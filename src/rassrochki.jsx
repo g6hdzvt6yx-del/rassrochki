@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
-  PiggyBank, TrendingUp, Trash2,
+  Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -14,6 +14,14 @@ const money = (n) =>
 
 const fmtDate = (d) =>
   new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
+
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
@@ -43,12 +51,13 @@ const buildSchedule = (c) => {
   const today = startOfToday();
   return amounts.map((amt, i) => {
     const due = addMonths(c.startDate, i);
-    const paid = !!(c.payments && c.payments[i]);
+    const rec = c.payments && c.payments[i];
+    const paid = !!(rec && rec.paidDate);
     let status = "upcoming";
     if (paid) status = "paid";
     else if (due < today) status = "overdue";
     else if ((due - today) / 86400000 <= 7) status = "due";
-    return { n: i + 1, index: i, dueDate: due, amountDue: amt, paid, paidDate: paid ? c.payments[i].paidDate : null, status };
+    return { n: i + 1, index: i, dueDate: due, amountDue: amt, paid, paidDate: paid ? rec.paidDate : null, receipt: rec ? rec.receipt : null, status };
   });
 };
 
@@ -72,19 +81,21 @@ const seed = () => {
   return [
     {
       id: "c1", clientName: "Ахмедов Руслан", phone: "+7 928 000-11-22",
-      item: "iPhone 15, 128ГБ", totalPrice: 95000, downPayment: 15000, markup: 12000,
-      termMonths: 6, startDate: back(3), payments: { 0: { paidDate: back(3) }, 1: { paidDate: back(2) } },
+      item: "iPhone 15, 128ГБ", totalPrice: 95000, downPayment: 15000, markup: 12000, markupPercent: 15,
+      termMonths: 6, startDate: back(3), investorId: "i1",
+      payments: { 0: { paidDate: back(3) }, 1: { paidDate: back(2) } },
     },
     {
       id: "c2", clientName: "Сайдуллаева Зарема", phone: "+7 963 555-77-88",
-      item: "Стиральная машина Bosch", totalPrice: 62000, downPayment: 12000, markup: 8000,
-      termMonths: 5, startDate: back(4), payments: { 0: { paidDate: back(4) } },
+      item: "Стиральная машина Bosch", totalPrice: 62000, downPayment: 12000, markup: 8000, markupPercent: 16,
+      termMonths: 5, startDate: back(4), investorId: "i2",
+      payments: { 0: { paidDate: back(4) } },
     },
     {
       id: "c3", clientName: "Магомедов Ибрагим", phone: "+7 989 123-45-67",
-      item: "Ноутбук Lenovo", totalPrice: 78000, downPayment: 18000, markup: 9000,
+      item: "Ноутбук Lenovo", totalPrice: 78000, downPayment: 18000, markup: 9000, markupPercent: 15,
       termMonths: 6, startDate: iso(addMonths(startOfToday().toISOString().slice(0, 10), 0)),
-      payments: {},
+      investorId: "", payments: {},
     },
   ];
 };
@@ -160,6 +171,9 @@ export default function App() {
   const [loadedInvestors, setLoadedInvestors] = useState(false);
   const [addingInvestor, setAddingInvestor] = useState(false);
 
+  const [sectionModal, setSectionModal] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+
   // загрузка
   useEffect(() => {
     (async () => {
@@ -220,16 +234,23 @@ export default function App() {
 
   const capital = useMemo(() => {
     let principalTotal = 0, principalReturned = 0, profitRealized = 0, profitTotal = 0;
+    const perInvestor = {};
     contracts.forEach((c) => {
       const cc = contractCapital(c);
       principalTotal += cc.principal;
       principalReturned += cc.principalReturned;
       profitRealized += cc.profitRealized;
       profitTotal += cc.markup;
+      const key = c.investorId || "";
+      perInvestor[key] = (perInvestor[key] || 0) + (cc.principal - cc.principalReturned);
     });
     const invested = investors.reduce((s, i) => s + (+i.amount || 0), 0);
     const deployed = principalTotal - principalReturned;
-    return { invested, deployed, free: invested - deployed, profitRealized, profitExpected: profitTotal - profitRealized, profitTotal };
+    return {
+      invested, deployed, free: invested - deployed,
+      profitRealized, profitExpected: profitTotal - profitRealized, profitTotal,
+      perInvestor,
+    };
   }, [contracts, investors]);
 
   const addInvestor = (data) => {
@@ -244,8 +265,37 @@ export default function App() {
       prev.map((c) => {
         if (c.id !== cid) return c;
         const payments = { ...(c.payments || {}) };
-        if (payments[idx]) delete payments[idx];
-        else payments[idx] = { paidDate: new Date().toISOString().slice(0, 10) };
+        const cur = payments[idx];
+        if (cur && cur.paidDate) {
+          if (cur.receipt) payments[idx] = { receipt: cur.receipt };
+          else delete payments[idx];
+        } else {
+          payments[idx] = { ...(cur || {}), paidDate: new Date().toISOString().slice(0, 10) };
+        }
+        return { ...c, payments };
+      })
+    );
+
+  const attachReceipt = (cid, idx, receipt) =>
+    setContracts((prev) =>
+      prev.map((c) => {
+        if (c.id !== cid) return c;
+        const payments = { ...(c.payments || {}) };
+        payments[idx] = { ...(payments[idx] || {}), receipt };
+        return { ...c, payments };
+      })
+    );
+
+  const removeReceipt = (cid, idx) =>
+    setContracts((prev) =>
+      prev.map((c) => {
+        if (c.id !== cid) return c;
+        const payments = { ...(c.payments || {}) };
+        const cur = payments[idx];
+        if (!cur) return c;
+        const { receipt, ...rest } = cur;
+        if (Object.keys(rest).length === 0) delete payments[idx];
+        else payments[idx] = rest;
         return { ...c, payments };
       })
     );
@@ -256,6 +306,32 @@ export default function App() {
   };
 
   const open = contracts.find((c) => c.id === openId) || null;
+
+  const sectionTitles = {
+    remaining: "Остаток к получению — по договорам",
+    financed: "Выдано в рассрочку — по договорам",
+    active: "Активные договоры",
+    debtors: "Должники (просрочка)",
+  };
+
+  const sectionRows = useMemo(() => {
+    if (!sectionModal) return [];
+    return contracts
+      .map((c) => ({ c, st: contractStats(c) }))
+      .filter(({ st }) => {
+        if (sectionModal === "active") return !st.done;
+        if (sectionModal === "debtors") return st.overdueSum > 0;
+        return true;
+      })
+      .map(({ c, st }) => ({
+        id: c.id,
+        name: c.clientName,
+        item: c.item,
+        amount: sectionModal === "financed" ? st.financed : sectionModal === "debtors" ? st.overdueSum : st.remaining,
+        badge: st.done ? "done" : st.overdueSum ? "overdue" : "active",
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [sectionModal, contracts]);
 
   if (!loaded)
     return (
@@ -289,13 +365,13 @@ export default function App() {
           <ScrollText size={16} /> Договоры <span className="cnt">{contracts.length}</span>
         </button>
         <button className={tab === "capital" ? "on" : ""} onClick={() => setTab("capital")}>
-          <PiggyBank size={16} /> Капитал
+          <Landmark size={16} /> Капитал
         </button>
       </nav>
 
       {tab === "dashboard" && (
         <main className="wrap">
-          <section className="hero">
+          <button type="button" className="hero hero-btn" onClick={() => setSectionModal("remaining")}>
             <div className="hero-label">Остаток к получению</div>
             <div className="hero-num num">{money(totals.remaining)}</div>
             <Ribbon paid={totals.paid} overdue={totals.overdue} remaining={totals.remaining - totals.overdue} />
@@ -304,12 +380,12 @@ export default function App() {
               <span><i className="dot s-over" /> Просрочено {money(totals.overdue)}</span>
               <span><i className="dot s-rem" /> Остаток {money(totals.remaining - totals.overdue)}</span>
             </div>
-          </section>
+          </button>
 
           <section className="cards">
-            <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} />
-            <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} />
-            <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} />
+            <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} onClick={() => setSectionModal("financed")} />
+            <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} onClick={() => setSectionModal("active")} />
+            <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
           </section>
 
           <section className="panel">
@@ -337,19 +413,62 @@ export default function App() {
           <div className="clist">
             {contracts.map((c) => {
               const st = contractStats(c);
+              const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
+              const expanded = expandedId === c.id;
+              const overdueRows = st.rows.filter((r) => r.status === "overdue");
+              const upcomingRows = st.rows.filter((r) => !r.paid && r.status !== "overdue");
+              const paidRows = st.rows.filter((r) => r.paid);
               return (
-                <button key={c.id} className="citem" onClick={() => setOpenId(c.id)}>
-                  <div className="citem-top">
+                <div key={c.id} className="citem">
+                  <button
+                    type="button"
+                    className="citem-status-row"
+                    onClick={() => setExpandedId(expanded ? null : c.id)}
+                  >
                     <span className="citem-name">{c.clientName}</span>
-                    <Badge s={st.done ? "done" : st.overdueSum ? "overdue" : "active"} />
-                  </div>
-                  <div className="citem-item">{c.item}</div>
-                  <div className="citem-foot">
-                    <span className="muted">Остаток</span>
-                    <span className="num strong">{money(st.remaining)}</span>
-                    {st.next && <span className="muted">→ {fmtDate(st.next.dueDate)}</span>}
-                  </div>
-                </button>
+                    <span className="citem-status-right">
+                      <Badge s={badge} />
+                      <ChevronDown size={15} className={`chev ${expanded ? "on" : ""}`} />
+                    </span>
+                  </button>
+                  {expanded && (
+                    <div className="citem-expand">
+                      {overdueRows.length > 0 && (
+                        <div className="mini-block">
+                          <div className="mini-hd clay">Просрочено</div>
+                          {overdueRows.map((r) => (
+                            <div key={r.index} className="mini-row">
+                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.amountDue)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {upcomingRows.length > 0 && (
+                        <div className="mini-block">
+                          <div className="mini-hd">Предстоящие</div>
+                          {upcomingRows.map((r) => (
+                            <div key={r.index} className="mini-row">
+                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.amountDue)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {paidRows.length > 0 && (
+                        <div className="mini-block">
+                          <div className="mini-hd emerald">История платежей</div>
+                          {paidRows.map((r) => (
+                            <div key={r.index} className="mini-row">
+                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.amountDue)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button type="button" className="btn ghost btn-sm citem-open" onClick={() => setOpenId(c.id)}>
+                        Открыть договор
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -381,52 +500,126 @@ export default function App() {
             <Stat icon={<Wallet size={16} />} label="Прибыль всего по договорам" value={money(capital.profitTotal)} />
           </section>
 
-          <section className="panel">
-            <div className="panel-hd panel-hd-row">
-              <span className="panel-hd-title"><PiggyBank size={15} /> Вкладчики</span>
-              <button className="btn primary btn-sm" onClick={() => setAddingInvestor(true)}>
-                <Plus size={14} /> Вкладчик
-              </button>
-            </div>
-            {investors.length === 0 ? (
-              <div className="empty">Вкладчиков пока нет.</div>
-            ) : (
-              <div className="rows">
-                {investors.map((inv) => (
-                  <div key={inv.id} className="inv-row">
-                    <span className="prow-name">{inv.name}</span>
-                    <span className="muted">{capital.invested ? Math.round(((+inv.amount || 0) / capital.invested) * 100) : 0}%</span>
-                    <span className="prow-sum num">{money(inv.amount)}</span>
+          <section className="panel-hd panel-hd-row inv-list-hd">
+            <span className="panel-hd-title"><Landmark size={15} /> Вкладчики</span>
+            <button className="btn primary btn-sm" onClick={() => setAddingInvestor(true)}>
+              <Plus size={14} /> Вкладчик
+            </button>
+          </section>
+
+          {investors.length === 0 ? (
+            <div className="panel"><div className="empty">Вкладчиков пока нет.</div></div>
+          ) : (
+            investors.map((inv) => {
+              const invDeployed = capital.perInvestor[inv.id] || 0;
+              const invFree = (+inv.amount || 0) - invDeployed;
+              const pct = capital.invested ? Math.round(((+inv.amount || 0) / capital.invested) * 100) : 0;
+              return (
+                <div key={inv.id} className="inv-card">
+                  <div className="citem-top">
+                    <span className="citem-name">{inv.name}</span>
                     <button className="icon-btn-ghost" onClick={() => removeInvestor(inv.id)} title="Удалить">
                       <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  <div className="det-grid inv-grid">
+                    <div><span>Вклад</span><b className="num">{money(inv.amount)}</b></div>
+                    <div><span>Доля</span><b className="num">{pct}%</b></div>
+                    <div><span>В обороте</span><b className="num">{money(invDeployed)}</b></div>
+                    <div><span>Свободно</span><b className="num strong">{money(invFree)}</b></div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {capital.perInvestor[""] > 0 && (
+            <div className="muted unassigned-note">Без привязки к вкладчику: {money(capital.perInvestor[""])}</div>
+          )}
         </main>
       )}
 
-      {open && <Detail contract={open} onClose={() => setOpenId(null)} onToggle={togglePay} />}
-      {adding && <AddForm onClose={() => setAdding(false)} onSave={addContract} />}
+      {open && (
+        <Detail
+          contract={open}
+          investors={investors}
+          onClose={() => setOpenId(null)}
+          onToggle={togglePay}
+          onAttachReceipt={attachReceipt}
+          onRemoveReceipt={removeReceipt}
+        />
+      )}
+      {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
       {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
+      {sectionModal && (
+        <SectionDetail
+          title={sectionTitles[sectionModal]}
+          rows={sectionRows}
+          onClose={() => setSectionModal(null)}
+          onOpenContract={(id) => { setSectionModal(null); setOpenId(id); }}
+        />
+      )}
     </div>
   );
 }
 
-const Stat = ({ icon, label, value, tone }) => (
-  <div className="stat">
-    <div className="stat-ic">{icon}</div>
-    <div className="stat-label">{label}</div>
-    <div className={`stat-val num ${tone || ""}`}>{value}</div>
-  </div>
-);
+const Stat = ({ icon, label, value, tone, onClick }) => {
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag type={onClick ? "button" : undefined} className={`stat ${onClick ? "stat-btn" : ""}`} onClick={onClick}>
+      <div className="stat-ic">{icon}</div>
+      <div className="stat-label">{label}</div>
+      <div className={`stat-val num ${tone || ""}`}>{value}</div>
+    </Tag>
+  );
+};
+
+/* --------------------------- Детали раздела сводки ------------------ */
+
+function SectionDetail({ title, rows, onClose, onOpenContract }) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">{title}</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">
+          {rows.length === 0 ? (
+            <div className="empty">Пусто.</div>
+          ) : (
+            <div className="rows">
+              {rows.map((r) => (
+                <button key={r.id} className="prow" onClick={() => onOpenContract(r.id)}>
+                  <span className="prow-name">{r.name}</span>
+                  <span className="prow-date">{r.item}</span>
+                  <span className="prow-sum num">{money(r.amount)}</span>
+                  <Badge s={r.badge} />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, onClose, onToggle }) {
+function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt }) {
   const st = contractStats(contract);
+  const investorName = contract.investorId
+    ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
+    : "Общий пул";
+
+  const handleFile = async (e, idx) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const dataUrl = await fileToDataUrl(file);
+    onAttachReceipt(contract.id, idx, { name: file.name, type: file.type, dataUrl });
+    e.target.value = "";
+  };
+
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -444,10 +637,11 @@ function Detail({ contract, onClose, onToggle }) {
           <div className="det-grid">
             <div><span>Цена</span><b className="num">{money(contract.totalPrice)}</b></div>
             <div><span>Взнос</span><b className="num">{money(contract.downPayment)}</b></div>
-            <div><span>Наценка</span><b className="num">{money(contract.markup)}</b></div>
+            <div><span>Наценка</span><b className="num">{money(contract.markup)}{contract.markupPercent ? ` (${contract.markupPercent}%)` : ""}</b></div>
             <div><span>Срок</span><b className="num">{contract.termMonths} мес</b></div>
             <div><span>К оплате</span><b className="num">{money(st.financed)}</b></div>
             <div><span>Остаток</span><b className="num strong">{money(st.remaining)}</b></div>
+            <div><span>Источник</span><b className="num">{investorName}</b></div>
           </div>
 
           <div className="ledger-hd">График платежей</div>
@@ -467,6 +661,29 @@ function Detail({ contract, onClose, onToggle }) {
                     <Check size={13} /> Оплатить
                   </button>
                 )}
+                <div className="receipt-row">
+                  {r.receipt ? (
+                    <>
+                      <a className="receipt-link" href={r.receipt.dataUrl} target="_blank" rel="noreferrer">
+                        <FileText size={13} /> {r.receipt.name}
+                      </a>
+                      <button className="receipt-remove" onClick={() => onRemoveReceipt(contract.id, r.index)} title="Удалить чек">
+                        <X size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <label className="receipt-btn" htmlFor={`receipt-${contract.id}-${r.index}`}>
+                      <Paperclip size={13} /> Прикрепить чек
+                      <input
+                        id={`receipt-${contract.id}-${r.index}`}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden-file-input"
+                        onChange={(e) => handleFile(e, r.index)}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -478,15 +695,17 @@ function Detail({ contract, onClose, onToggle }) {
 
 /* --------------------------- Новый договор ------------------------- */
 
-function AddForm({ onClose, onSave }) {
+function AddForm({ investors, onClose, onSave }) {
   const [f, setF] = useState({
     clientName: "", phone: "", item: "",
-    totalPrice: "", downPayment: "", markup: "", termMonths: "6",
-    startDate: new Date().toISOString().slice(0, 10),
+    totalPrice: "", downPayment: "", markupPercent: "20", termMonths: "6",
+    startDate: new Date().toISOString().slice(0, 10), investorId: "",
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
-  const financed = Math.max(0, (+f.totalPrice || 0) - (+f.downPayment || 0) + (+f.markup || 0));
+  const principal = Math.max(0, (+f.totalPrice || 0) - (+f.downPayment || 0));
+  const markup = Math.round(principal * (+f.markupPercent || 0) / 100);
+  const financed = principal + markup;
   const monthly = financed / Math.max(1, +f.termMonths || 1);
   const valid = f.clientName.trim() && +f.totalPrice > 0 && +f.termMonths > 0;
 
@@ -509,11 +728,20 @@ function AddForm({ onClose, onSave }) {
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
           </div>
           <div className="frow">
-            <Field label="Наценка (переплата)"><input type="number" value={f.markup} onChange={set("markup")} placeholder="0" /></Field>
+            <Field label="Наценка, %"><input type="number" value={f.markupPercent} onChange={set("markupPercent")} placeholder="20" /></Field>
             <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={set("termMonths")} placeholder="6" /></Field>
           </div>
+          <Field label="Источник финансирования">
+            <select value={f.investorId} onChange={set("investorId")}>
+              <option value="">Общий пул (без привязки)</option>
+              {investors.map((inv) => (
+                <option key={inv.id} value={inv.id}>{inv.name}</option>
+              ))}
+            </select>
+          </Field>
 
           <div className="calc">
+            <div><span>Наценка</span><b className="num">{money(markup)}</b></div>
             <div><span>К оплате в рассрочку</span><b className="num">{money(financed)}</b></div>
             <div><span>Платёж в месяц</span><b className="num strong">{money(monthly)}</b></div>
           </div>
@@ -522,7 +750,7 @@ function AddForm({ onClose, onSave }) {
             <button className="btn ghost" onClick={onClose}>Отмена</button>
             <button className="btn primary" disabled={!valid} onClick={() => onSave({
               ...f, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
-              markup: +f.markup || 0, termMonths: +f.termMonths,
+              markup, markupPercent: +f.markupPercent || 0, termMonths: +f.termMonths,
             })}>Создать договор</button>
           </div>
         </div>
@@ -603,6 +831,9 @@ const css = `
 .wrap{max-width:820px;margin:0 auto;padding:22px 18px 60px}
 
 .hero{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin-bottom:16px}
+.hero-btn{display:block;width:100%;border:1px solid var(--line);cursor:pointer;font:inherit;color:inherit;
+  text-align:left;transition:border-color .15s}
+.hero-btn:hover{border-color:var(--brass)}
 .hero-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);font-weight:600}
 .hero-num{font-size:40px;font-weight:600;margin:4px 0 16px}
 .ribbon{display:flex;height:10px;border-radius:20px;overflow:hidden;background:var(--line)}
@@ -617,6 +848,8 @@ const css = `
 .stat-label{font-size:12px;color:var(--ink-soft);margin-bottom:3px}
 .stat-val{font-size:22px;font-weight:600}
 .stat-val.clay{color:var(--clay)}
+.stat-btn{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%;transition:border-color .15s}
+.stat-btn:hover{border-color:var(--brass)}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .panel-hd{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);
@@ -640,15 +873,25 @@ const css = `
 .b-amber{background:#F6ECD6;color:#8A6111}
 .b-line{background:#EBEEE5;color:var(--ink-soft)}
 
-.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-.citem{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px;
-  cursor:pointer;font:inherit;text-align:left;transition:border-color .15s}
+.clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
+.citem{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  transition:border-color .15s}
 .citem:hover{border-color:var(--brass)}
-.citem-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.citem-status-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  border:none;background:transparent;cursor:pointer;font:inherit;text-align:left;padding:15px 16px}
+.citem-status-row:hover{background:#F3F5EF}
 .citem-name{font-weight:600;font-size:15px}
-.citem-item{font-size:13px;color:var(--ink-soft);margin-bottom:12px}
-.citem-foot{display:flex;align-items:center;gap:8px;font-size:13px}
-.citem-foot .num{font-size:15px}
+.citem-status-right{display:flex;align-items:center;gap:8px}
+.chev{color:var(--ink-soft);transition:transform .15s}
+.chev.on{transform:rotate(180deg)}
+.citem-expand{padding:0 16px 16px;border-top:1px solid var(--line)}
+.mini-block{margin-top:12px}
+.mini-hd{font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:600;color:var(--ink-soft);margin-bottom:6px}
+.mini-hd.clay{color:var(--clay)}
+.mini-hd.emerald{color:var(--emerald)}
+.mini-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.mini-row:last-child{border-bottom:none}
+.citem-open{margin-top:14px;width:100%;justify-content:center}
 
 .overlay{position:fixed;inset:0;background:rgba(18,32,28,.42);display:flex;justify-content:center;
   align-items:flex-start;padding:24px 14px;z-index:50;overflow-y:auto;backdrop-filter:blur(2px)}
@@ -687,11 +930,23 @@ const css = `
 .lbtn.undo{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
 .lbtn.pay:hover{filter:brightness(1.06)}
 
+.hidden-file-input{display:none}
+.receipt-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:2px}
+.receipt-btn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink-soft);
+  border:1px dashed var(--line);padding:5px 10px;border-radius:8px;cursor:pointer;background:transparent}
+.receipt-btn:hover{border-color:var(--brass);color:var(--brass)}
+.receipt-link{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--emerald);
+  text-decoration:none;border:1px solid var(--line);padding:5px 10px;border-radius:8px;background:var(--surface)}
+.receipt-link:hover{border-color:var(--emerald)}
+.receipt-remove{background:transparent;border:none;color:var(--ink-soft);cursor:pointer;display:grid;place-items:center;
+  width:22px;height:22px;border-radius:6px}
+.receipt-remove:hover{color:var(--clay)}
+
 .field{display:block;margin-bottom:12px}
 .field>span{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:500}
-.field input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:9px;
+.field input, .field select{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:9px;
   padding:10px 12px;font:inherit;font-size:14px;color:var(--ink)}
-.field input:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
+.field input:focus, .field select:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
 .calc{display:flex;gap:12px;margin:6px 0 18px}
@@ -708,12 +963,15 @@ const css = `
 .btn.ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
 .btn-sm{padding:6px 12px;font-size:12.5px}
 
-.inv-row{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:14px;
-  padding:12px 18px;border-bottom:1px solid var(--line)}
-.inv-row:last-child{border-bottom:none}
 .icon-btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink-soft);
   width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer}
 .icon-btn-ghost:hover{border-color:var(--clay);color:var(--clay)}
+
+.inv-list-hd{margin-bottom:6px}
+.inv-grid{grid-template-columns:repeat(2,1fr)}
+.inv-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:10px}
+.inv-card:last-child{margin-bottom:0}
+.unassigned-note{margin-top:4px;font-size:12.5px}
 
 @media(max-width:560px){
   .cards{grid-template-columns:1fr}
