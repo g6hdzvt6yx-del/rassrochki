@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
+  PiggyBank, TrendingUp, Trash2,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -91,6 +92,27 @@ const seed = () => {
 const STORAGE_KEY = "rassrochki:contracts:v1";
 
 /* ------------------------------------------------------------------ */
+/*  Вкладчики / капитал                                                */
+/* ------------------------------------------------------------------ */
+
+const seedInvestors = () => [
+  { id: "i1", name: "Иванов Пётр", amount: 2000000 },
+  { id: "i2", name: "Смирнова Ольга", amount: 1000000 },
+];
+
+const STORAGE_KEY_INVESTORS = "rassrochki:investors:v1";
+
+// сколько из наценки (прибыли) уже получено, а сколько ещё в графике платежей
+const contractCapital = (c) => {
+  const principal = Math.max(0, (+c.totalPrice || 0) - (+c.downPayment || 0));
+  const markup = Math.max(0, +c.markup || 0);
+  const financed = principal + markup;
+  const { paidSum } = contractStats(c);
+  const frac = financed > 0 ? paidSum / financed : 0;
+  return { principal, markup, principalReturned: principal * frac, profitRealized: markup * frac };
+};
+
+/* ------------------------------------------------------------------ */
 /*  Мелкие компоненты                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -134,6 +156,10 @@ export default function App() {
   const [openId, setOpenId] = useState(null);
   const [adding, setAdding] = useState(false);
 
+  const [investors, setInvestors] = useState([]);
+  const [loadedInvestors, setLoadedInvestors] = useState(false);
+  const [addingInvestor, setAddingInvestor] = useState(false);
+
   // загрузка
   useEffect(() => {
     (async () => {
@@ -156,6 +182,28 @@ export default function App() {
     })();
   }, [contracts, loaded]);
 
+  // загрузка вкладчиков
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await window.storage.get(STORAGE_KEY_INVESTORS);
+        setInvestors(res && res.value ? JSON.parse(res.value) : seedInvestors());
+      } catch {
+        setInvestors(seedInvestors());
+      } finally {
+        setLoadedInvestors(true);
+      }
+    })();
+  }, []);
+
+  // сохранение вкладчиков
+  useEffect(() => {
+    if (!loadedInvestors) return;
+    (async () => {
+      try { await window.storage.set(STORAGE_KEY_INVESTORS, JSON.stringify(investors)); } catch { /* демо-режим без сохранения */ }
+    })();
+  }, [investors, loadedInvestors]);
+
   const totals = useMemo(() => {
     let financed = 0, paid = 0, overdue = 0, remaining = 0, debtors = 0, active = 0;
     const upcoming = [];
@@ -169,6 +217,27 @@ export default function App() {
     upcoming.sort((a, b) => a.dueDate - b.dueDate);
     return { financed, paid, overdue, remaining, debtors, active, upcoming: upcoming.slice(0, 8) };
   }, [contracts]);
+
+  const capital = useMemo(() => {
+    let principalTotal = 0, principalReturned = 0, profitRealized = 0, profitTotal = 0;
+    contracts.forEach((c) => {
+      const cc = contractCapital(c);
+      principalTotal += cc.principal;
+      principalReturned += cc.principalReturned;
+      profitRealized += cc.profitRealized;
+      profitTotal += cc.markup;
+    });
+    const invested = investors.reduce((s, i) => s + (+i.amount || 0), 0);
+    const deployed = principalTotal - principalReturned;
+    return { invested, deployed, free: invested - deployed, profitRealized, profitExpected: profitTotal - profitRealized, profitTotal };
+  }, [contracts, investors]);
+
+  const addInvestor = (data) => {
+    setInvestors((prev) => [{ ...data, id: "i" + Date.now() }, ...prev]);
+    setAddingInvestor(false);
+  };
+
+  const removeInvestor = (id) => setInvestors((prev) => prev.filter((i) => i.id !== id));
 
   const togglePay = (cid, idx) =>
     setContracts((prev) =>
@@ -218,6 +287,9 @@ export default function App() {
         </button>
         <button className={tab === "contracts" ? "on" : ""} onClick={() => setTab("contracts")}>
           <ScrollText size={16} /> Договоры <span className="cnt">{contracts.length}</span>
+        </button>
+        <button className={tab === "capital" ? "on" : ""} onClick={() => setTab("capital")}>
+          <PiggyBank size={16} /> Капитал
         </button>
       </nav>
 
@@ -284,8 +356,61 @@ export default function App() {
         </main>
       )}
 
+      {tab === "capital" && (
+        <main className="wrap">
+          <section className="hero">
+            <div className="hero-label">Капитал вкладчиков</div>
+            <div className="hero-num num">{money(capital.invested)}</div>
+            <Ribbon
+              paid={capital.deployed}
+              overdue={capital.free < 0 ? -capital.free : 0}
+              remaining={Math.max(0, capital.free)}
+            />
+            <div className="hero-legend">
+              <span><i className="dot s-paid" /> В обороте {money(capital.deployed)}</span>
+              {capital.free < 0 && (
+                <span><i className="dot s-over" /> Не хватает вложений {money(-capital.free)}</span>
+              )}
+              <span><i className="dot s-rem" /> Свободно {money(Math.max(0, capital.free))}</span>
+            </div>
+          </section>
+
+          <section className="cards">
+            <Stat icon={<TrendingUp size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} />
+            <Stat icon={<Clock size={16} />} label="Прибыль ожидается" value={money(capital.profitExpected)} />
+            <Stat icon={<Wallet size={16} />} label="Прибыль всего по договорам" value={money(capital.profitTotal)} />
+          </section>
+
+          <section className="panel">
+            <div className="panel-hd panel-hd-row">
+              <span className="panel-hd-title"><PiggyBank size={15} /> Вкладчики</span>
+              <button className="btn primary btn-sm" onClick={() => setAddingInvestor(true)}>
+                <Plus size={14} /> Вкладчик
+              </button>
+            </div>
+            {investors.length === 0 ? (
+              <div className="empty">Вкладчиков пока нет.</div>
+            ) : (
+              <div className="rows">
+                {investors.map((inv) => (
+                  <div key={inv.id} className="inv-row">
+                    <span className="prow-name">{inv.name}</span>
+                    <span className="muted">{capital.invested ? Math.round(((+inv.amount || 0) / capital.invested) * 100) : 0}%</span>
+                    <span className="prow-sum num">{money(inv.amount)}</span>
+                    <button className="icon-btn-ghost" onClick={() => removeInvestor(inv.id)} title="Удалить">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </main>
+      )}
+
       {open && <Detail contract={open} onClose={() => setOpenId(null)} onToggle={togglePay} />}
       {adding && <AddForm onClose={() => setAdding(false)} onSave={addContract} />}
+      {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
     </div>
   );
 }
@@ -410,6 +535,35 @@ const Field = ({ label, children }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
 
+/* --------------------------- Новый вкладчик ------------------------ */
+
+function AddInvestorForm({ onClose, onSave }) {
+  const [f, setF] = useState({ name: "", amount: "" });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const valid = f.name.trim() && +f.amount > 0;
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Новый вкладчик</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">
+          <Field label="Имя вкладчика"><input value={f.name} onChange={set("name")} placeholder="Иванов Пётр" /></Field>
+          <Field label="Сумма вклада"><input type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
+          <div className="sheet-actions">
+            <button className="btn ghost" onClick={onClose}>Отмена</button>
+            <button className="btn primary" disabled={!valid} onClick={() => onSave({ name: f.name.trim(), amount: +f.amount })}>
+              Добавить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Стили                                                              */
 /* ------------------------------------------------------------------ */
@@ -467,6 +621,8 @@ const css = `
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .panel-hd{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);
   font-weight:600;font-size:13.5px;color:var(--brass)}
+.panel-hd-row{justify-content:space-between}
+.panel-hd-title{display:flex;align-items:center;gap:8px}
 .empty{padding:26px 18px;text-align:center;color:var(--ink-soft);font-size:13px}
 .rows{display:flex;flex-direction:column}
 .prow{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:14px;
@@ -550,6 +706,14 @@ const css = `
 .btn.primary:hover{filter:brightness(1.06)}
 .btn.primary:disabled{opacity:.45;cursor:not-allowed;filter:none}
 .btn.ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
+.btn-sm{padding:6px 12px;font-size:12.5px}
+
+.inv-row{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:14px;
+  padding:12px 18px;border-bottom:1px solid var(--line)}
+.inv-row:last-child{border-bottom:none}
+.icon-btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink-soft);
+  width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer}
+.icon-btn-ghost:hover{border-color:var(--clay);color:var(--clay)}
 
 @media(max-width:560px){
   .cards{grid-template-columns:1fr}
