@@ -9,7 +9,7 @@ import {
 /* ------------------------------------------------------------------ */
 
 const money = (n) =>
-  new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(Math.round(n || 0)) + " \u20BD";
+  new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(Math.round(n || 0)) + " ₽";
 
 const fmtDate = (d) =>
   new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
@@ -70,18 +70,18 @@ const seed = () => {
   const back = (m) => iso(addMonths(startOfToday().toISOString().slice(0, 10), -m));
   return [
     {
-      id: "c1", clientName: "\u0410\u0445\u043c\u0435\u0434\u043e\u0432 \u0420\u0443\u0441\u043b\u0430\u043d", phone: "+7 928 000-11-22",
-      item: "iPhone 15, 128\u0413\u0411", totalPrice: 95000, downPayment: 15000, markup: 12000,
+      id: "c1", clientName: "Ахмедов Руслан", phone: "+7 928 000-11-22",
+      item: "iPhone 15, 128ГБ", totalPrice: 95000, downPayment: 15000, markup: 12000,
       termMonths: 6, startDate: back(3), payments: { 0: { paidDate: back(3) }, 1: { paidDate: back(2) } },
     },
     {
-      id: "c2", clientName: "\u0421\u0430\u0439\u0434\u0443\u043b\u043b\u0430\u0435\u0432\u0430 \u0417\u0430\u0440\u0435\u043c\u0430", phone: "+7 963 555-77-88",
-      item: "\u0421\u0442\u0438\u0440\u0430\u043b\u044c\u043d\u0430\u044f \u043c\u0430\u0448\u0438\u043d\u0430 Bosch", totalPrice: 62000, downPayment: 12000, markup: 8000,
+      id: "c2", clientName: "Сайдуллаева Зарема", phone: "+7 963 555-77-88",
+      item: "Стиральная машина Bosch", totalPrice: 62000, downPayment: 12000, markup: 8000,
       termMonths: 5, startDate: back(4), payments: { 0: { paidDate: back(4) } },
     },
     {
-      id: "c3", clientName: "\u041c\u0430\u0433\u043e\u043c\u0435\u0434\u043e\u0432 \u0418\u0431\u0440\u0430\u0433\u0438\u043c", phone: "+7 989 123-45-67",
-      item: "\u041d\u043e\u0443\u0442\u0431\u0443\u043a Lenovo", totalPrice: 78000, downPayment: 18000, markup: 9000,
+      id: "c3", clientName: "Магомедов Ибрагим", phone: "+7 989 123-45-67",
+      item: "Ноутбук Lenovo", totalPrice: 78000, downPayment: 18000, markup: 9000,
       termMonths: 6, startDate: iso(addMonths(startOfToday().toISOString().slice(0, 10), 0)),
       payments: {},
     },
@@ -95,12 +95,12 @@ const STORAGE_KEY = "rassrochki:contracts:v1";
 /* ------------------------------------------------------------------ */
 
 const STATUS = {
-  paid: { label: "\u041e\u043f\u043b\u0430\u0447\u0435\u043d", cls: "b-emerald" },
-  overdue: { label: "\u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d", cls: "b-clay" },
-  due: { label: "\u0421\u043a\u043e\u0440\u043e", cls: "b-amber" },
-  upcoming: { label: "\u041e\u0436\u0438\u0434\u0430\u0435\u0442", cls: "b-line" },
-  active: { label: "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0439", cls: "b-line" },
-  done: { label: "\u0417\u0430\u043a\u0440\u044b\u0442", cls: "b-emerald" },
+  paid: { label: "Оплачен", cls: "b-emerald" },
+  overdue: { label: "Просрочен", cls: "b-clay" },
+  due: { label: "Скоро", cls: "b-amber" },
+  upcoming: { label: "Ожидает", cls: "b-line" },
+  active: { label: "Активный", cls: "b-line" },
+  done: { label: "Закрыт", cls: "b-emerald" },
 };
 
 const Badge = ({ s }) => {
@@ -115,7 +115,7 @@ const Ribbon = ({ paid, overdue, remaining }) => {
   const o = (overdue / total) * 100;
   const r = 100 - p - o;
   return (
-    <div className="ribbon" title="\u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e / \u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u043e / \u041e\u0441\u0442\u0430\u0442\u043e\u043a">
+    <div className="ribbon" title="Оплачено / Просрочено / Остаток">
       <span style={{ width: `${p}%` }} className="seg s-paid" />
       <span style={{ width: `${o}%` }} className="seg s-over" />
       <span style={{ width: `${r}%` }} className="seg s-rem" />
@@ -191,7 +191,7 @@ export default function App() {
   if (!loaded)
     return (
       <div className="app"><style>{css}</style>
-        <div className="loading">\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0432\u0435\u0434\u043e\u043c\u043e\u0441\u0442\u0438\u2026</div>
+        <div className="loading">Загрузка ведомости…</div>
       </div>
     );
 
@@ -203,47 +203,47 @@ export default function App() {
         <div className="brand">
           <span className="mark"><Wallet size={18} /></span>
           <div>
-            <div className="bname">\u0420\u0430\u0441\u0441\u0440\u043e\u0447\u043a\u0438</div>
-            <div className="btag">\u0443\u0447\u0451\u0442 \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u043e\u0432 \u0438 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439</div>
+            <div className="bname">Рассрочки</div>
+            <div className="btag">учёт договоров и платежей</div>
           </div>
         </div>
         <button className="btn primary" onClick={() => setAdding(true)}>
-          <Plus size={16} /> \u041d\u043e\u0432\u044b\u0439 \u0434\u043e\u0433\u043e\u0432\u043e\u0440
+          <Plus size={16} /> Новый договор
         </button>
       </header>
 
       <nav className="tabs">
         <button className={tab === "dashboard" ? "on" : ""} onClick={() => setTab("dashboard")}>
-          <LayoutGrid size={16} /> \u0421\u0432\u043e\u0434\u043a\u0430
+          <LayoutGrid size={16} /> Сводка
         </button>
         <button className={tab === "contracts" ? "on" : ""} onClick={() => setTab("contracts")}>
-          <ScrollText size={16} /> \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u044b <span className="cnt">{contracts.length}</span>
+          <ScrollText size={16} /> Договоры <span className="cnt">{contracts.length}</span>
         </button>
       </nav>
 
       {tab === "dashboard" && (
         <main className="wrap">
           <section className="hero">
-            <div className="hero-label">\u041e\u0441\u0442\u0430\u0442\u043e\u043a \u043a \u043f\u043e\u043b\u0443\u0447\u0435\u043d\u0438\u044e</div>
+            <div className="hero-label">Остаток к получению</div>
             <div className="hero-num num">{money(totals.remaining)}</div>
             <Ribbon paid={totals.paid} overdue={totals.overdue} remaining={totals.remaining - totals.overdue} />
             <div className="hero-legend">
-              <span><i className="dot s-paid" /> \u041e\u043f\u043b\u0430\u0447\u0435\u043d\u043e {money(totals.paid)}</span>
-              <span><i className="dot s-over" /> \u041f\u0440\u043e\u0441\u0440\u043e\u0447\u0435\u043d\u043e {money(totals.overdue)}</span>
-              <span><i className="dot s-rem" /> \u041e\u0441\u0442\u0430\u0442\u043e\u043a {money(totals.remaining - totals.overdue)}</span>
+              <span><i className="dot s-paid" /> Оплачено {money(totals.paid)}</span>
+              <span><i className="dot s-over" /> Просрочено {money(totals.overdue)}</span>
+              <span><i className="dot s-rem" /> Остаток {money(totals.remaining - totals.overdue)}</span>
             </div>
           </section>
 
           <section className="cards">
-            <Stat icon={<Wallet size={16} />} label="\u0412\u044b\u0434\u0430\u043d\u043e \u0432 \u0440\u0430\u0441\u0441\u0440\u043e\u0447\u043a\u0443" value={money(totals.financed)} />
-            <Stat icon={<Users size={16} />} label="\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0445 \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u043e\u0432" value={totals.active} />
-            <Stat icon={<AlertTriangle size={16} />} label="\u0414\u043e\u043b\u0436\u043d\u0438\u043a\u043e\u0432 (\u043f\u0440\u043e\u0441\u0440\u043e\u0447\u043a\u0430)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} />
+            <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} />
+            <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} />
+            <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} />
           </section>
 
           <section className="panel">
-            <div className="panel-hd"><CalendarDays size={15} /> \u0411\u043b\u0438\u0436\u0430\u0439\u0448\u0438\u0435 \u043f\u043b\u0430\u0442\u0435\u0436\u0438</div>
+            <div className="panel-hd"><CalendarDays size={15} /> Ближайшие платежи</div>
             {totals.upcoming.length === 0 ? (
-              <div className="empty">\u0412\u0441\u0451 \u043e\u043f\u043b\u0430\u0447\u0435\u043d\u043e \u2014 \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439 \u043d\u0435\u0442.</div>
+              <div className="empty">Всё оплачено — открытых платежей нет.</div>
             ) : (
               <div className="rows">
                 {totals.upcoming.map((r) => (
@@ -273,9 +273,9 @@ export default function App() {
                   </div>
                   <div className="citem-item">{c.item}</div>
                   <div className="citem-foot">
-                    <span className="muted">\u041e\u0441\u0442\u0430\u0442\u043e\u043a</span>
+                    <span className="muted">Остаток</span>
                     <span className="num strong">{money(st.remaining)}</span>
-                    {st.next && <span className="muted">\u2192 {fmtDate(st.next.dueDate)}</span>}
+                    {st.next && <span className="muted">→ {fmtDate(st.next.dueDate)}</span>}
                   </div>
                 </button>
               );
@@ -317,15 +317,15 @@ function Detail({ contract, onClose, onToggle }) {
         <div className="sheet-body">
           <div className="det-item">{contract.item}</div>
           <div className="det-grid">
-            <div><span>\u0426\u0435\u043d\u0430</span><b className="num">{money(contract.totalPrice)}</b></div>
-            <div><span>\u0412\u0437\u043d\u043e\u0441</span><b className="num">{money(contract.downPayment)}</b></div>
-            <div><span>\u041d\u0430\u0446\u0435\u043d\u043a\u0430</span><b className="num">{money(contract.markup)}</b></div>
-            <div><span>\u0421\u0440\u043e\u043a</span><b className="num">{contract.termMonths} \u043c\u0435\u0441</b></div>
-            <div><span>\u041a \u043e\u043f\u043b\u0430\u0442\u0435</span><b className="num">{money(st.financed)}</b></div>
-            <div><span>\u041e\u0441\u0442\u0430\u0442\u043e\u043a</span><b className="num strong">{money(st.remaining)}</b></div>
+            <div><span>Цена</span><b className="num">{money(contract.totalPrice)}</b></div>
+            <div><span>Взнос</span><b className="num">{money(contract.downPayment)}</b></div>
+            <div><span>Наценка</span><b className="num">{money(contract.markup)}</b></div>
+            <div><span>Срок</span><b className="num">{contract.termMonths} мес</b></div>
+            <div><span>К оплате</span><b className="num">{money(st.financed)}</b></div>
+            <div><span>Остаток</span><b className="num strong">{money(st.remaining)}</b></div>
           </div>
 
-          <div className="ledger-hd">\u0413\u0440\u0430\u0444\u0438\u043a \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439</div>
+          <div className="ledger-hd">График платежей</div>
           <div className="ledger">
             {st.rows.map((r) => (
               <div key={r.index} className={`lrow ${r.status}`}>
@@ -335,11 +335,11 @@ function Detail({ contract, onClose, onToggle }) {
                 <span className="lstatus"><Badge s={r.status} /></span>
                 {r.paid ? (
                   <button className="lbtn undo" onClick={() => onToggle(contract.id, r.index)}>
-                    <Undo2 size={13} /> \u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c
+                    <Undo2 size={13} /> Отменить
                   </button>
                 ) : (
                   <button className="lbtn pay" onClick={() => onToggle(contract.id, r.index)}>
-                    <Check size={13} /> \u041e\u043f\u043b\u0430\u0442\u0438\u0442\u044c
+                    <Check size={13} /> Оплатить
                   </button>
                 )}
               </div>
@@ -369,36 +369,36 @@ function AddForm({ onClose, onSave }) {
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
-          <div className="sheet-name">\u041d\u043e\u0432\u044b\u0439 \u0434\u043e\u0433\u043e\u0432\u043e\u0440 \u0440\u0430\u0441\u0441\u0440\u043e\u0447\u043a\u0438</div>
+          <div className="sheet-name">Новый договор рассрочки</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="sheet-body">
-          <Field label="\u0424\u0418\u041e \u043a\u043b\u0438\u0435\u043d\u0442\u0430"><input value={f.clientName} onChange={set("clientName")} placeholder="\u0418\u0432\u0430\u043d\u043e\u0432 \u0418\u0432\u0430\u043d" /></Field>
+          <Field label="ФИО клиента"><input value={f.clientName} onChange={set("clientName")} placeholder="Иванов Иван" /></Field>
           <div className="frow">
-            <Field label="\u0422\u0435\u043b\u0435\u0444\u043e\u043d"><input value={f.phone} onChange={set("phone")} placeholder="+7 \u2026" /></Field>
-            <Field label="\u0414\u0430\u0442\u0430 1-\u0433\u043e \u043f\u043b\u0430\u0442\u0435\u0436\u0430"><input type="date" value={f.startDate} onChange={set("startDate")} /></Field>
+            <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
+            <Field label="Дата 1-го платежа"><input type="date" value={f.startDate} onChange={set("startDate")} /></Field>
           </div>
-          <Field label="\u0422\u043e\u0432\u0430\u0440"><input value={f.item} onChange={set("item")} placeholder="\u0422\u0435\u043b\u0435\u0444\u043e\u043d, \u0442\u0435\u0445\u043d\u0438\u043a\u0430\u2026" /></Field>
+          <Field label="Товар"><input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" /></Field>
           <div className="frow">
-            <Field label="\u0426\u0435\u043d\u0430 \u0442\u043e\u0432\u0430\u0440\u0430"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
-            <Field label="\u041f\u0435\u0440\u0432\u043e\u043d\u0430\u0447. \u0432\u0437\u043d\u043e\u0441"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
+            <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
+            <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
           </div>
           <div className="frow">
-            <Field label="\u041d\u0430\u0446\u0435\u043d\u043a\u0430 (\u043f\u0435\u0440\u0435\u043f\u043b\u0430\u0442\u0430)"><input type="number" value={f.markup} onChange={set("markup")} placeholder="0" /></Field>
-            <Field label="\u0421\u0440\u043e\u043a, \u043c\u0435\u0441"><input type="number" value={f.termMonths} onChange={set("termMonths")} placeholder="6" /></Field>
+            <Field label="Наценка (переплата)"><input type="number" value={f.markup} onChange={set("markup")} placeholder="0" /></Field>
+            <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={set("termMonths")} placeholder="6" /></Field>
           </div>
 
           <div className="calc">
-            <div><span>\u041a \u043e\u043f\u043b\u0430\u0442\u0435 \u0432 \u0440\u0430\u0441\u0441\u0440\u043e\u0447\u043a\u0443</span><b className="num">{money(financed)}</b></div>
-            <div><span>\u041f\u043b\u0430\u0442\u0451\u0436 \u0432 \u043c\u0435\u0441\u044f\u0446</span><b className="num strong">{money(monthly)}</b></div>
+            <div><span>К оплате в рассрочку</span><b className="num">{money(financed)}</b></div>
+            <div><span>Платёж в месяц</span><b className="num strong">{money(monthly)}</b></div>
           </div>
 
           <div className="sheet-actions">
-            <button className="btn ghost" onClick={onClose}>\u041e\u0442\u043c\u0435\u043d\u0430</button>
+            <button className="btn ghost" onClick={onClose}>Отмена</button>
             <button className="btn primary" disabled={!valid} onClick={() => onSave({
               ...f, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
               markup: +f.markup || 0, termMonths: +f.termMonths,
-            })}>\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0434\u043e\u0433\u043e\u0432\u043e\u0440</button>
+            })}>Создать договор</button>
           </div>
         </div>
       </div>
