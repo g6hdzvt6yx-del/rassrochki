@@ -286,6 +286,19 @@ export default function App() {
       })
     );
 
+  const earlyPayoff = (cid) =>
+    setContracts((prev) =>
+      prev.map((c) => {
+        if (c.id !== cid) return c;
+        const payments = { ...(c.payments || {}) };
+        const today = new Date().toISOString().slice(0, 10);
+        buildSchedule(c).forEach((r) => {
+          if (!r.paid) payments[r.index] = { ...(payments[r.index] || {}), paidDate: today };
+        });
+        return { ...c, payments };
+      })
+    );
+
   const removeReceipt = (cid, idx) =>
     setContracts((prev) =>
       prev.map((c) => {
@@ -312,6 +325,7 @@ export default function App() {
     financed: "Выдано в рассрочку — по договорам",
     active: "Активные договоры",
     debtors: "Должники (просрочка)",
+    profit: "Общая прибыль — по договорам",
   };
 
   const sectionRows = useMemo(() => {
@@ -327,7 +341,10 @@ export default function App() {
         id: c.id,
         name: c.clientName,
         item: c.item,
-        amount: sectionModal === "financed" ? st.financed : sectionModal === "debtors" ? st.overdueSum : st.remaining,
+        amount: sectionModal === "financed" ? st.financed
+          : sectionModal === "debtors" ? st.overdueSum
+          : sectionModal === "profit" ? Math.max(0, +c.markup || 0)
+          : st.remaining,
         badge: st.done ? "done" : st.overdueSum ? "overdue" : "active",
       }))
       .sort((a, b) => b.amount - a.amount);
@@ -384,6 +401,7 @@ export default function App() {
 
           <section className="cards">
             <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} onClick={() => setSectionModal("financed")} />
+            <Stat icon={<TrendingUp size={16} />} label="Общая прибыль" value={money(capital.profitTotal)} onClick={() => setSectionModal("profit")} />
             <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} onClick={() => setSectionModal("active")} />
             <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
           </section>
@@ -418,6 +436,9 @@ export default function App() {
               const overdueRows = st.rows.filter((r) => r.status === "overdue");
               const upcomingRows = st.rows.filter((r) => !r.paid && r.status !== "overdue");
               const paidRows = st.rows.filter((r) => r.paid);
+              const investorLabel = c.investorId
+                ? (investors.find((i) => i.id === c.investorId)?.name || "—")
+                : "Общий пул";
               return (
                 <div key={c.id} className="citem">
                   <button
@@ -425,7 +446,10 @@ export default function App() {
                     className="citem-status-row"
                     onClick={() => setExpandedId(expanded ? null : c.id)}
                   >
-                    <span className="citem-name">{c.clientName}</span>
+                    <span className="citem-name-block">
+                      <span className="citem-name">{c.clientName}</span>
+                      <span className="citem-investor muted">{investorLabel}</span>
+                    </span>
                     <span className="citem-status-right">
                       <Badge s={badge} />
                       <ChevronDown size={15} className={`chev ${expanded ? "on" : ""}`} />
@@ -546,6 +570,7 @@ export default function App() {
           onToggle={togglePay}
           onAttachReceipt={attachReceipt}
           onRemoveReceipt={removeReceipt}
+          onEarlyPayoff={earlyPayoff}
         />
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
@@ -606,7 +631,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt }) {
+function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
@@ -644,7 +669,14 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
             <div><span>Источник</span><b className="num">{investorName}</b></div>
           </div>
 
-          <div className="ledger-hd">График платежей</div>
+          <div className="ledger-hd-row">
+            <div className="ledger-hd ledger-hd-inline">График платежей</div>
+            {!st.done && (
+              <button className="btn ghost btn-sm" onClick={() => onEarlyPayoff(contract.id)}>
+                <CheckCircle2 size={13} /> Досрочное погашение
+              </button>
+            )}
+          </div>
           <div className="ledger">
             {st.rows.map((r) => (
               <div key={r.index} className={`lrow ${r.status}`}>
@@ -698,13 +730,31 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
 function AddForm({ investors, onClose, onSave }) {
   const [f, setF] = useState({
     clientName: "", phone: "", item: "",
-    totalPrice: "", downPayment: "", markupPercent: "20", termMonths: "6",
+    totalPrice: "", downPayment: "", markupPercent: "20", markupAmount: "0", termMonths: "6",
     startDate: new Date().toISOString().slice(0, 10), investorId: "",
   });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }));
 
   const principal = Math.max(0, (+f.totalPrice || 0) - (+f.downPayment || 0));
-  const markup = Math.round(principal * (+f.markupPercent || 0) / 100);
+
+  // цена/взнос меняются — сумма наценки пересчитывается от текущего процента
+  useEffect(() => {
+    setF((prev) => ({ ...prev, markupAmount: String(Math.round(principal * (+prev.markupPercent || 0) / 100)) }));
+  }, [principal]);
+
+  const onMarkupPercent = (e) => {
+    const percent = e.target.value;
+    const amount = Math.round(principal * (+percent || 0) / 100);
+    setF((prev) => ({ ...prev, markupPercent: percent, markupAmount: String(amount) }));
+  };
+
+  const onMarkupAmount = (e) => {
+    const amount = e.target.value;
+    const percent = principal > 0 ? Math.round(((+amount || 0) / principal) * 1000) / 10 : 0;
+    setF((prev) => ({ ...prev, markupAmount: amount, markupPercent: String(percent) }));
+  };
+
+  const markup = +f.markupAmount || 0;
   const financed = principal + markup;
   const monthly = financed / Math.max(1, +f.termMonths || 1);
   const valid = f.clientName.trim() && +f.totalPrice > 0 && +f.termMonths > 0;
@@ -728,17 +778,20 @@ function AddForm({ investors, onClose, onSave }) {
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
           </div>
           <div className="frow">
-            <Field label="Наценка, %"><input type="number" value={f.markupPercent} onChange={set("markupPercent")} placeholder="20" /></Field>
-            <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={set("termMonths")} placeholder="6" /></Field>
+            <Field label="Наценка, %"><input type="number" value={f.markupPercent} onChange={onMarkupPercent} placeholder="20" /></Field>
+            <Field label="Наценка, ₽"><input type="number" value={f.markupAmount} onChange={onMarkupAmount} placeholder="0" /></Field>
           </div>
-          <Field label="Источник финансирования">
-            <select value={f.investorId} onChange={set("investorId")}>
-              <option value="">Общий пул (без привязки)</option>
-              {investors.map((inv) => (
-                <option key={inv.id} value={inv.id}>{inv.name}</option>
-              ))}
-            </select>
-          </Field>
+          <div className="frow">
+            <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={set("termMonths")} placeholder="6" /></Field>
+            <Field label="Источник финансирования">
+              <select value={f.investorId} onChange={set("investorId")}>
+                <option value="">Общий пул (без привязки)</option>
+                {investors.map((inv) => (
+                  <option key={inv.id} value={inv.id}>{inv.name}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
 
           <div className="calc">
             <div><span>Наценка</span><b className="num">{money(markup)}</b></div>
@@ -748,10 +801,13 @@ function AddForm({ investors, onClose, onSave }) {
 
           <div className="sheet-actions">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
-            <button className="btn primary" disabled={!valid} onClick={() => onSave({
-              ...f, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
-              markup, markupPercent: +f.markupPercent || 0, termMonths: +f.termMonths,
-            })}>Создать договор</button>
+            <button className="btn primary" disabled={!valid} onClick={() => {
+              const { markupAmount: _markupAmount, ...rest } = f;
+              onSave({
+                ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
+                markup, markupPercent: +f.markupPercent || 0, termMonths: +f.termMonths,
+              });
+            }}>Создать договор</button>
           </div>
         </div>
       </div>
@@ -842,7 +898,7 @@ const css = `
 .hero-legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;font-size:12.5px;color:var(--ink-soft)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:middle}
 
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 16px}
 .stat-ic{color:var(--brass);margin-bottom:8px}
 .stat-label{font-size:12px;color:var(--ink-soft);margin-bottom:3px}
@@ -880,7 +936,9 @@ const css = `
 .citem-status-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
   border:none;background:transparent;cursor:pointer;font:inherit;text-align:left;padding:15px 16px}
 .citem-status-row:hover{background:#F3F5EF}
+.citem-name-block{display:flex;flex-direction:column;gap:2px}
 .citem-name{font-weight:600;font-size:15px}
+.citem-investor{font-size:11.5px}
 .citem-status-right{display:flex;align-items:center;gap:8px}
 .chev{color:var(--ink-soft);transition:transform .15s}
 .chev.on{transform:rotate(180deg)}
@@ -915,6 +973,8 @@ const css = `
 
 .ledger-hd{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);
   font-weight:600;margin-bottom:8px}
+.ledger-hd-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ledger-hd-inline{margin-bottom:0}
 .ledger{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .lrow{display:grid;grid-template-columns:26px 1fr auto auto auto;align-items:center;gap:12px;
   padding:11px 14px;border-bottom:1px solid var(--line)}
