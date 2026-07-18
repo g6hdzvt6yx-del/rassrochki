@@ -3,9 +3,10 @@ import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
-  Upload, Download,
+  Upload, Download, LogOut,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { supabase, supabaseConfigured } from "./supabaseClient";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -24,17 +25,6 @@ const fileToDataUrl = (file) =>
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-
-// постоянное хранилище в браузере (переживает перезагрузку и закрытие вкладки)
-const localStore = {
-  async get(key) {
-    const value = window.localStorage.getItem(key);
-    return value === null ? null : { value };
-  },
-  async set(key, value) {
-    window.localStorage.setItem(key, value);
-  },
-};
 
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
@@ -85,46 +75,8 @@ const contractStats = (c) => {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Демо-данные (относительно сегодняшней даты)                        */
-/* ------------------------------------------------------------------ */
-
-const seed = () => {
-  const iso = (d) => new Date(d).toISOString().slice(0, 10);
-  const back = (m) => iso(addMonths(startOfToday().toISOString().slice(0, 10), -m));
-  return [
-    {
-      id: "c1", clientName: "Ахмедов Руслан", phone: "+7 928 000-11-22",
-      item: "iPhone 15, 128ГБ", totalPrice: 95000, downPayment: 15000, markup: 12000, markupPercent: 15,
-      termMonths: 6, startDate: back(3), investorId: "i1",
-      payments: { 0: { paidDate: back(3) }, 1: { paidDate: back(2) } },
-    },
-    {
-      id: "c2", clientName: "Сайдуллаева Зарема", phone: "+7 963 555-77-88",
-      item: "Стиральная машина Bosch", totalPrice: 62000, downPayment: 12000, markup: 8000, markupPercent: 16,
-      termMonths: 5, startDate: back(4), investorId: "i2",
-      payments: { 0: { paidDate: back(4) } },
-    },
-    {
-      id: "c3", clientName: "Магомедов Ибрагим", phone: "+7 989 123-45-67",
-      item: "Ноутбук Lenovo", totalPrice: 78000, downPayment: 18000, markup: 9000, markupPercent: 15,
-      termMonths: 6, startDate: iso(addMonths(startOfToday().toISOString().slice(0, 10), 0)),
-      investorId: "", payments: {},
-    },
-  ];
-};
-
-const STORAGE_KEY = "rassrochki:contracts:v1";
-
-/* ------------------------------------------------------------------ */
 /*  Вкладчики / капитал                                                */
 /* ------------------------------------------------------------------ */
-
-const seedInvestors = () => [
-  { id: "i1", name: "Иванов Пётр", amount: 2000000 },
-  { id: "i2", name: "Смирнова Ольга", amount: 1000000 },
-];
-
-const STORAGE_KEY_INVESTORS = "rassrochki:investors:v1";
 
 const WITHDRAWAL_PURPOSES = {
   owner: "Прибыль собственнику",
@@ -132,10 +84,6 @@ const WITHDRAWAL_PURPOSES = {
   restock: "Закупка товара",
   other: "Прочее",
 };
-
-const seedWithdrawals = () => [];
-
-const STORAGE_KEY_WITHDRAWALS = "rassrochki:withdrawals:v1";
 
 // сколько из наценки (прибыли) уже получено, а сколько ещё в графике платежей
 const contractCapital = (c) => {
@@ -146,6 +94,38 @@ const contractCapital = (c) => {
   const frac = financed > 0 ? paidSum / financed : 0;
   return { principal, markup, principalReturned: principal * frac, profitRealized: markup * frac };
 };
+
+/* ------------------------------------------------------------------ */
+/*  Supabase: перевод строк БД <-> объекты приложения                  */
+/* ------------------------------------------------------------------ */
+
+const contractFromRow = (r) => ({
+  id: r.id, clientName: r.client_name, phone: r.phone || "", item: r.item || "",
+  totalPrice: Number(r.total_price) || 0, downPayment: Number(r.down_payment) || 0,
+  markup: Number(r.markup) || 0, markupPercent: Number(r.markup_percent) || 0,
+  termMonths: Number(r.term_months) || 1, startDate: r.start_date,
+  investorId: r.investor_id || "", payments: r.payments || {},
+});
+
+const contractToRow = (c) => ({
+  id: c.id, client_name: c.clientName, phone: c.phone || "", item: c.item || "",
+  total_price: c.totalPrice, down_payment: c.downPayment || 0,
+  markup: c.markup || 0, markup_percent: c.markupPercent || 0,
+  term_months: c.termMonths, start_date: c.startDate,
+  investor_id: c.investorId || "", payments: c.payments || {},
+});
+
+const investorFromRow = (r) => ({ id: r.id, name: r.name, amount: Number(r.amount) || 0 });
+const investorToRow = (i) => ({ id: i.id, name: i.name, amount: i.amount });
+
+const withdrawalFromRow = (r) => ({
+  id: r.id, amount: Number(r.amount) || 0, date: r.date, investorId: r.investor_id || "",
+  purpose: r.purpose || "other", note: r.note || "",
+});
+const withdrawalToRow = (w) => ({
+  id: w.id, amount: w.amount, date: w.date, investor_id: w.investorId || "",
+  purpose: w.purpose || "other", note: w.note || "",
+});
 
 /* ------------------------------------------------------------------ */
 /*  Импорт из Excel                                                    */
@@ -342,18 +322,22 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 /* ------------------------------------------------------------------ */
 
 export default function App() {
+  const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
   const [contracts, setContracts] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
   const [tab, setTab] = useState("dashboard");
   const [openId, setOpenId] = useState(null);
   const [adding, setAdding] = useState(false);
 
   const [investors, setInvestors] = useState([]);
-  const [loadedInvestors, setLoadedInvestors] = useState(false);
   const [addingInvestor, setAddingInvestor] = useState(false);
 
   const [withdrawals, setWithdrawals] = useState([]);
-  const [loadedWithdrawals, setLoadedWithdrawals] = useState(false);
   const [addingWithdrawal, setAddingWithdrawal] = useState(false);
 
   const [sectionModal, setSectionModal] = useState(null);
@@ -361,80 +345,49 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const [storageError, setStorageError] = useState(false);
 
-  // загрузка
+  // сессия входа
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await localStore.get(STORAGE_KEY);
-        setContracts(res && res.value ? JSON.parse(res.value) : seed());
-      } catch {
-        setContracts(seed());
-      } finally {
-        setLoaded(true);
-      }
-    })();
+    if (!supabaseConfigured) { setSession(null); return; }
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => setSession(sess));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  // сохранение
-  useEffect(() => {
-    if (!loaded) return;
-    (async () => {
-      try {
-        await localStore.set(STORAGE_KEY, JSON.stringify(contracts));
-        setStorageError(false);
-      } catch { setStorageError(true); }
-    })();
-  }, [contracts, loaded]);
+  const login = async (email, password) => {
+    setAuthBusy(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    setAuthBusy(false);
+  };
 
-  // загрузка вкладчиков
+  const logout = () => supabase.auth.signOut();
+
+  // загрузка договоров, вкладчиков и выводов из Supabase
   useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    setLoaded(false);
+    setLoadError("");
     (async () => {
-      try {
-        const res = await localStore.get(STORAGE_KEY_INVESTORS);
-        setInvestors(res && res.value ? JSON.parse(res.value) : seedInvestors());
-      } catch {
-        setInvestors(seedInvestors());
-      } finally {
-        setLoadedInvestors(true);
+      const [contractsRes, investorsRes, withdrawalsRes] = await Promise.all([
+        supabase.from("contracts").select("*").order("created_at", { ascending: false }),
+        supabase.from("investors").select("*").order("created_at", { ascending: false }),
+        supabase.from("withdrawals").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (cancelled) return;
+      const err = contractsRes.error || investorsRes.error || withdrawalsRes.error;
+      if (err) {
+        setLoadError(err.message || "Не удалось загрузить данные");
+        return;
       }
+      setContracts((contractsRes.data || []).map(contractFromRow));
+      setInvestors((investorsRes.data || []).map(investorFromRow));
+      setWithdrawals((withdrawalsRes.data || []).map(withdrawalFromRow));
+      setLoaded(true);
     })();
-  }, []);
-
-  // сохранение вкладчиков
-  useEffect(() => {
-    if (!loadedInvestors) return;
-    (async () => {
-      try {
-        await localStore.set(STORAGE_KEY_INVESTORS, JSON.stringify(investors));
-        setStorageError(false);
-      } catch { setStorageError(true); }
-    })();
-  }, [investors, loadedInvestors]);
-
-  // загрузка выводов
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await localStore.get(STORAGE_KEY_WITHDRAWALS);
-        setWithdrawals(res && res.value ? JSON.parse(res.value) : seedWithdrawals());
-      } catch {
-        setWithdrawals(seedWithdrawals());
-      } finally {
-        setLoadedWithdrawals(true);
-      }
-    })();
-  }, []);
-
-  // сохранение выводов
-  useEffect(() => {
-    if (!loadedWithdrawals) return;
-    (async () => {
-      try {
-        await localStore.set(STORAGE_KEY_WITHDRAWALS, JSON.stringify(withdrawals));
-        setStorageError(false);
-      } catch { setStorageError(true); }
-    })();
-  }, [withdrawals, loadedWithdrawals]);
+    return () => { cancelled = true; };
+  }, [session, reloadTick]);
 
   const totals = useMemo(() => {
     let financed = 0, paid = 0, overdue = 0, remaining = 0, debtors = 0, active = 0;
@@ -481,92 +434,121 @@ export default function App() {
     };
   }, [contracts, investors, withdrawals]);
 
-  const addInvestor = (data) => {
-    setInvestors((prev) => [{ ...data, id: "i" + Date.now() }, ...prev]);
+  const addInvestor = async (data) => {
+    const inv = { ...data, id: "i" + Date.now() };
+    setInvestors((prev) => [inv, ...prev]);
     setAddingInvestor(false);
+    const { error } = await supabase.from("investors").insert(investorToRow(inv));
+    setStorageError(!!error);
   };
 
-  const removeInvestor = (id) => setInvestors((prev) => prev.filter((i) => i.id !== id));
+  const removeInvestor = async (id) => {
+    setInvestors((prev) => prev.filter((i) => i.id !== id));
+    const { error } = await supabase.from("investors").delete().eq("id", id);
+    setStorageError(!!error);
+  };
 
-  const addWithdrawal = (data) => {
-    setWithdrawals((prev) => [{ ...data, id: "w" + Date.now() }, ...prev]);
+  const addWithdrawal = async (data) => {
+    const w = { ...data, id: "w" + Date.now() };
+    setWithdrawals((prev) => [w, ...prev]);
     setAddingWithdrawal(false);
+    const { error } = await supabase.from("withdrawals").insert(withdrawalToRow(w));
+    setStorageError(!!error);
   };
 
-  const removeWithdrawal = (id) => setWithdrawals((prev) => prev.filter((w) => w.id !== id));
+  const removeWithdrawal = async (id) => {
+    setWithdrawals((prev) => prev.filter((w) => w.id !== id));
+    const { error } = await supabase.from("withdrawals").delete().eq("id", id);
+    setStorageError(!!error);
+  };
 
-  const importData = (newInvestors, newContracts, paymentUpdates) => {
-    if (newInvestors.length) setInvestors((prev) => [...newInvestors, ...prev]);
-    if (newContracts.length) setContracts((prev) => [...newContracts, ...prev]);
-    if (paymentUpdates && paymentUpdates.length) {
-      setContracts((prev) =>
-        prev.map((c) => {
-          const updates = paymentUpdates.filter((u) => u.contractId === c.id);
-          if (!updates.length) return c;
-          const payments = { ...(c.payments || {}) };
-          updates.forEach((u) => { payments[u.index] = { ...(payments[u.index] || {}), paidDate: u.paidDate }; });
-          return { ...c, payments };
-        })
-      );
+  const importData = async (newInvestors, newContracts, paymentUpdates) => {
+    let failed = false;
+    if (newInvestors.length) {
+      setInvestors((prev) => [...newInvestors, ...prev]);
+      const { error } = await supabase.from("investors").insert(newInvestors.map(investorToRow));
+      if (error) failed = true;
     }
+    if (newContracts.length) {
+      setContracts((prev) => [...newContracts, ...prev]);
+      const { error } = await supabase.from("contracts").insert(newContracts.map(contractToRow));
+      if (error) failed = true;
+    }
+    if (paymentUpdates && paymentUpdates.length) {
+      const merged = new Map();
+      paymentUpdates.forEach((u) => {
+        const base = merged.get(u.contractId) || { ...(contracts.find((c) => c.id === u.contractId)?.payments || {}) };
+        base[u.index] = { ...(base[u.index] || {}), paidDate: u.paidDate };
+        merged.set(u.contractId, base);
+      });
+      setContracts((prev) => prev.map((c) => (merged.has(c.id) ? { ...c, payments: merged.get(c.id) } : c)));
+      const results = await Promise.all(
+        [...merged.entries()].map(([id, payments]) => supabase.from("contracts").update({ payments }).eq("id", id))
+      );
+      if (results.some((r) => r.error)) failed = true;
+    }
+    setStorageError(failed);
   };
 
-  const togglePay = (cid, idx) =>
-    setContracts((prev) =>
-      prev.map((c) => {
-        if (c.id !== cid) return c;
-        const payments = { ...(c.payments || {}) };
-        const cur = payments[idx];
-        if (cur && cur.paidDate) {
-          if (cur.receipt) payments[idx] = { receipt: cur.receipt };
-          else delete payments[idx];
-        } else {
-          payments[idx] = { ...(cur || {}), paidDate: new Date().toISOString().slice(0, 10) };
-        }
-        return { ...c, payments };
-      })
-    );
+  const togglePay = async (cid, idx) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) return;
+    const payments = { ...(c.payments || {}) };
+    const cur = payments[idx];
+    if (cur && cur.paidDate) {
+      if (cur.receipt) payments[idx] = { receipt: cur.receipt };
+      else delete payments[idx];
+    } else {
+      payments[idx] = { ...(cur || {}), paidDate: new Date().toISOString().slice(0, 10) };
+    }
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    setStorageError(!!error);
+  };
 
-  const attachReceipt = (cid, idx, receipt) =>
-    setContracts((prev) =>
-      prev.map((c) => {
-        if (c.id !== cid) return c;
-        const payments = { ...(c.payments || {}) };
-        payments[idx] = { ...(payments[idx] || {}), receipt };
-        return { ...c, payments };
-      })
-    );
+  const attachReceipt = async (cid, idx, receipt) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) return;
+    const payments = { ...(c.payments || {}) };
+    payments[idx] = { ...(payments[idx] || {}), receipt };
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    setStorageError(!!error);
+  };
 
-  const earlyPayoff = (cid) =>
-    setContracts((prev) =>
-      prev.map((c) => {
-        if (c.id !== cid) return c;
-        const payments = { ...(c.payments || {}) };
-        const today = new Date().toISOString().slice(0, 10);
-        buildSchedule(c).forEach((r) => {
-          if (!r.paid) payments[r.index] = { ...(payments[r.index] || {}), paidDate: today };
-        });
-        return { ...c, payments };
-      })
-    );
+  const earlyPayoff = async (cid) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) return;
+    const payments = { ...(c.payments || {}) };
+    const today = new Date().toISOString().slice(0, 10);
+    buildSchedule(c).forEach((r) => {
+      if (!r.paid) payments[r.index] = { ...(payments[r.index] || {}), paidDate: today };
+    });
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    setStorageError(!!error);
+  };
 
-  const removeReceipt = (cid, idx) =>
-    setContracts((prev) =>
-      prev.map((c) => {
-        if (c.id !== cid) return c;
-        const payments = { ...(c.payments || {}) };
-        const cur = payments[idx];
-        if (!cur) return c;
-        const { receipt, ...rest } = cur;
-        if (Object.keys(rest).length === 0) delete payments[idx];
-        else payments[idx] = rest;
-        return { ...c, payments };
-      })
-    );
+  const removeReceipt = async (cid, idx) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) return;
+    const payments = { ...(c.payments || {}) };
+    const cur = payments[idx];
+    if (!cur) return;
+    const { receipt, ...rest } = cur;
+    if (Object.keys(rest).length === 0) delete payments[idx];
+    else payments[idx] = rest;
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    setStorageError(!!error);
+  };
 
-  const addContract = (data) => {
-    setContracts((prev) => [{ ...data, id: "c" + Date.now(), payments: {} }, ...prev]);
+  const addContract = async (data) => {
+    const c = { ...data, id: "c" + Date.now(), payments: {} };
+    setContracts((prev) => [c, ...prev]);
     setAdding(false);
+    const { error } = await supabase.from("contracts").insert(contractToRow(c));
+    setStorageError(!!error);
   };
 
   const open = contracts.find((c) => c.id === openId) || null;
@@ -601,6 +583,35 @@ export default function App() {
       .sort((a, b) => b.amount - a.amount);
   }, [sectionModal, contracts]);
 
+  if (!supabaseConfigured)
+    return (
+      <div className="app"><style>{css}</style>
+        <div className="loading">
+          Supabase не подключён — не заданы VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.
+        </div>
+      </div>
+    );
+
+  if (session === undefined)
+    return (
+      <div className="app"><style>{css}</style>
+        <div className="loading">Проверка входа…</div>
+      </div>
+    );
+
+  if (!session)
+    return <Login onLogin={login} busy={authBusy} error={authError} />;
+
+  if (loadError)
+    return (
+      <div className="app"><style>{css}</style>
+        <div className="loading">
+          Не удалось загрузить данные: {loadError}
+          <div><button className="btn primary btn-sm retry-btn" onClick={() => setReloadTick((t) => t + 1)}>Повторить</button></div>
+        </div>
+      </div>
+    );
+
   if (!loaded)
     return (
       <div className="app"><style>{css}</style>
@@ -627,6 +638,9 @@ export default function App() {
           <button className="btn primary" onClick={() => setAdding(true)}>
             <Plus size={16} /> Новый договор
           </button>
+          <button className="icon-btn" onClick={logout} title="Выйти">
+            <LogOut size={16} />
+          </button>
         </div>
       </header>
 
@@ -646,8 +660,8 @@ export default function App() {
         <div className="storage-warn-wrap">
           <div className="storage-warn">
             <AlertTriangle size={15} />
-            Не удалось сохранить последние изменения в этом браузере — возможно, закончилось место в хранилище
-            (часто из-за больших прикреплённых чеков). Изменения видны сейчас, но пропадут при перезагрузке страницы.
+            Не удалось сохранить последние изменения в базе данных — проверьте интернет-соединение.
+            Изменения видны сейчас, но могут не сохраниться на сервере.
           </div>
         </div>
       )}
@@ -694,6 +708,9 @@ export default function App() {
 
       {tab === "contracts" && (
         <main className="wrap">
+          {contracts.length === 0 ? (
+            <div className="panel"><div className="empty">Договоров пока нет — добавьте первый кнопкой «Новый договор».</div></div>
+          ) : (
           <div className="clist">
             {contracts.map((c) => {
               const st = contractStats(c);
@@ -762,6 +779,7 @@ export default function App() {
               );
             })}
           </div>
+          )}
         </main>
       )}
 
@@ -892,6 +910,42 @@ export default function App() {
           onOpenContract={(id) => { setSectionModal(null); setOpenId(id); }}
         />
       )}
+    </div>
+  );
+}
+
+/* --------------------------- Вход --------------------------------- */
+
+function Login({ onLogin, busy, error }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!email.trim() || !password || busy) return;
+    onLogin(email.trim(), password);
+  };
+
+  return (
+    <div className="app">
+      <style>{css}</style>
+      <div className="login-wrap">
+        <form className="login-card" onSubmit={submit}>
+          <div className="login-mark"><Wallet size={20} /></div>
+          <div className="login-title">Рассрочки</div>
+          <div className="login-sub">Войдите, чтобы продолжить</div>
+          <Field label="Email">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoFocus />
+          </Field>
+          <Field label="Пароль">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+          </Field>
+          {error && <div className="login-error">{error}</div>}
+          <button className="btn primary login-btn" type="submit" disabled={busy}>
+            {busy ? "Входим…" : "Войти"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -1304,6 +1358,18 @@ const css = `
 .strong{font-weight:600}
 .muted{color:var(--ink-soft);font-size:12px}
 .loading{padding:60px;text-align:center;color:var(--ink-soft)}
+.retry-btn{margin-top:14px}
+
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:32px 28px;
+  width:100%;max-width:360px;box-shadow:0 24px 60px rgba(18,32,28,.12)}
+.login-mark{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-bottom:14px;
+  background:linear-gradient(135deg,var(--brass),#B0873C);color:#fff}
+.login-title{font-weight:700;font-size:19px;letter-spacing:.02em}
+.login-sub{color:var(--ink-soft);font-size:13px;margin:2px 0 20px}
+.login-error{background:#FBEEEC;color:var(--clay);border:1px solid #F0CAC4;border-radius:9px;
+  padding:9px 12px;font-size:12.5px;margin-bottom:14px}
+.login-btn{width:100%;justify-content:center;margin-top:4px}
 
 .hd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   padding:16px 20px;background:var(--ink);color:#EFF3EC}
