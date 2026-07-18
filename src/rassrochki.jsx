@@ -3,7 +3,9 @@ import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
+  Upload, Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -124,6 +126,106 @@ const contractCapital = (c) => {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Импорт из Excel                                                    */
+/* ------------------------------------------------------------------ */
+
+const excelDateToIso = (v) => {
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+  if (typeof v === "number") {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+  }
+  if (typeof v === "string" && v.trim()) {
+    const s = v.trim();
+    const dm = s.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})$/);
+    if (dm) return `${dm[3]}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`;
+    const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+  }
+  return null;
+};
+
+const findSheet = (wb, names) => {
+  const key = wb.SheetNames.find((n) => names.includes(n.trim().toLowerCase()));
+  return key ? wb.Sheets[key] : null;
+};
+
+const parseImportWorkbook = async (file, existingInvestors) => {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+
+  const investorsSheet = findSheet(wb, ["вкладчики", "investors"]);
+  const contractsSheet = findSheet(wb, ["договоры", "contracts"]);
+
+  const newInvestors = [];
+  const investorByName = new Map(existingInvestors.map((i) => [i.name.trim().toLowerCase(), i]));
+  const errors = [];
+
+  if (investorsSheet) {
+    XLSX.utils.sheet_to_json(investorsSheet, { defval: "" }).forEach((row, i) => {
+      const name = String(row["Имя вкладчика"] || row["Имя"] || "").trim();
+      const amount = +row["Сумма вклада"] || +row["Сумма"] || 0;
+      if (!name && !amount) return;
+      if (!name || amount <= 0) { errors.push(`Вкладчики, строка ${i + 2}: не заполнено имя или сумма`); return; }
+      if (investorByName.has(name.toLowerCase())) return;
+      const inv = { id: "i" + Date.now() + Math.random().toString(36).slice(2, 7), name, amount };
+      newInvestors.push(inv);
+      investorByName.set(name.toLowerCase(), inv);
+    });
+  }
+
+  const newContracts = [];
+  if (contractsSheet) {
+    XLSX.utils.sheet_to_json(contractsSheet, { defval: "" }).forEach((row, i) => {
+      const rowNum = i + 2;
+      const clientName = String(row["ФИО клиента"] || "").trim();
+      const totalPrice = +row["Цена товара"] || 0;
+      const termMonths = +row["Срок, мес"] || 0;
+      if (!clientName && !totalPrice) return;
+      if (!clientName || totalPrice <= 0 || termMonths <= 0) {
+        errors.push(`Договоры, строка ${rowNum}: не заполнены обязательные поля (ФИО, цена, срок)`);
+        return;
+      }
+      const downPayment = +row["Первоначальный взнос"] || 0;
+      const principal = Math.max(0, totalPrice - downPayment);
+      let markup = +row["Наценка, ₽"] || 0;
+      let markupPercent = +row["Наценка, %"] || 0;
+      if (!markup && markupPercent) markup = Math.round((principal * markupPercent) / 100);
+      else if (!markupPercent && markup && principal > 0) markupPercent = Math.round((markup / principal) * 1000) / 10;
+
+      const startDate = excelDateToIso(row["Дата 1-го платежа"]) || new Date().toISOString().slice(0, 10);
+
+      const sourceName = String(row["Источник финансирования"] || "").trim();
+      const investor = sourceName && sourceName.toLowerCase() !== "общий пул"
+        ? investorByName.get(sourceName.toLowerCase())
+        : null;
+      if (sourceName && sourceName.toLowerCase() !== "общий пул" && !investor) {
+        errors.push(`Договоры, строка ${rowNum}: вкладчик «${sourceName}» не найден — договор добавлен в общий пул`);
+      }
+
+      const paidCount = Math.max(0, Math.min(termMonths, Math.round(+row["Оплачено платежей (шт.)"] || 0)));
+      const payments = {};
+      for (let k = 0; k < paidCount; k++) {
+        payments[k] = { paidDate: addMonths(startDate, k).toISOString().slice(0, 10) };
+      }
+
+      newContracts.push({
+        id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
+        clientName, phone: String(row["Телефон"] || "").trim(), item: String(row["Товар"] || "").trim(),
+        totalPrice, downPayment, markup, markupPercent, termMonths, startDate,
+        investorId: investor ? investor.id : "", payments,
+      });
+    });
+  }
+
+  if (!investorsSheet && !contractsSheet) {
+    errors.push("В файле не найдены вкладки «Вкладчики» или «Договоры» — используйте шаблон");
+  }
+
+  return { newInvestors, newContracts, errors };
+};
+
+/* ------------------------------------------------------------------ */
 /*  Мелкие компоненты                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -173,6 +275,7 @@ export default function App() {
 
   const [sectionModal, setSectionModal] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   // загрузка
   useEffect(() => {
@@ -259,6 +362,11 @@ export default function App() {
   };
 
   const removeInvestor = (id) => setInvestors((prev) => prev.filter((i) => i.id !== id));
+
+  const importData = (newInvestors, newContracts) => {
+    if (newInvestors.length) setInvestors((prev) => [...newInvestors, ...prev]);
+    if (newContracts.length) setContracts((prev) => [...newContracts, ...prev]);
+  };
 
   const togglePay = (cid, idx) =>
     setContracts((prev) =>
@@ -369,9 +477,14 @@ export default function App() {
             <div className="btag">учёт договоров и платежей</div>
           </div>
         </div>
-        <button className="btn primary" onClick={() => setAdding(true)}>
-          <Plus size={16} /> Новый договор
-        </button>
+        <div className="hd-actions">
+          <button className="btn on-dark" onClick={() => setImporting(true)}>
+            <Upload size={16} /> Импорт из Excel
+          </button>
+          <button className="btn primary" onClick={() => setAdding(true)}>
+            <Plus size={16} /> Новый договор
+          </button>
+        </div>
       </header>
 
       <nav className="tabs">
@@ -575,6 +688,7 @@ export default function App() {
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
       {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
+      {importing && <ImportModal investors={investors} onClose={() => setImporting(false)} onImport={importData} />}
       {sectionModal && (
         <SectionDetail
           title={sectionTitles[sectionModal]}
@@ -848,6 +962,80 @@ function AddInvestorForm({ onClose, onSave }) {
   );
 }
 
+/* --------------------------- Импорт из Excel ------------------------ */
+
+function ImportModal({ investors, onClose, onImport }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const { newInvestors, newContracts, errors } = await parseImportWorkbook(file, investors);
+      onImport(newInvestors, newContracts);
+      setResult({ investors: newInvestors.length, contracts: newContracts.length, errors });
+    } catch (err) {
+      setResult({ investors: 0, contracts: 0, errors: [`Не удалось прочитать файл: ${err.message || err}`] });
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Импорт из Excel</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">
+          <p className="import-hint">
+            Скачайте шаблон, заполните вкладки «Вкладчики» и «Договоры», затем загрузите файл обратно.
+            Новые записи добавятся к уже существующим на сайте.
+          </p>
+          <div className="import-actions">
+            <a className="btn ghost" href={`${import.meta.env.BASE_URL}rassrochki_template.xlsx`} download>
+              <Download size={16} /> Скачать шаблон
+            </a>
+            <label className="btn primary" htmlFor="import-file-input">
+              <Upload size={16} /> {busy ? "Загрузка…" : "Выбрать файл .xlsx"}
+              <input
+                id="import-file-input"
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden-file-input"
+                disabled={busy}
+                onChange={handleFile}
+              />
+            </label>
+          </div>
+
+          {result && (
+            <div className="import-result">
+              <div className="import-result-row">
+                <CheckCircle2 size={15} className="ok" />
+                Добавлено вкладчиков: {result.investors}, договоров: {result.contracts}
+              </div>
+              {result.errors.length > 0 && (
+                <div className="mini-block">
+                  <div className="mini-hd clay">Замечания ({result.errors.length})</div>
+                  {result.errors.map((err, i) => (
+                    <div key={i} className="mini-row import-error">{err}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Стили                                                              */
 /* ------------------------------------------------------------------ */
@@ -868,9 +1056,10 @@ const css = `
 .muted{color:var(--ink-soft);font-size:12px}
 .loading{padding:60px;text-align:center;color:var(--ink-soft)}
 
-.hd{display:flex;align-items:center;justify-content:space-between;gap:12px;
+.hd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
   padding:16px 20px;background:var(--ink);color:#EFF3EC}
 .brand{display:flex;align-items:center;gap:11px}
+.hd-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .mark{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
   background:linear-gradient(135deg,var(--brass),#B0873C);color:#fff}
 .bname{font-weight:700;font-size:16px;letter-spacing:.02em}
@@ -1021,7 +1210,16 @@ const css = `
 .btn.primary:hover{filter:brightness(1.06)}
 .btn.primary:disabled{opacity:.45;cursor:not-allowed;filter:none}
 .btn.ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
+.btn.on-dark{background:rgba(255,255,255,.12);color:#EFF3EC;border:1px solid rgba(255,255,255,.18)}
+.btn.on-dark:hover{background:rgba(255,255,255,.2)}
 .btn-sm{padding:6px 12px;font-size:12.5px}
+
+.import-hint{font-size:13px;color:var(--ink-soft);line-height:1.5;margin:0 0 14px}
+.import-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.import-result{margin-top:4px}
+.import-result-row{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600}
+.import-result-row .ok{color:var(--emerald)}
+.import-error{color:var(--clay)}
 
 .icon-btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink-soft);
   width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer}
