@@ -499,9 +499,13 @@ export default function App() {
   };
 
   const attachReceipt = async (cid, idx, file) => {
-    const path = `${cid}/${idx}-${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("receipts").upload(path, file);
-    if (uploadError) { setStorageError(true); return; }
+    const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
+    const safeExt = /^\.[a-z0-9]{1,6}$/.test(ext) ? ext : "";
+    const path = `${cid}/${idx}-${Date.now()}${safeExt}`;
+    const { error: uploadError } = await supabase.storage.from("receipts").upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+    });
+    if (uploadError) { setStorageError(true); alert(`Не удалось загрузить чек: ${uploadError.message}`); return; }
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
     const receipt = { name: file.name, type: file.type, path };
@@ -1009,7 +1013,7 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
       // открываем вкладку сразу (по клику), иначе Safari заблокирует её после ожидания ссылки
       const win = window.open("about:blank", "_blank");
       const { data, error } = await supabase.storage.from("receipts").createSignedUrl(receipt.path, 60);
-      if (error || !data?.signedUrl) { win?.close(); alert("Не удалось открыть чек"); return; }
+      if (error || !data?.signedUrl) { win?.close(); alert(`Не удалось открыть чек: ${error?.message || "нет ссылки"}`); return; }
       if (win) win.location.href = data.signedUrl;
       else window.open(data.signedUrl, "_blank");
     } else if (receipt.dataUrl) {
