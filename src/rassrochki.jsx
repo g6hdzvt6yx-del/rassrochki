@@ -115,6 +115,17 @@ const seedInvestors = () => [
 
 const STORAGE_KEY_INVESTORS = "rassrochki:investors:v1";
 
+const WITHDRAWAL_PURPOSES = {
+  owner: "Прибыль собственнику",
+  investor_payout: "Выплата вкладчику",
+  restock: "Закупка товара",
+  other: "Прочее",
+};
+
+const seedWithdrawals = () => [];
+
+const STORAGE_KEY_WITHDRAWALS = "rassrochki:withdrawals:v1";
+
 // сколько из наценки (прибыли) уже получено, а сколько ещё в графике платежей
 const contractCapital = (c) => {
   const principal = Math.max(0, (+c.totalPrice || 0) - (+c.downPayment || 0));
@@ -330,6 +341,10 @@ export default function App() {
   const [loadedInvestors, setLoadedInvestors] = useState(false);
   const [addingInvestor, setAddingInvestor] = useState(false);
 
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [loadedWithdrawals, setLoadedWithdrawals] = useState(false);
+  const [addingWithdrawal, setAddingWithdrawal] = useState(false);
+
   const [sectionModal, setSectionModal] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [importing, setImporting] = useState(false);
@@ -378,6 +393,28 @@ export default function App() {
     })();
   }, [investors, loadedInvestors]);
 
+  // загрузка выводов
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await window.storage.get(STORAGE_KEY_WITHDRAWALS);
+        setWithdrawals(res && res.value ? JSON.parse(res.value) : seedWithdrawals());
+      } catch {
+        setWithdrawals(seedWithdrawals());
+      } finally {
+        setLoadedWithdrawals(true);
+      }
+    })();
+  }, []);
+
+  // сохранение выводов
+  useEffect(() => {
+    if (!loadedWithdrawals) return;
+    (async () => {
+      try { await window.storage.set(STORAGE_KEY_WITHDRAWALS, JSON.stringify(withdrawals)); } catch { /* демо-режим без сохранения */ }
+    })();
+  }, [withdrawals, loadedWithdrawals]);
+
   const totals = useMemo(() => {
     let financed = 0, paid = 0, overdue = 0, remaining = 0, debtors = 0, active = 0;
     const upcoming = [];
@@ -406,12 +443,22 @@ export default function App() {
     });
     const invested = investors.reduce((s, i) => s + (+i.amount || 0), 0);
     const deployed = principalTotal - principalReturned;
+
+    const withdrawnByInvestor = {};
+    let withdrawnTotal = 0;
+    withdrawals.forEach((w) => {
+      const key = w.investorId || "";
+      const amt = +w.amount || 0;
+      withdrawnByInvestor[key] = (withdrawnByInvestor[key] || 0) + amt;
+      withdrawnTotal += amt;
+    });
+
     return {
-      invested, deployed, free: invested - deployed,
+      invested, deployed, free: invested - deployed - withdrawnTotal,
       profitRealized, profitExpected: profitTotal - profitRealized, profitTotal,
-      perInvestor,
+      perInvestor, withdrawnByInvestor, withdrawnTotal,
     };
-  }, [contracts, investors]);
+  }, [contracts, investors, withdrawals]);
 
   const addInvestor = (data) => {
     setInvestors((prev) => [{ ...data, id: "i" + Date.now() }, ...prev]);
@@ -419,6 +466,13 @@ export default function App() {
   };
 
   const removeInvestor = (id) => setInvestors((prev) => prev.filter((i) => i.id !== id));
+
+  const addWithdrawal = (data) => {
+    setWithdrawals((prev) => [{ ...data, id: "w" + Date.now() }, ...prev]);
+    setAddingWithdrawal(false);
+  };
+
+  const removeWithdrawal = (id) => setWithdrawals((prev) => prev.filter((w) => w.id !== id));
 
   const importData = (newInvestors, newContracts, paymentUpdates) => {
     if (newInvestors.length) setInvestors((prev) => [...newInvestors, ...prev]);
@@ -696,6 +750,9 @@ export default function App() {
                 <span><i className="dot s-over" /> Не хватает вложений {money(-capital.free)}</span>
               )}
               <span><i className="dot s-rem" /> Свободно {money(Math.max(0, capital.free))}</span>
+              {capital.withdrawnTotal > 0 && (
+                <span>Выведено всего: {money(capital.withdrawnTotal)}</span>
+              )}
             </div>
           </section>
 
@@ -717,7 +774,8 @@ export default function App() {
           ) : (
             investors.map((inv) => {
               const invDeployed = capital.perInvestor[inv.id] || 0;
-              const invFree = (+inv.amount || 0) - invDeployed;
+              const invWithdrawn = capital.withdrawnByInvestor[inv.id] || 0;
+              const invFree = (+inv.amount || 0) - invDeployed - invWithdrawn;
               const pct = capital.invested ? Math.round(((+inv.amount || 0) / capital.invested) * 100) : 0;
               return (
                 <div key={inv.id} className="inv-card">
@@ -731,6 +789,7 @@ export default function App() {
                     <div><span>Вклад</span><b className="num">{money(inv.amount)}</b></div>
                     <div><span>Доля</span><b className="num">{pct}%</b></div>
                     <div><span>В обороте</span><b className="num">{money(invDeployed)}</b></div>
+                    <div><span>Выведено</span><b className="num">{money(invWithdrawn)}</b></div>
                     <div><span>Свободно</span><b className="num strong">{money(invFree)}</b></div>
                   </div>
                 </div>
@@ -738,7 +797,39 @@ export default function App() {
             })
           )}
           {capital.perInvestor[""] > 0 && (
-            <div className="muted unassigned-note">Без привязки к вкладчику: {money(capital.perInvestor[""])}</div>
+            <div className="muted unassigned-note">Без привязки к вкладчику в обороте: {money(capital.perInvestor[""])}</div>
+          )}
+
+          <section className="panel-hd panel-hd-row inv-list-hd wd-list-hd">
+            <span className="panel-hd-title"><Wallet size={15} /> Выводы</span>
+            <button className="btn primary btn-sm" onClick={() => setAddingWithdrawal(true)}>
+              <Plus size={14} /> Вывод
+            </button>
+          </section>
+
+          {withdrawals.length === 0 ? (
+            <div className="panel"><div className="empty">Выводов пока не было.</div></div>
+          ) : (
+            <div className="panel">
+              <div className="rows">
+                {withdrawals.map((w) => {
+                  const invName = w.investorId
+                    ? (investors.find((i) => i.id === w.investorId)?.name || "—")
+                    : "Общий пул / собственные";
+                  return (
+                    <div key={w.id} className="wd-row">
+                      <span className="wd-date">{fmtDate(w.date)}</span>
+                      <span className="wd-purpose"><span className="badge b-brass">{WITHDRAWAL_PURPOSES[w.purpose] || "Прочее"}</span></span>
+                      <span className="wd-investor muted">{invName}</span>
+                      <span className="wd-sum num strong">{money(w.amount)}</span>
+                      <button className="icon-btn-ghost" onClick={() => removeWithdrawal(w.id)} title="Удалить">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </main>
       )}
@@ -756,6 +847,9 @@ export default function App() {
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
       {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
+      {addingWithdrawal && (
+        <AddWithdrawalForm investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
+      )}
       {importing && (
         <ImportModal investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
       )}
@@ -1032,6 +1126,59 @@ function AddInvestorForm({ onClose, onSave }) {
   );
 }
 
+/* --------------------------- Новый вывод средств --------------------- */
+
+function AddWithdrawalForm({ investors, onClose, onSave }) {
+  const [f, setF] = useState({
+    amount: "", date: new Date().toISOString().slice(0, 10),
+    investorId: "", purpose: "owner", note: "",
+  });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const valid = +f.amount > 0 && f.date;
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Новый вывод средств</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">
+          <div className="frow">
+            <Field label="Сумма"><input type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
+            <Field label="Дата"><input type="date" value={f.date} onChange={set("date")} /></Field>
+          </div>
+          <Field label="С кем рассчитываемся">
+            <select value={f.investorId} onChange={set("investorId")}>
+              <option value="">Общий пул / собственные средства</option>
+              {investors.map((inv) => (
+                <option key={inv.id} value={inv.id}>{inv.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Назначение вывода">
+            <select value={f.purpose} onChange={set("purpose")}>
+              {Object.entries(WITHDRAWAL_PURPOSES).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Комментарий (необязательно)">
+            <input value={f.note} onChange={set("note")} placeholder="Например, модель телефона для закупки" />
+          </Field>
+
+          <div className="sheet-actions">
+            <button className="btn ghost" onClick={onClose}>Отмена</button>
+            <button className="btn primary" disabled={!valid} onClick={() => onSave({
+              amount: +f.amount, date: f.date, investorId: f.investorId, purpose: f.purpose, note: f.note.trim(),
+            })}>Вывести</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------- Импорт из Excel ------------------------ */
 
 function ImportModal({ investors, contracts, onClose, onImport }) {
@@ -1188,6 +1335,7 @@ const css = `
 .b-clay{background:#F7E3E0;color:var(--clay)}
 .b-amber{background:#F6ECD6;color:#8A6111}
 .b-line{background:#EBEEE5;color:var(--ink-soft)}
+.b-brass{background:#F1E7D6;color:var(--brass)}
 
 .clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
 .citem{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;
@@ -1302,6 +1450,14 @@ const css = `
 .inv-card:last-child{margin-bottom:0}
 .unassigned-note{margin-top:4px;font-size:12.5px}
 
+.wd-list-hd{margin-top:18px}
+.wd-row{display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:14px;
+  padding:12px 18px;border-bottom:1px solid var(--line)}
+.wd-row:last-child{border-bottom:none}
+.wd-date{font-size:12.5px;color:var(--ink-soft);white-space:nowrap}
+.wd-investor{font-size:12.5px;white-space:nowrap}
+.wd-sum{font-size:14px}
+
 @media(max-width:560px){
   .cards{grid-template-columns:1fr}
   .det-grid{grid-template-columns:repeat(2,1fr)}
@@ -1311,5 +1467,8 @@ const css = `
   .lrow{grid-template-columns:22px 1fr auto;row-gap:6px}
   .lstatus{grid-column:2}
   .lbtn{grid-column:3}
+  .wd-row{grid-template-columns:1fr auto;row-gap:6px}
+  .wd-purpose{grid-column:1}
+  .wd-investor{grid-column:1}
 }
 `;
