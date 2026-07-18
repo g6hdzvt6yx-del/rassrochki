@@ -150,12 +150,40 @@ const findSheet = (wb, names) => {
   return key ? wb.Sheets[key] : null;
 };
 
-const parseImportWorkbook = async (file, existingInvestors) => {
+// индекс договоров по "имя|товар" и по одному имени — для сопоставления строк платежей
+const buildContractIndex = (contracts) => {
+  const byKey = new Map();
+  const byName = new Map();
+  contracts.forEach((c) => {
+    const name = (c.clientName || "").trim().toLowerCase();
+    const item = (c.item || "").trim().toLowerCase();
+    byKey.set(`${name}|${item}`, c);
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(c);
+  });
+  return { byKey, byName };
+};
+
+const findContract = (index, name, item) => {
+  const n = name.trim().toLowerCase();
+  const it = (item || "").trim().toLowerCase();
+  if (it) {
+    const exact = index.byKey.get(`${n}|${it}`);
+    if (exact) return { contract: exact, ambiguous: false };
+  }
+  const list = index.byName.get(n) || [];
+  if (list.length === 1) return { contract: list[0], ambiguous: false };
+  if (list.length > 1) return { contract: list[0], ambiguous: true };
+  return { contract: null, ambiguous: false };
+};
+
+const parseImportWorkbook = async (file, existingInvestors, existingContracts) => {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array", cellDates: true });
 
   const investorsSheet = findSheet(wb, ["вкладчики", "investors"]);
   const contractsSheet = findSheet(wb, ["договоры", "contracts"]);
+  const paymentsSheet = findSheet(wb, ["платежи", "payments"]);
 
   const newInvestors = [];
   const investorByName = new Map(existingInvestors.map((i) => [i.name.trim().toLowerCase(), i]));
@@ -203,26 +231,55 @@ const parseImportWorkbook = async (file, existingInvestors) => {
         errors.push(`Договоры, строка ${rowNum}: вкладчик «${sourceName}» не найден — договор добавлен в общий пул`);
       }
 
-      const paidCount = Math.max(0, Math.min(termMonths, Math.round(+row["Оплачено платежей (шт.)"] || 0)));
-      const payments = {};
-      for (let k = 0; k < paidCount; k++) {
-        payments[k] = { paidDate: addMonths(startDate, k).toISOString().slice(0, 10) };
-      }
-
       newContracts.push({
         id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
         clientName, phone: String(row["Телефон"] || "").trim(), item: String(row["Товар"] || "").trim(),
         totalPrice, downPayment, markup, markupPercent, termMonths, startDate,
-        investorId: investor ? investor.id : "", payments,
+        investorId: investor ? investor.id : "", payments: {},
       });
     });
   }
 
-  if (!investorsSheet && !contractsSheet) {
-    errors.push("В файле не найдены вкладки «Вкладчики» или «Договоры» — используйте шаблон");
+  const paymentUpdates = [];
+  if (paymentsSheet) {
+    const index = buildContractIndex([...existingContracts, ...newContracts]);
+    XLSX.utils.sheet_to_json(paymentsSheet, { defval: "" }).forEach((row, i) => {
+      const rowNum = i + 2;
+      const clientName = String(row["ФИО клиента"] || "").trim();
+      const item = String(row["Товар (если у клиента >1 договора)"] || row["Товар"] || "").trim();
+      const paymentNo = Math.round(+row["№ платежа"] || 0);
+      const paidDate = excelDateToIso(row["Дата фактической оплаты"]);
+      if (!clientName && !paymentNo && !paidDate) return;
+      if (!clientName || paymentNo <= 0 || !paidDate) {
+        errors.push(`Платежи, строка ${rowNum}: не заполнены обязательные поля (ФИО, № платежа, дата оплаты)`);
+        return;
+      }
+      const { contract, ambiguous } = findContract(index, clientName, item);
+      if (!contract) {
+        errors.push(`Платежи, строка ${rowNum}: договор клиента «${clientName}» не найден`);
+        return;
+      }
+      if (ambiguous) {
+        errors.push(`Платежи, строка ${rowNum}: у клиента «${clientName}» несколько договоров — платёж применён к первому найденному, уточните колонку «Товар»`);
+      }
+      if (paymentNo > contract.termMonths) {
+        errors.push(`Платежи, строка ${rowNum}: № платежа ${paymentNo} больше срока договора (${contract.termMonths} мес.) — пропущено`);
+        return;
+      }
+      const idx = paymentNo - 1;
+      if (newContracts.includes(contract)) {
+        contract.payments[idx] = { ...(contract.payments[idx] || {}), paidDate };
+      } else {
+        paymentUpdates.push({ contractId: contract.id, index: idx, paidDate });
+      }
+    });
   }
 
-  return { newInvestors, newContracts, errors };
+  if (!investorsSheet && !contractsSheet && !paymentsSheet) {
+    errors.push("В файле не найдены вкладки «Вкладчики», «Договоры» или «Платежи» — используйте шаблон");
+  }
+
+  return { newInvestors, newContracts, paymentUpdates, errors };
 };
 
 /* ------------------------------------------------------------------ */
@@ -363,9 +420,20 @@ export default function App() {
 
   const removeInvestor = (id) => setInvestors((prev) => prev.filter((i) => i.id !== id));
 
-  const importData = (newInvestors, newContracts) => {
+  const importData = (newInvestors, newContracts, paymentUpdates) => {
     if (newInvestors.length) setInvestors((prev) => [...newInvestors, ...prev]);
     if (newContracts.length) setContracts((prev) => [...newContracts, ...prev]);
+    if (paymentUpdates && paymentUpdates.length) {
+      setContracts((prev) =>
+        prev.map((c) => {
+          const updates = paymentUpdates.filter((u) => u.contractId === c.id);
+          if (!updates.length) return c;
+          const payments = { ...(c.payments || {}) };
+          updates.forEach((u) => { payments[u.index] = { ...(payments[u.index] || {}), paidDate: u.paidDate }; });
+          return { ...c, payments };
+        })
+      );
+    }
   };
 
   const togglePay = (cid, idx) =>
@@ -688,7 +756,9 @@ export default function App() {
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
       {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
-      {importing && <ImportModal investors={investors} onClose={() => setImporting(false)} onImport={importData} />}
+      {importing && (
+        <ImportModal investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
+      )}
       {sectionModal && (
         <SectionDetail
           title={sectionTitles[sectionModal]}
@@ -964,7 +1034,7 @@ function AddInvestorForm({ onClose, onSave }) {
 
 /* --------------------------- Импорт из Excel ------------------------ */
 
-function ImportModal({ investors, onClose, onImport }) {
+function ImportModal({ investors, contracts, onClose, onImport }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -974,11 +1044,11 @@ function ImportModal({ investors, onClose, onImport }) {
     setBusy(true);
     setResult(null);
     try {
-      const { newInvestors, newContracts, errors } = await parseImportWorkbook(file, investors);
-      onImport(newInvestors, newContracts);
-      setResult({ investors: newInvestors.length, contracts: newContracts.length, errors });
+      const { newInvestors, newContracts, paymentUpdates, errors } = await parseImportWorkbook(file, investors, contracts);
+      onImport(newInvestors, newContracts, paymentUpdates);
+      setResult({ investors: newInvestors.length, contracts: newContracts.length, payments: paymentUpdates.length, errors });
     } catch (err) {
-      setResult({ investors: 0, contracts: 0, errors: [`Не удалось прочитать файл: ${err.message || err}`] });
+      setResult({ investors: 0, contracts: 0, payments: 0, errors: [`Не удалось прочитать файл: ${err.message || err}`] });
     } finally {
       setBusy(false);
       e.target.value = "";
@@ -994,7 +1064,8 @@ function ImportModal({ investors, onClose, onImport }) {
         </div>
         <div className="sheet-body">
           <p className="import-hint">
-            Скачайте шаблон, заполните вкладки «Вкладчики» и «Договоры», затем загрузите файл обратно.
+            Скачайте шаблон, заполните вкладки «Вкладчики», «Договоры» и, если нужно, «Платежи»
+            (для отметки уже оплаченных платежей), затем загрузите файл обратно.
             Новые записи добавятся к уже существующим на сайте.
           </p>
           <div className="import-actions">
@@ -1018,7 +1089,7 @@ function ImportModal({ investors, onClose, onImport }) {
             <div className="import-result">
               <div className="import-result-row">
                 <CheckCircle2 size={15} className="ok" />
-                Добавлено вкладчиков: {result.investors}, договоров: {result.contracts}
+                Добавлено вкладчиков: {result.investors}, договоров: {result.contracts}, отмечено платежей: {result.payments}
               </div>
               {result.errors.length > 0 && (
                 <div className="mini-block">
