@@ -25,6 +25,17 @@ const fileToDataUrl = (file) =>
     reader.readAsDataURL(file);
   });
 
+// постоянное хранилище в браузере (переживает перезагрузку и закрытие вкладки)
+const localStore = {
+  async get(key) {
+    const value = window.localStorage.getItem(key);
+    return value === null ? null : { value };
+  },
+  async set(key, value) {
+    window.localStorage.setItem(key, value);
+  },
+};
+
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
 const addMonths = (isoDate, n) => {
@@ -348,12 +359,13 @@ export default function App() {
   const [sectionModal, setSectionModal] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [storageError, setStorageError] = useState(false);
 
   // загрузка
   useEffect(() => {
     (async () => {
       try {
-        const res = await window.storage.get(STORAGE_KEY);
+        const res = await localStore.get(STORAGE_KEY);
         setContracts(res && res.value ? JSON.parse(res.value) : seed());
       } catch {
         setContracts(seed());
@@ -367,7 +379,10 @@ export default function App() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
-      try { await window.storage.set(STORAGE_KEY, JSON.stringify(contracts)); } catch { /* демо-режим без сохранения */ }
+      try {
+        await localStore.set(STORAGE_KEY, JSON.stringify(contracts));
+        setStorageError(false);
+      } catch { setStorageError(true); }
     })();
   }, [contracts, loaded]);
 
@@ -375,7 +390,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await window.storage.get(STORAGE_KEY_INVESTORS);
+        const res = await localStore.get(STORAGE_KEY_INVESTORS);
         setInvestors(res && res.value ? JSON.parse(res.value) : seedInvestors());
       } catch {
         setInvestors(seedInvestors());
@@ -389,7 +404,10 @@ export default function App() {
   useEffect(() => {
     if (!loadedInvestors) return;
     (async () => {
-      try { await window.storage.set(STORAGE_KEY_INVESTORS, JSON.stringify(investors)); } catch { /* демо-режим без сохранения */ }
+      try {
+        await localStore.set(STORAGE_KEY_INVESTORS, JSON.stringify(investors));
+        setStorageError(false);
+      } catch { setStorageError(true); }
     })();
   }, [investors, loadedInvestors]);
 
@@ -397,7 +415,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await window.storage.get(STORAGE_KEY_WITHDRAWALS);
+        const res = await localStore.get(STORAGE_KEY_WITHDRAWALS);
         setWithdrawals(res && res.value ? JSON.parse(res.value) : seedWithdrawals());
       } catch {
         setWithdrawals(seedWithdrawals());
@@ -411,7 +429,10 @@ export default function App() {
   useEffect(() => {
     if (!loadedWithdrawals) return;
     (async () => {
-      try { await window.storage.set(STORAGE_KEY_WITHDRAWALS, JSON.stringify(withdrawals)); } catch { /* демо-режим без сохранения */ }
+      try {
+        await localStore.set(STORAGE_KEY_WITHDRAWALS, JSON.stringify(withdrawals));
+        setStorageError(false);
+      } catch { setStorageError(true); }
     })();
   }, [withdrawals, loadedWithdrawals]);
 
@@ -620,6 +641,16 @@ export default function App() {
           <Landmark size={16} /> Капитал
         </button>
       </nav>
+
+      {storageError && (
+        <div className="storage-warn-wrap">
+          <div className="storage-warn">
+            <AlertTriangle size={15} />
+            Не удалось сохранить последние изменения в этом браузере — возможно, закончилось место в хранилище
+            (часто из-за больших прикреплённых чеков). Изменения видны сейчас, но пропадут при перезагрузке страницы.
+          </div>
+        </div>
+      )}
 
       {tab === "dashboard" && (
         <main className="wrap">
@@ -1290,6 +1321,11 @@ const css = `
 .tabs button.on{background:var(--paper);color:var(--ink)}
 .tabs .cnt{background:var(--line);color:var(--ink-soft);font-size:11px;padding:1px 7px;border-radius:20px}
 .tabs button.on .cnt{background:var(--brass);color:#fff}
+
+.storage-warn-wrap{max-width:820px;margin:14px auto 0;padding:0 18px}
+.storage-warn{display:flex;align-items:center;gap:10px;padding:11px 16px;
+  background:#FBEEEC;color:var(--clay);border:1px solid #F0CAC4;border-radius:11px;font-size:12.5px;line-height:1.5}
+.storage-warn svg{flex-shrink:0}
 
 .wrap{max-width:820px;margin:0 auto;padding:22px 18px 60px}
 
