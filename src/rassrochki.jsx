@@ -18,14 +18,6 @@ const money = (n) =>
 const fmtDate = (d) =>
   new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
 
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
 const addMonths = (isoDate, n) => {
@@ -506,9 +498,13 @@ export default function App() {
     setStorageError(!!error);
   };
 
-  const attachReceipt = async (cid, idx, receipt) => {
+  const attachReceipt = async (cid, idx, file) => {
+    const path = `${cid}/${idx}-${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("receipts").upload(path, file);
+    if (uploadError) { setStorageError(true); return; }
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
+    const receipt = { name: file.name, type: file.type, path };
     const payments = { ...(c.payments || {}) };
     payments[idx] = { ...(payments[idx] || {}), receipt };
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
@@ -539,6 +535,7 @@ export default function App() {
     if (Object.keys(rest).length === 0) delete payments[idx];
     else payments[idx] = rest;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    if (receipt && receipt.path) await supabase.storage.from("receipts").remove([receipt.path]);
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
     setStorageError(!!error);
   };
@@ -1003,9 +1000,21 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
   const handleFile = async (e, idx) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const dataUrl = await fileToDataUrl(file);
-    onAttachReceipt(contract.id, idx, { name: file.name, type: file.type, dataUrl });
+    onAttachReceipt(contract.id, idx, file);
     e.target.value = "";
+  };
+
+  const openReceipt = async (receipt) => {
+    if (receipt.path) {
+      // открываем вкладку сразу (по клику), иначе Safari заблокирует её после ожидания ссылки
+      const win = window.open("about:blank", "_blank");
+      const { data, error } = await supabase.storage.from("receipts").createSignedUrl(receipt.path, 60);
+      if (error || !data?.signedUrl) { win?.close(); alert("Не удалось открыть чек"); return; }
+      if (win) win.location.href = data.signedUrl;
+      else window.open(data.signedUrl, "_blank");
+    } else if (receipt.dataUrl) {
+      window.open(receipt.dataUrl, "_blank");
+    }
   };
 
   return (
@@ -1059,9 +1068,9 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
                 <div className="receipt-row">
                   {r.receipt ? (
                     <>
-                      <a className="receipt-link" href={r.receipt.dataUrl} target="_blank" rel="noreferrer">
+                      <button type="button" className="receipt-link" onClick={() => openReceipt(r.receipt)}>
                         <FileText size={13} /> {r.receipt.name}
-                      </a>
+                      </button>
                       <button className="receipt-remove" onClick={() => onRemoveReceipt(contract.id, r.index)} title="Удалить чек">
                         <X size={13} />
                       </button>
@@ -1506,7 +1515,8 @@ const css = `
   border:1px dashed var(--line);padding:5px 10px;border-radius:8px;cursor:pointer;background:transparent}
 .receipt-btn:hover{border-color:var(--brass);color:var(--brass)}
 .receipt-link{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--emerald);
-  text-decoration:none;border:1px solid var(--line);padding:5px 10px;border-radius:8px;background:var(--surface)}
+  text-decoration:none;border:1px solid var(--line);padding:5px 10px;border-radius:8px;background:var(--surface);
+  cursor:pointer;font-family:inherit}
 .receipt-link:hover{border-color:var(--emerald)}
 .receipt-remove{background:transparent;border:none;color:var(--ink-soft);cursor:pointer;display:grid;place-items:center;
   width:22px;height:22px;border-radius:6px}
