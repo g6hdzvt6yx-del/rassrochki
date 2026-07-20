@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
@@ -1213,7 +1213,7 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
                 )}
                 {payingIdx === r.index && !r.paid && (
                   <div className="pay-inline">
-                    <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                    <DateFields value={payDate} onChange={setPayDate} />
                     <button className="btn primary btn-sm" onClick={() => confirmPay(r.index)}>Подтвердить</button>
                     <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
                   </div>
@@ -1323,7 +1323,9 @@ function AddForm({ investors, onClose, onSave, editing }) {
           <Field label="ФИО клиента"><input value={f.clientName} onChange={set("clientName")} placeholder="Иванов Иван" /></Field>
           <div className="frow">
             <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
-            <Field label="Дата 1-го платежа"><input type="date" value={f.startDate} onChange={set("startDate")} /></Field>
+            <Field label="Дата 1-го платежа">
+              <DateFields value={f.startDate} onChange={(v) => setF((prev) => ({ ...prev, startDate: v }))} />
+            </Field>
           </div>
           <Field label="Товар"><input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" /></Field>
           <div className="frow">
@@ -1375,6 +1377,69 @@ const Field = ({ label, children }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
 
+// поле даты из трёх сегментов (ДД/ММ/ГГГГ) с автопереходом — вместо капризного native <input type="date">
+function DateFields({ value, onChange }) {
+  const [vy, vm, vd] = value ? value.split("-") : ["", "", ""];
+  const [day, setDay] = useState(vd || "");
+  const [month, setMonth] = useState(vm || "");
+  const [year, setYear] = useState(vy || "");
+
+  useEffect(() => {
+    const [y, m, d] = value ? value.split("-") : ["", "", ""];
+    setDay(d || ""); setMonth(m || ""); setYear(y || "");
+  }, [value]);
+
+  const dayRef = useRef(null);
+  const monthRef = useRef(null);
+  const yearRef = useRef(null);
+
+  const commit = (d, m, y) => {
+    if (d.length === 2 && m.length === 2 && y.length === 4) onChange(`${y}-${m}-${d}`);
+  };
+
+  const onDay = (e) => {
+    let v = e.target.value.replace(/\D/g, "");
+    if (v.length === 1 && +v > 3) v = "0" + v;
+    v = v.slice(0, 2);
+    if (v.length === 2 && +v > 31) v = "31";
+    setDay(v);
+    commit(v, month, year);
+    if (v.length === 2) monthRef.current?.focus();
+  };
+
+  const onMonth = (e) => {
+    let v = e.target.value.replace(/\D/g, "");
+    if (v.length === 1 && +v > 1) v = "0" + v;
+    v = v.slice(0, 2);
+    if (v.length === 2 && +v > 12) v = "12";
+    setMonth(v);
+    commit(day, v, year);
+    if (v.length === 2) yearRef.current?.focus();
+  };
+
+  const onYear = (e) => {
+    const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setYear(v);
+    commit(day, month, v);
+  };
+
+  const backspaceTo = (ref, current) => (e) => {
+    if (e.key === "Backspace" && current === "") ref.current?.focus();
+  };
+
+  return (
+    <div className="date-fields">
+      <input ref={dayRef} value={day} onChange={onDay} onFocus={(e) => e.target.select()} placeholder="ДД" inputMode="numeric" />
+      <span>.</span>
+      <input ref={monthRef} value={month} onChange={onMonth} onKeyDown={backspaceTo(dayRef, month)}
+        onFocus={(e) => e.target.select()} placeholder="ММ" inputMode="numeric" />
+      <span>.</span>
+      <input ref={yearRef} value={year} onChange={onYear} onKeyDown={backspaceTo(monthRef, year)}
+        onFocus={(e) => e.target.select()} placeholder="ГГГГ" inputMode="numeric" />
+    </div>
+  );
+}
+
 /* --------------------------- Новый вкладчик ------------------------ */
 
 function AddInvestorForm({ onClose, onSave }) {
@@ -1424,7 +1489,9 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
         <div className="sheet-body">
           <div className="frow">
             <Field label="Сумма"><input type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
-            <Field label="Дата"><input type="date" value={f.date} onChange={set("date")} /></Field>
+            <Field label="Дата">
+              <DateFields value={f.date} onChange={(v) => setF((prev) => ({ ...prev, date: v }))} />
+            </Field>
           </div>
           <Field label="С кем рассчитываемся">
             <select value={f.investorId} onChange={set("investorId")}>
@@ -1725,14 +1792,24 @@ const css = `
 .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
+.date-fields{display:flex;align-items:center;gap:2px;width:100%;border:1px solid var(--line);
+  background:var(--surface);border-radius:9px;padding:10px 12px}
+.date-fields:focus-within{border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
+.date-fields input{border:none;background:transparent;font:inherit;font-size:14px;color:var(--ink);
+  text-align:center;padding:0;outline:none}
+.date-fields input:nth-child(1){width:1.7em}
+.date-fields input:nth-child(3){width:1.7em}
+.date-fields input:nth-child(5){width:2.8em}
+.date-fields span{color:var(--ink-soft)}
+
 .det-edit-btn{margin-bottom:16px}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
 .comment-save{width:100%;justify-content:center}
 
 .pay-inline{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px}
-.pay-inline input[type="date"]{border:1px solid var(--line);background:var(--surface);border-radius:8px;
-  padding:6px 8px;font:inherit;font-size:12.5px;color:var(--ink)}
+.pay-inline .date-fields{width:auto;padding:6px 8px}
+.pay-inline .date-fields input{font-size:12.5px}
 
 .calc{display:flex;gap:12px;margin:6px 0 18px}
 .calc>div{flex:1;background:var(--ink);color:#EFF3EC;border-radius:11px;padding:12px 14px}
