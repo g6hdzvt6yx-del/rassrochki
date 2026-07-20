@@ -368,9 +368,14 @@ export default function App() {
 
   const logout = () => supabase.auth.signOut();
 
+  // стабильный идентификатор пользователя — не меняется при обновлении токена
+  // (session — новый объект при каждом TOKEN_REFRESHED, из-за чего эффект ниже
+  // не должен зависеть от него напрямую, иначе форма посреди заполнения сбросится)
+  const userId = session?.user?.id || null;
+
   // загрузка договоров, вкладчиков и выводов из Supabase
   useEffect(() => {
-    if (!session) return;
+    if (!userId) return;
     let cancelled = false;
     setLoaded(false);
     setLoadError("");
@@ -392,7 +397,7 @@ export default function App() {
       setLoaded(true);
     })();
     return () => { cancelled = true; };
-  }, [session, reloadTick]);
+  }, [userId, reloadTick]);
 
   const totals = useMemo(() => {
     let financed = 0, paid = 0, overdue = 0, remaining = 0, debtors = 0, active = 0;
