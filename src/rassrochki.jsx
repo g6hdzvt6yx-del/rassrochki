@@ -96,7 +96,7 @@ const contractFromRow = (r) => ({
   totalPrice: Number(r.total_price) || 0, downPayment: Number(r.down_payment) || 0,
   markup: Number(r.markup) || 0, markupPercent: Number(r.markup_percent) || 0,
   termMonths: Number(r.term_months) || 1, startDate: r.start_date,
-  investorId: r.investor_id || "", payments: r.payments || {},
+  investorId: r.investor_id || "", payments: r.payments || {}, comment: r.comment || "",
 });
 
 const contractToRow = (c) => ({
@@ -104,7 +104,7 @@ const contractToRow = (c) => ({
   total_price: c.totalPrice, down_payment: c.downPayment || 0,
   markup: c.markup || 0, markup_percent: c.markupPercent || 0,
   term_months: c.termMonths, start_date: c.startDate,
-  investor_id: c.investorId || "", payments: c.payments || {},
+  investor_id: c.investorId || "", payments: c.payments || {}, comment: c.comment || "",
 });
 
 const investorFromRow = (r) => ({ id: r.id, name: r.name, amount: Number(r.amount) || 0 });
@@ -481,7 +481,7 @@ export default function App() {
     setStorageError(failed);
   };
 
-  const togglePay = async (cid, idx) => {
+  const togglePay = async (cid, idx, paidDate) => {
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
     const payments = { ...(c.payments || {}) };
@@ -490,7 +490,7 @@ export default function App() {
       if (cur.receipt) payments[idx] = { receipt: cur.receipt };
       else delete payments[idx];
     } else {
-      payments[idx] = { ...(cur || {}), paidDate: new Date().toISOString().slice(0, 10) };
+      payments[idx] = { ...(cur || {}), paidDate: paidDate || new Date().toISOString().slice(0, 10) };
     }
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
@@ -551,6 +551,12 @@ export default function App() {
     setStorageError(!!error);
   };
 
+  const updateComment = async (cid, comment) => {
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, comment } : x)));
+    const { error } = await supabase.from("contracts").update({ comment }).eq("id", cid);
+    setStorageError(!!error);
+  };
+
   const deleteContract = async (cid) => {
     if (!window.confirm("Удалить договор безвозвратно? Все платежи и прикреплённые чеки будут удалены.")) return;
     const c = contracts.find((x) => x.id === cid);
@@ -570,6 +576,7 @@ export default function App() {
     active: "Активные договоры",
     debtors: "Должники (просрочка)",
     profit: "Общая прибыль — по договорам",
+    profitRealized: "Полученная прибыль — по договорам",
   };
 
   const sectionRows = useMemo(() => {
@@ -588,6 +595,7 @@ export default function App() {
         amount: sectionModal === "financed" ? st.financed
           : sectionModal === "debtors" ? st.overdueSum
           : sectionModal === "profit" ? Math.max(0, +c.markup || 0)
+          : sectionModal === "profitRealized" ? contractCapital(c).profitRealized
           : st.remaining,
         badge: st.done ? "done" : st.overdueSum ? "overdue" : "active",
       }))
@@ -693,6 +701,7 @@ export default function App() {
           <section className="cards">
             <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} onClick={() => setSectionModal("financed")} />
             <Stat icon={<TrendingUp size={16} />} label="Общая прибыль" value={money(capital.profitTotal)} onClick={() => setSectionModal("profit")} />
+            <Stat icon={<CheckCircle2 size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} onClick={() => setSectionModal("profitRealized")} />
             <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} onClick={() => setSectionModal("active")} />
             <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
           </section>
@@ -904,6 +913,7 @@ export default function App() {
           onRemoveReceipt={removeReceipt}
           onEarlyPayoff={earlyPayoff}
           onDelete={deleteContract}
+          onUpdateComment={updateComment}
         />
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
@@ -1006,11 +1016,25 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete }) {
+function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
     : "Общий пул";
+
+  const [comment, setComment] = useState(contract.comment || "");
+  const [payingIdx, setPayingIdx] = useState(null);
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const startPay = (idx) => {
+    setPayingIdx(idx);
+    setPayDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const confirmPay = (idx) => {
+    onToggle(contract.id, idx, payDate);
+    setPayingIdx(null);
+  };
 
   const handleFile = async (e, idx) => {
     const file = e.target.files && e.target.files[0];
@@ -1057,6 +1081,23 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
             <div><span>Источник</span><b className="num">{investorName}</b></div>
           </div>
 
+          <div className="comment-block">
+            <label className="field comment-field">
+              <span>Комментарий</span>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Заметки по договору…"
+                rows={2}
+              />
+            </label>
+            {comment !== (contract.comment || "") && (
+              <button className="btn primary btn-sm comment-save" onClick={() => onUpdateComment(contract.id, comment)}>
+                Сохранить комментарий
+              </button>
+            )}
+          </div>
+
           <div className="ledger-hd-row">
             <div className="ledger-hd ledger-hd-inline">График платежей</div>
             {!st.done && (
@@ -1077,9 +1118,16 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
                     <Undo2 size={13} /> Отменить
                   </button>
                 ) : (
-                  <button className="lbtn pay" onClick={() => onToggle(contract.id, r.index)}>
+                  <button className="lbtn pay" onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startPay(r.index))}>
                     <Check size={13} /> Оплатить
                   </button>
+                )}
+                {payingIdx === r.index && !r.paid && (
+                  <div className="pay-inline">
+                    <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                    <button className="btn primary btn-sm" onClick={() => confirmPay(r.index)}>Подтвердить</button>
+                    <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
+                  </div>
                 )}
                 <div className="receipt-row">
                   {r.receipt ? (
@@ -1117,34 +1165,55 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
 
 function AddForm({ investors, onClose, onSave }) {
   const [f, setF] = useState({
-    clientName: "", phone: "", item: "",
-    totalPrice: "", downPayment: "", markupPercent: "20", markupAmount: "0", termMonths: "6",
+    clientName: "", phone: "", item: "", comment: "",
+    totalPrice: "", downPayment: "", markupPercent: "20", markupAmount: "0", monthlyPayment: "0", termMonths: "6",
     startDate: new Date().toISOString().slice(0, 10), investorId: "",
   });
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }));
 
   const principal = Math.max(0, (+f.totalPrice || 0) - (+f.downPayment || 0));
 
-  // цена/взнос меняются — сумма наценки пересчитывается от текущего процента
+  // цена/взнос меняются — сумма наценки и платёж в месяц пересчитываются от текущего процента
   useEffect(() => {
-    setF((prev) => ({ ...prev, markupAmount: String(Math.round(principal * (+prev.markupPercent || 0) / 100)) }));
+    setF((prev) => {
+      const amount = Math.round(principal * (+prev.markupPercent || 0) / 100);
+      const monthly = Math.round((principal + amount) / Math.max(1, +prev.termMonths || 1));
+      return { ...prev, markupAmount: String(amount), monthlyPayment: String(monthly) };
+    });
   }, [principal]);
 
   const onMarkupPercent = (e) => {
     const percent = e.target.value;
     const amount = Math.round(principal * (+percent || 0) / 100);
-    setF((prev) => ({ ...prev, markupPercent: percent, markupAmount: String(amount) }));
+    const monthly = Math.round((principal + amount) / Math.max(1, +f.termMonths || 1));
+    setF((prev) => ({ ...prev, markupPercent: percent, markupAmount: String(amount), monthlyPayment: String(monthly) }));
   };
 
   const onMarkupAmount = (e) => {
     const amount = e.target.value;
     const percent = principal > 0 ? Math.round(((+amount || 0) / principal) * 1000) / 10 : 0;
-    setF((prev) => ({ ...prev, markupAmount: amount, markupPercent: String(percent) }));
+    const monthly = Math.round((principal + (+amount || 0)) / Math.max(1, +f.termMonths || 1));
+    setF((prev) => ({ ...prev, markupAmount: amount, markupPercent: String(percent), monthlyPayment: String(monthly) }));
+  };
+
+  const onMonthlyPayment = (e) => {
+    const monthlyInput = e.target.value;
+    const term = Math.max(1, +f.termMonths || 1);
+    const financedFromMonthly = Math.round((+monthlyInput || 0) * term);
+    const amount = Math.max(0, financedFromMonthly - principal);
+    const percent = principal > 0 ? Math.round((amount / principal) * 1000) / 10 : 0;
+    setF((prev) => ({ ...prev, monthlyPayment: monthlyInput, markupAmount: String(amount), markupPercent: String(percent) }));
+  };
+
+  const onTermMonths = (e) => {
+    const term = e.target.value;
+    const amount = +f.markupAmount || 0;
+    const monthly = Math.round((principal + amount) / Math.max(1, +term || 1));
+    setF((prev) => ({ ...prev, termMonths: term, monthlyPayment: String(monthly) }));
   };
 
   const markup = +f.markupAmount || 0;
   const financed = principal + markup;
-  const monthly = financed / Math.max(1, +f.termMonths || 1);
   const valid = f.clientName.trim() && +f.totalPrice > 0 && +f.termMonths > 0;
 
   return (
@@ -1170,27 +1239,30 @@ function AddForm({ investors, onClose, onSave }) {
             <Field label="Наценка, ₽"><input type="number" value={f.markupAmount} onChange={onMarkupAmount} placeholder="0" /></Field>
           </div>
           <div className="frow">
-            <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={set("termMonths")} placeholder="6" /></Field>
-            <Field label="Источник финансирования">
-              <select value={f.investorId} onChange={set("investorId")}>
-                <option value="">Общий пул (без привязки)</option>
-                {investors.map((inv) => (
-                  <option key={inv.id} value={inv.id}>{inv.name}</option>
-                ))}
-              </select>
-            </Field>
+            <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={onTermMonths} placeholder="6" /></Field>
+            <Field label="Платёж в месяц, ₽"><input type="number" value={f.monthlyPayment} onChange={onMonthlyPayment} placeholder="0" /></Field>
           </div>
+          <Field label="Источник финансирования">
+            <select value={f.investorId} onChange={set("investorId")}>
+              <option value="">Общий пул (без привязки)</option>
+              {investors.map((inv) => (
+                <option key={inv.id} value={inv.id}>{inv.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Комментарий (необязательно)">
+            <textarea value={f.comment} onChange={set("comment")} placeholder="Заметки по договору…" rows={2} />
+          </Field>
 
           <div className="calc">
             <div><span>Наценка</span><b className="num">{money(markup)}</b></div>
             <div><span>К оплате в рассрочку</span><b className="num">{money(financed)}</b></div>
-            <div><span>Платёж в месяц</span><b className="num strong">{money(monthly)}</b></div>
           </div>
 
           <div className="sheet-actions">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
             <button className="btn primary" disabled={!valid} onClick={() => {
-              const { markupAmount: _markupAmount, ...rest } = f;
+              const { markupAmount: _markupAmount, monthlyPayment: _monthlyPayment, ...rest } = f;
               onSave({
                 ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
                 markup, markupPercent: +f.markupPercent || 0, termMonths: +f.termMonths,
@@ -1540,10 +1612,18 @@ const css = `
 
 .field{display:block;margin-bottom:12px}
 .field>span{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:500}
-.field input, .field select{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:9px;
-  padding:10px 12px;font:inherit;font-size:14px;color:var(--ink)}
-.field input:focus, .field select:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
+.field input, .field select, .field textarea{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:9px;
+  padding:10px 12px;font:inherit;font-size:14px;color:var(--ink);resize:vertical}
+.field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+.comment-block{margin-bottom:18px}
+.comment-field{margin-bottom:8px}
+.comment-save{width:100%;justify-content:center}
+
+.pay-inline{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px}
+.pay-inline input[type="date"]{border:1px solid var(--line);background:var(--surface);border-radius:8px;
+  padding:6px 8px;font:inherit;font-size:12.5px;color:var(--ink)}
 
 .calc{display:flex;gap:12px;margin:6px 0 18px}
 .calc>div{flex:1;background:var(--ink);color:#EFF3EC;border-radius:11px;padding:12px 14px}
