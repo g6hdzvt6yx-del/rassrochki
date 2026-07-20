@@ -3,7 +3,7 @@ import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
-  Upload, Download, LogOut,
+  Upload, Download, LogOut, Search, Pencil,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
@@ -17,6 +17,16 @@ const money = (n) =>
 
 const fmtDate = (d) =>
   new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
+
+// приводим телефон к виду 8-928-662-85-85; если не похоже на рос. номер — возвращаем как есть
+const fmtPhone = (raw) => {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length === 11 && d[0] === "7") d = "8" + d.slice(1);
+  else if (d.length === 10) d = "8" + d;
+  if (d.length !== 11) return raw;
+  return `${d[0]}-${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
+};
 
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
@@ -335,6 +345,10 @@ export default function App() {
   const [expandedId, setExpandedId] = useState(null);
   const [importing, setImporting] = useState(false);
   const [storageError, setStorageError] = useState(false);
+  const [editingContract, setEditingContract] = useState(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // сессия входа
   useEffect(() => {
@@ -551,6 +565,15 @@ export default function App() {
     setStorageError(!!error);
   };
 
+  const updateContract = async (data) => {
+    const cid = editingContract.id;
+    const updated = { ...editingContract, ...data };
+    setContracts((prev) => prev.map((c) => (c.id === cid ? updated : c)));
+    setEditingContract(null);
+    const { error } = await supabase.from("contracts").update(contractToRow(updated)).eq("id", cid);
+    setStorageError(!!error);
+  };
+
   const updateComment = async (cid, comment) => {
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, comment } : x)));
     const { error } = await supabase.from("contracts").update({ comment }).eq("id", cid);
@@ -601,6 +624,23 @@ export default function App() {
       }))
       .sort((a, b) => b.amount - a.amount);
   }, [sectionModal, contracts]);
+
+  const filteredContracts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return contracts.filter((c) => {
+      if (statusFilter !== "all") {
+        const st = contractStats(c);
+        const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
+        if (badge !== statusFilter) return false;
+      }
+      if (!q) return true;
+      return (
+        c.clientName.toLowerCase().includes(q) ||
+        (c.phone || "").toLowerCase().includes(q) ||
+        (c.item || "").toLowerCase().includes(q)
+      );
+    });
+  }, [contracts, search, statusFilter]);
 
   if (!supabaseConfigured)
     return (
@@ -731,8 +771,35 @@ export default function App() {
           {contracts.length === 0 ? (
             <div className="panel"><div className="empty">Договоров пока нет — добавьте первый кнопкой «Новый договор».</div></div>
           ) : (
+          <>
+          <div className="clist-toolbar">
+            <div className="search-box">
+              <Search size={15} />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Поиск по имени, телефону, товару…"
+              />
+              {search && (
+                <button className="search-clear" onClick={() => setSearch("")} title="Очистить"><X size={13} /></button>
+              )}
+            </div>
+            <div className="filter-chips">
+              {[
+                ["all", "Все"], ["active", "Активные"], ["overdue", "Просрочка"], ["done", "Закрытые"],
+              ].map(([key, label]) => (
+                <button key={key} className={statusFilter === key ? "on" : ""} onClick={() => setStatusFilter(key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredContracts.length === 0 ? (
+            <div className="panel"><div className="empty">Ничего не найдено по этому запросу или фильтру.</div></div>
+          ) : (
           <div className="clist">
-            {contracts.map((c) => {
+            {filteredContracts.map((c) => {
               const st = contractStats(c);
               const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
               const expanded = expandedId === c.id;
@@ -799,6 +866,8 @@ export default function App() {
               );
             })}
           </div>
+          )}
+          </>
           )}
         </main>
       )}
@@ -914,9 +983,18 @@ export default function App() {
           onEarlyPayoff={earlyPayoff}
           onDelete={deleteContract}
           onUpdateComment={updateComment}
+          onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
         />
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
+      {editingContract && (
+        <AddForm
+          investors={investors}
+          editing={editingContract}
+          onClose={() => setEditingContract(null)}
+          onSave={updateContract}
+        />
+      )}
       {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
       {addingWithdrawal && (
         <AddWithdrawalForm investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
@@ -1016,7 +1094,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment }) {
+function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
@@ -1063,7 +1141,9 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
           <button className="icon-btn" onClick={onClose}><ChevronLeft size={18} /></button>
           <div>
             <div className="sheet-name">{contract.clientName}</div>
-            <a className="sheet-phone" href={`tel:${contract.phone}`}><Phone size={12} /> {contract.phone}</a>
+            {contract.phone && (
+              <a className="sheet-phone" href={`tel:${contract.phone}`}><Phone size={12} /> {fmtPhone(contract.phone)}</a>
+            )}
           </div>
           <button className="icon-btn" onClick={() => onDelete(contract.id)} title="Удалить договор"><Trash2 size={18} /></button>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -1080,6 +1160,10 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
             <div><span>Остаток</span><b className="num strong">{money(st.remaining)}</b></div>
             <div><span>Источник</span><b className="num">{investorName}</b></div>
           </div>
+
+          <button type="button" className="btn ghost btn-sm det-edit-btn" onClick={() => onEdit(contract)}>
+            <Pencil size={13} /> Изменить договор
+          </button>
 
           <div className="comment-block">
             <label className="field comment-field">
@@ -1163,11 +1247,18 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
 
 /* --------------------------- Новый договор ------------------------- */
 
-function AddForm({ investors, onClose, onSave }) {
+function AddForm({ investors, onClose, onSave, editing }) {
   const [f, setF] = useState({
-    clientName: "", phone: "", item: "", comment: "",
-    totalPrice: "", downPayment: "", markupPercent: "20", markupAmount: "0", monthlyPayment: "0", termMonths: "6",
-    startDate: new Date().toISOString().slice(0, 10), investorId: "",
+    clientName: editing?.clientName || "", phone: editing?.phone || "", item: editing?.item || "",
+    comment: editing?.comment || "",
+    totalPrice: editing ? String(editing.totalPrice || "") : "",
+    downPayment: editing ? String(editing.downPayment || "") : "",
+    markupPercent: editing ? String(editing.markupPercent || 0) : "20",
+    markupAmount: editing ? String(editing.markup || 0) : "0",
+    monthlyPayment: "0",
+    termMonths: editing ? String(editing.termMonths || 1) : "6",
+    startDate: editing?.startDate || new Date().toISOString().slice(0, 10),
+    investorId: editing?.investorId || "",
   });
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -1220,7 +1311,7 @@ function AddForm({ investors, onClose, onSave }) {
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
-          <div className="sheet-name">Новый договор рассрочки</div>
+          <div className="sheet-name">{editing ? "Изменить договор" : "Новый договор рассрочки"}</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="sheet-body">
@@ -1267,7 +1358,7 @@ function AddForm({ investors, onClose, onSave }) {
                 ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
                 markup, markupPercent: +f.markupPercent || 0, termMonths: +f.termMonths,
               });
-            }}>Создать договор</button>
+            }}>{editing ? "Сохранить изменения" : "Создать договор"}</button>
           </div>
         </div>
       </div>
@@ -1536,6 +1627,18 @@ const css = `
 .b-line{background:#EBEEE5;color:var(--ink-soft)}
 .b-brass{background:#F1E7D6;color:var(--brass)}
 
+.clist-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.search-box{display:flex;align-items:center;gap:8px;flex:1;min-width:220px;background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;padding:8px 12px;color:var(--ink-soft)}
+.search-box input{flex:1;border:none;background:transparent;font:inherit;font-size:14px;color:var(--ink)}
+.search-box input:focus{outline:none}
+.search-clear{background:transparent;border:none;color:var(--ink-soft);cursor:pointer;display:grid;place-items:center}
+.search-clear:hover{color:var(--clay)}
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap}
+.filter-chips button{border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer;
+  font:inherit;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:20px;white-space:nowrap}
+.filter-chips button.on{background:var(--brass);color:#fff;border-color:var(--brass)}
+
 .clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
 .citem{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;
   transition:border-color .15s}
@@ -1617,6 +1720,7 @@ const css = `
 .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
+.det-edit-btn{margin-bottom:16px}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
 .comment-save{width:100%;justify-content:center}
