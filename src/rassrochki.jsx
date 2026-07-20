@@ -201,12 +201,11 @@ const parseImportWorkbook = async (file, existingInvestors, existingContracts) =
     XLSX.utils.sheet_to_json(contractsSheet, { defval: "" }).forEach((row, i) => {
       const rowNum = i + 2;
       const clientName = String(row["ФИО клиента"] || "").trim();
+      if (!clientName) return;
       const totalPrice = +row["Цена товара"] || 0;
-      const termMonths = +row["Срок, мес"] || 0;
-      if (!clientName && !totalPrice) return;
-      if (!clientName || totalPrice <= 0 || termMonths <= 0) {
-        errors.push(`Договоры, строка ${rowNum}: не заполнены обязательные поля (ФИО, цена, срок)`);
-        return;
+      const termMonths = Math.max(1, +row["Срок, мес"] || 1);
+      if (!totalPrice || !row["Срок, мес"]) {
+        errors.push(`Договоры, строка ${rowNum}: не указана цена и/или срок — договор добавлен с неполными данными`);
       }
       const downPayment = +row["Первоначальный взнос"] || 0;
       const principal = Math.max(0, totalPrice - downPayment);
