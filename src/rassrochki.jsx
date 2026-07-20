@@ -552,6 +552,17 @@ export default function App() {
     setStorageError(!!error);
   };
 
+  const deleteContract = async (cid) => {
+    if (!window.confirm("Удалить договор безвозвратно? Все платежи и прикреплённые чеки будут удалены.")) return;
+    const c = contracts.find((x) => x.id === cid);
+    setContracts((prev) => prev.filter((x) => x.id !== cid));
+    setOpenId(null);
+    const receiptPaths = Object.values(c?.payments || {}).map((p) => p?.receipt?.path).filter(Boolean);
+    if (receiptPaths.length) await supabase.storage.from("receipts").remove(receiptPaths);
+    const { error } = await supabase.from("contracts").delete().eq("id", cid);
+    setStorageError(!!error);
+  };
+
   const open = contracts.find((c) => c.id === openId) || null;
 
   const sectionTitles = {
@@ -893,6 +904,7 @@ export default function App() {
           onAttachReceipt={attachReceipt}
           onRemoveReceipt={removeReceipt}
           onEarlyPayoff={earlyPayoff}
+          onDelete={deleteContract}
         />
       )}
       {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
@@ -995,7 +1007,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff }) {
+function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
@@ -1030,6 +1042,7 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
             <div className="sheet-name">{contract.clientName}</div>
             <a className="sheet-phone" href={`tel:${contract.phone}`}><Phone size={12} /> {contract.phone}</a>
           </div>
+          <button className="icon-btn" onClick={() => onDelete(contract.id)} title="Удалить договор"><Trash2 size={18} /></button>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
 
