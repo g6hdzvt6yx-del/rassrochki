@@ -107,6 +107,7 @@ const contractFromRow = (r) => ({
   markup: Number(r.markup) || 0, markupPercent: Number(r.markup_percent) || 0,
   termMonths: Number(r.term_months) || 1, startDate: r.start_date,
   investorId: r.investor_id || "", payments: r.payments || {}, comment: r.comment || "",
+  guarantorName: r.guarantor_name || "", guarantorPhone: r.guarantor_phone || "",
 });
 
 const contractToRow = (c) => ({
@@ -115,6 +116,7 @@ const contractToRow = (c) => ({
   markup: c.markup || 0, markup_percent: c.markupPercent || 0,
   term_months: c.termMonths, start_date: c.startDate,
   investor_id: c.investorId || "", payments: c.payments || {}, comment: c.comment || "",
+  guarantor_name: c.guarantorName || "", guarantor_phone: c.guarantorPhone || "",
 });
 
 const investorFromRow = (r) => ({ id: r.id, name: r.name, amount: Number(r.amount) || 0 });
@@ -239,11 +241,18 @@ const parseImportWorkbook = async (file, existingInvestors, existingContracts) =
         errors.push(`Договоры, строка ${rowNum}: вкладчик «${sourceName}» не найден — договор добавлен в общий пул`);
       }
 
+      const guarantorName = String(row["Поручитель, ФИО"] || "").trim();
+      const guarantorPhone = String(row["Поручитель, телефон"] || "").trim();
+      if (!guarantorName || !guarantorPhone) {
+        errors.push(`Договоры, строка ${rowNum}: не указан поручитель — договор добавлен, дозаполните на сайте`);
+      }
+
       newContracts.push({
         id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
         clientName, phone: String(row["Телефон"] || "").trim(), item: String(row["Товар"] || "").trim(),
         totalPrice, downPayment, markup, markupPercent, termMonths, startDate,
-        investorId: investor ? investor.id : "", comment: String(row["Комментарий"] || "").trim(), payments: {},
+        investorId: investor ? investor.id : "", comment: String(row["Комментарий"] || "").trim(),
+        guarantorName, guarantorPhone, payments: {},
       });
     });
   }
@@ -1221,6 +1230,13 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
             <div><span>К оплате</span><b className="num">{money(st.financed)}</b></div>
             <div><span>Остаток</span><b className="num strong">{money(st.remaining)}</b></div>
             <div><span>Источник</span><b className="num">{investorName}</b></div>
+            <div>
+              <span>Поручитель</span>
+              <b className="num">
+                {contract.guarantorName || "не указан"}
+                {contract.guarantorPhone ? ` · ${fmtPhone(contract.guarantorPhone)}` : ""}
+              </b>
+            </div>
           </div>
 
           <button type="button" className="btn ghost btn-sm det-edit-btn" onClick={() => onEdit(contract)}>
@@ -1330,6 +1346,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
     termMonths: editing ? String(editing.termMonths || 1) : "6",
     startDate: editing?.startDate || new Date().toISOString().slice(0, 10),
     investorId: editing?.investorId || "",
+    guarantorName: editing?.guarantorName || "", guarantorPhone: editing?.guarantorPhone || "",
   });
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -1376,7 +1393,9 @@ function AddForm({ investors, onClose, onSave, editing }) {
 
   const markup = +f.markupAmount || 0;
   const financed = principal + markup;
-  const valid = f.clientName.trim().length > 0;
+  const valid = f.clientName.trim().length > 0
+    && f.guarantorName.trim().length > 0
+    && f.guarantorPhone.trim().length > 0;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -1394,6 +1413,14 @@ function AddForm({ investors, onClose, onSave, editing }) {
             </Field>
           </div>
           <Field label="Товар"><input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" /></Field>
+          <div className="frow">
+            <Field label="Поручитель, ФИО *">
+              <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
+            </Field>
+            <Field label="Поручитель, телефон *">
+              <input value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
+            </Field>
+          </div>
           <div className="frow">
             <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
