@@ -3,7 +3,7 @@ import {
   LayoutGrid, ScrollText, Plus, Phone, Wallet, Users, AlertTriangle,
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
-  Upload, Download, LogOut, Search, Pencil,
+  Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
@@ -26,6 +26,16 @@ const fmtPhone = (raw) => {
   else if (d.length === 10) d = "8" + d;
   if (d.length !== 11) return raw;
   return `${d[0]}-${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
+};
+
+// ссылка wa.me с предзаполненным напоминанием; null, если номер не похож на российский
+const waReminderLink = (phone, name, amount, dueDate) => {
+  let d = String(phone || "").replace(/\D/g, "");
+  if (d.length === 11 && d[0] === "8") d = "7" + d.slice(1);
+  else if (d.length === 10) d = "7" + d;
+  if (d.length !== 11 || d[0] !== "7") return null;
+  const text = `Ассаламу 1алайкум, ${name}! Напоминаем о платеже ${money(amount)} до ${fmtDate(dueDate)}`;
+  return `https://wa.me/${d}?text=${encodeURIComponent(text)}`;
 };
 
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
@@ -57,20 +67,31 @@ const buildSchedule = (c) => {
   return amounts.map((amt, i) => {
     const due = addMonths(c.startDate, i);
     const rec = c.payments && c.payments[i];
-    const paid = !!(rec && rec.paidDate);
+    const hasPay = !!(rec && rec.paidDate);
+    // paidAmount отсутствует у старых записей — считаем их оплаченными полностью
+    const paidAmount = hasPay
+      ? (rec.paidAmount != null ? Math.min(Math.max(+rec.paidAmount || 0, 0), amt) : amt)
+      : 0;
+    const paid = hasPay && (amt === 0 || paidAmount >= amt);
+    const partial = hasPay && !paid && paidAmount > 0;
     let status = "upcoming";
     if (paid) status = "paid";
     else if (due < today) status = "overdue";
+    else if (partial) status = "partial";
     else if ((due - today) / 86400000 <= 7) status = "due";
-    return { n: i + 1, index: i, dueDate: due, amountDue: amt, paid, paidDate: paid ? rec.paidDate : null, receipt: rec ? rec.receipt : null, status };
+    return {
+      n: i + 1, index: i, dueDate: due, amountDue: amt,
+      paid, partial, paidAmount, remainingDue: amt - paidAmount,
+      paidDate: hasPay ? rec.paidDate : null, receipt: rec ? rec.receipt : null, status,
+    };
   });
 };
 
 const contractStats = (c) => {
   const rows = buildSchedule(c);
   const financed = rows.reduce((s, r) => s + r.amountDue, 0);
-  const paidSum = rows.filter((r) => r.paid).reduce((s, r) => s + r.amountDue, 0);
-  const overdueSum = rows.filter((r) => r.status === "overdue").reduce((s, r) => s + r.amountDue, 0);
+  const paidSum = rows.reduce((s, r) => s + r.paidAmount, 0);
+  const overdueSum = rows.filter((r) => r.status === "overdue").reduce((s, r) => s + r.remainingDue, 0);
   const next = rows.find((r) => !r.paid) || null;
   const done = rows.every((r) => r.paid);
   return { rows, financed, paidSum, remaining: financed - paidSum, overdueSum, next, done };
@@ -300,11 +321,61 @@ const parseImportWorkbook = async (file, existingInvestors, existingContracts) =
 };
 
 /* ------------------------------------------------------------------ */
+/*  Экспорт в Excel — зеркало формата импорта                          */
+/* ------------------------------------------------------------------ */
+
+const buildExportWorkbook = (contracts, investors) => {
+  const wb = XLSX.utils.book_new();
+  const investorName = (id) => (id ? investors.find((i) => i.id === id)?.name || "" : "");
+
+  const invSheet = XLSX.utils.aoa_to_sheet([
+    ["Имя вкладчика", "Сумма вклада"],
+    ...investors.map((i) => [i.name, i.amount]),
+  ]);
+  invSheet["!cols"] = [{ wch: 28 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, invSheet, "Вкладчики");
+
+  const contractsSheet = XLSX.utils.aoa_to_sheet([
+    ["ФИО клиента", "Телефон", "Товар", "Цена товара", "Первоначальный взнос",
+     "Наценка, %", "Наценка, ₽", "Срок, мес", "Дата 1-го платежа",
+     "Источник финансирования", "Комментарий", "Поручитель, ФИО", "Поручитель, телефон"],
+    ...contracts.map((c) => [
+      c.clientName, c.phone || "", c.item || "", c.totalPrice || 0, c.downPayment || 0,
+      c.markupPercent || 0, c.markup || 0, c.termMonths || 1, fmtDate(c.startDate),
+      investorName(c.investorId), c.comment || "", c.guarantorName || "", c.guarantorPhone || "",
+    ]),
+  ]);
+  contractsSheet["!cols"] = [
+    { wch: 24 }, { wch: 18 }, { wch: 22 }, { wch: 13 }, { wch: 16 },
+    { wch: 11 }, { wch: 11 }, { wch: 10 }, { wch: 15 }, { wch: 24 }, { wch: 28 }, { wch: 24 }, { wch: 18 },
+  ];
+  XLSX.utils.book_append_sheet(wb, contractsSheet, "Договоры");
+
+  const paymentRows = [];
+  contracts.forEach((c) => {
+    Object.entries(c.payments || {}).forEach(([idx, rec]) => {
+      if (rec && rec.paidDate) {
+        paymentRows.push([c.clientName, c.item || "", Number(idx) + 1, fmtDate(rec.paidDate)]);
+      }
+    });
+  });
+  const paySheet = XLSX.utils.aoa_to_sheet([
+    ["ФИО клиента", "Товар (если у клиента >1 договора)", "№ платежа", "Дата фактической оплаты"],
+    ...paymentRows,
+  ]);
+  paySheet["!cols"] = [{ wch: 24 }, { wch: 30 }, { wch: 11 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, paySheet, "Платежи");
+
+  return wb;
+};
+
+/* ------------------------------------------------------------------ */
 /*  Мелкие компоненты                                                  */
 /* ------------------------------------------------------------------ */
 
 const STATUS = {
   paid: { label: "Оплачен", cls: "b-emerald" },
+  partial: { label: "Частично", cls: "b-amber" },
   overdue: { label: "Просрочен", cls: "b-clay" },
   due: { label: "Скоро", cls: "b-amber" },
   upcoming: { label: "Ожидает", cls: "b-line" },
@@ -432,6 +503,7 @@ export default function App() {
   const capital = useMemo(() => {
     let principalTotal = 0, principalReturned = 0, profitRealized = 0, profitTotal = 0;
     const perInvestor = {};
+    const profitByInvestor = {};
     contracts.forEach((c) => {
       const cc = contractCapital(c);
       principalTotal += cc.principal;
@@ -440,6 +512,9 @@ export default function App() {
       profitTotal += cc.markup;
       const key = c.investorId || "";
       perInvestor[key] = (perInvestor[key] || 0) + (cc.principal - cc.principalReturned);
+      if (!profitByInvestor[key]) profitByInvestor[key] = { realized: 0, expected: 0 };
+      profitByInvestor[key].realized += cc.profitRealized;
+      profitByInvestor[key].expected += cc.markup - cc.profitRealized;
     });
     const invested = investors.reduce((s, i) => s + (+i.amount || 0), 0);
     const deployed = principalTotal - principalReturned;
@@ -456,7 +531,7 @@ export default function App() {
     return {
       invested, deployed, free: invested - deployed - withdrawnTotal,
       profitRealized, profitExpected: profitTotal - profitRealized, profitTotal,
-      perInvestor, withdrawnByInvestor, withdrawnTotal,
+      perInvestor, profitByInvestor, withdrawnByInvestor, withdrawnTotal,
     };
   }, [contracts, investors, withdrawals]);
 
@@ -469,6 +544,12 @@ export default function App() {
   };
 
   const removeInvestor = async (id) => {
+    const inv = investors.find((i) => i.id === id);
+    const linked = contracts.filter((c) => c.investorId === id).length;
+    const msg = linked > 0
+      ? `Удалить вкладчика «${inv?.name || ""}»? С ним связано договоров: ${linked}. Договоры останутся, но потеряют привязку к источнику финансирования.`
+      : `Удалить вкладчика «${inv?.name || ""}»?`;
+    if (!window.confirm(msg)) return;
     setInvestors((prev) => prev.filter((i) => i.id !== id));
     const { error } = await supabase.from("investors").delete().eq("id", id);
     setStorageError(!!error);
@@ -483,7 +564,9 @@ export default function App() {
   };
 
   const removeWithdrawal = async (id) => {
-    setWithdrawals((prev) => prev.filter((w) => w.id !== id));
+    const w = withdrawals.find((x) => x.id === id);
+    if (!window.confirm(`Удалить вывод ${money(w?.amount || 0)} от ${w ? fmtDate(w.date) : ""}?`)) return;
+    setWithdrawals((prev) => prev.filter((x) => x.id !== id));
     const { error } = await supabase.from("withdrawals").delete().eq("id", id);
     setStorageError(!!error);
   };
@@ -532,6 +615,27 @@ export default function App() {
     setStorageError(!!error);
   };
 
+  // внесение оплаты (полной или частичной): суммы накапливаются в paidAmount
+  const payPayment = async (cid, idx, paidDate, amount) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) return;
+    const row = buildSchedule(c).find((r) => r.index === idx);
+    if (!row) return;
+    const payments = { ...(c.payments || {}) };
+    const cur = payments[idx] || {};
+    const total = Math.min(row.paidAmount + Math.max(+amount || 0, 0), row.amountDue);
+    const rec = {
+      ...cur,
+      paidDate: paidDate || cur.paidDate || new Date().toISOString().slice(0, 10),
+    };
+    if (total >= row.amountDue) delete rec.paidAmount; // полная оплата — как у старых записей
+    else rec.paidAmount = total;
+    payments[idx] = rec;
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    setStorageError(!!error);
+  };
+
   const updatePaidDate = async (cid, idx, paidDate) => {
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
@@ -568,7 +672,10 @@ export default function App() {
     const payments = { ...(c.payments || {}) };
     const today = new Date().toISOString().slice(0, 10);
     buildSchedule(c).forEach((r) => {
-      if (!r.paid) payments[r.index] = { ...(payments[r.index] || {}), paidDate: today };
+      if (!r.paid) {
+        const { paidAmount: _pa, ...rest } = payments[r.index] || {};
+        payments[r.index] = { ...rest, paidDate: rest.paidDate || today };
+      }
     });
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
@@ -690,6 +797,68 @@ export default function App() {
     return list; // "created" — уже отсортировано по дате создания (новые сверху)
   }, [contracts, search, statusFilter, investorFilter, sortBy]);
 
+  // помесячная аналитика: 6 месяцев факта (включая текущий) и 6 месяцев ожиданий
+  const monthlyStats = useMemo(() => {
+    const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const acc = new Map();
+    const get = (k) => {
+      if (!acc.has(k)) acc.set(k, { received: 0, receivedProfit: 0, expected: 0, expectedProfit: 0 });
+      return acc.get(k);
+    };
+    contracts.forEach((c) => {
+      const st = contractStats(c);
+      const profitFrac = st.financed > 0 ? Math.max(0, +c.markup || 0) / st.financed : 0;
+      st.rows.forEach((r) => {
+        if (r.paidAmount > 0 && r.paidDate) {
+          const m = get(keyOf(new Date(r.paidDate)));
+          m.received += r.paidAmount;
+          m.receivedProfit += r.paidAmount * profitFrac;
+        }
+        if (!r.paid && r.remainingDue > 0) {
+          const m = get(keyOf(r.dueDate));
+          m.expected += r.remainingDue;
+          m.expectedProfit += r.remainingDue * profitFrac;
+        }
+      });
+    });
+    const MONTHS = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+    const now = new Date();
+    const mk = (offset) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const k = keyOf(d);
+      return {
+        key: k, label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+        ...(acc.get(k) || { received: 0, receivedProfit: 0, expected: 0, expectedProfit: 0 }),
+      };
+    };
+    const past = [-5, -4, -3, -2, -1, 0].map(mk);
+    const future = [0, 1, 2, 3, 4, 5].map(mk);
+    const maxPast = Math.max(1, ...past.map((m) => m.received));
+    const maxFuture = Math.max(1, ...future.map((m) => m.expected));
+    return { past, future, maxPast, maxFuture };
+  }, [contracts]);
+
+  // группировка договоров по клиенту (по имени), с сохранением порядка сортировки
+  const groupedContracts = useMemo(() => {
+    const map = new Map();
+    const order = [];
+    filteredContracts.forEach((c) => {
+      const key = c.clientName.trim().toLowerCase();
+      if (!map.has(key)) { map.set(key, []); order.push(key); }
+      map.get(key).push(c);
+    });
+    return order.map((key) => {
+      const list = map.get(key);
+      let remaining = 0, overdue = 0;
+      list.forEach((c) => {
+        const st = contractStats(c);
+        remaining += st.remaining;
+        overdue += st.overdueSum;
+      });
+      return { key, list, remaining, overdue };
+    });
+  }, [filteredContracts]);
+
   if (!supabaseConfigured)
     return (
       <div className="app"><style>{css}</style>
@@ -741,6 +910,15 @@ export default function App() {
         <div className="hd-actions">
           <button className="btn on-dark" onClick={() => setImporting(true)}>
             <Upload size={16} /> Импорт из Excel
+          </button>
+          <button
+            className="btn on-dark"
+            onClick={() => XLSX.writeFile(
+              buildExportWorkbook(contracts, investors),
+              `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`
+            )}
+          >
+            <Download size={16} /> Экспорт
           </button>
           <button className="btn primary" onClick={() => setAdding(true)}>
             <Plus size={16} /> Новый договор
@@ -794,6 +972,39 @@ export default function App() {
             <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
           </section>
 
+          <section className="panel monthly-panel">
+            <div className="panel-hd"><TrendingUp size={15} /> По месяцам</div>
+            <div className="monthly-grid">
+              <div className="monthly-col">
+                <div className="mini-hd emerald">Получено</div>
+                {monthlyStats.past.map((m) => (
+                  <div key={m.key} className="month-row" title={`Прибыль: ${money(m.receivedProfit)}`}>
+                    <span className="month-label">{m.label}</span>
+                    <span className="month-bar">
+                      <span className="month-bar-fill fill-received" style={{ width: `${(m.received / monthlyStats.maxPast) * 100}%` }} />
+                    </span>
+                    <span className="month-val num">{money(m.received)}</span>
+                    <span className="month-profit num">{money(m.receivedProfit)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="monthly-col">
+                <div className="mini-hd">Ожидается</div>
+                {monthlyStats.future.map((m) => (
+                  <div key={m.key} className="month-row" title={`Прибыль: ${money(m.expectedProfit)}`}>
+                    <span className="month-label">{m.label}</span>
+                    <span className="month-bar">
+                      <span className="month-bar-fill fill-expected" style={{ width: `${(m.expected / monthlyStats.maxFuture) * 100}%` }} />
+                    </span>
+                    <span className="month-val num">{money(m.expected)}</span>
+                    <span className="month-profit num">{money(m.expectedProfit)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="monthly-note">В последней колонке — прибыль (наценка) в составе суммы.</div>
+          </section>
+
           <section className="panel">
             <div className="panel-hd"><CalendarDays size={15} /> Ближайшие платежи</div>
             {totals.upcoming.length === 0 ? (
@@ -801,7 +1012,7 @@ export default function App() {
             ) : (
               <div className="rows">
                 {totals.upcoming.map((r) => (
-                  <button key={r.cid + "-" + r.index} className="prow" onClick={() => { setOpenId(r.cid); }}>
+                  <div key={r.cid + "-" + r.index} className="prow" role="button" tabIndex={0} onClick={() => { setOpenId(r.cid); }}>
                     <span className="prow-name-block">
                       <span className="prow-name">{r.client}</span>
                       {r.phone && <span className="prow-phone muted">{fmtPhone(r.phone)}</span>}
@@ -809,7 +1020,17 @@ export default function App() {
                     <span className="prow-date">{fmtDate(r.dueDate)}</span>
                     <span className="prow-sum num">{money(r.amountDue)}</span>
                     <Badge s={r.status} />
-                  </button>
+                    {waReminderLink(r.phone, r.client, r.amountDue, r.dueDate) ? (
+                      <a
+                        className="wa-row-btn"
+                        href={waReminderLink(r.phone, r.client, r.amountDue, r.dueDate)}
+                        target="_blank" rel="noreferrer" title="Напомнить в WhatsApp"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MessageCircle size={15} />
+                      </a>
+                    ) : <span />}
+                  </div>
                 ))}
               </div>
             )}
@@ -863,7 +1084,8 @@ export default function App() {
             <div className="panel"><div className="empty">Ничего не найдено по этому запросу или фильтру.</div></div>
           ) : (
           <div className="clist">
-            {filteredContracts.map((c) => {
+            {groupedContracts.map((g) => {
+            const renderCard = (c) => {
               const st = contractStats(c);
               const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
               const expanded = expandedId === c.id;
@@ -900,7 +1122,7 @@ export default function App() {
                           <div className="mini-hd clay">Просрочено</div>
                           {overdueRows.map((r) => (
                             <div key={r.index} className="mini-row">
-                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.amountDue)}</span>
+                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.remainingDue)}</span>
                             </div>
                           ))}
                         </div>
@@ -910,7 +1132,7 @@ export default function App() {
                           <div className="mini-hd">Предстоящие</div>
                           {upcomingRows.map((r) => (
                             <div key={r.index} className="mini-row">
-                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.amountDue)}</span>
+                              <span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.remainingDue)}</span>
                             </div>
                           ))}
                         </div>
@@ -932,6 +1154,21 @@ export default function App() {
                   )}
                 </div>
               );
+            };
+
+            if (g.list.length === 1) return renderCard(g.list[0]);
+            return (
+              <div key={"g-" + g.key} className="cgroup">
+                <div className="cgroup-hd">
+                  <span className="cgroup-name"><Users size={14} /> {g.list[0].clientName}</span>
+                  <span className="cgroup-stats">
+                    Договоров: {g.list.length} · Остаток <b className="num">{money(g.remaining)}</b>
+                    {g.overdue > 0 && <span className="cgroup-overdue"> · Просрочка {money(g.overdue)}</span>}
+                  </span>
+                </div>
+                <div className="cgroup-items">{g.list.map(renderCard)}</div>
+              </div>
+            );
             })}
           </div>
           )}
@@ -983,6 +1220,7 @@ export default function App() {
               const invWithdrawn = capital.withdrawnByInvestor[inv.id] || 0;
               const invFree = (+inv.amount || 0) - invDeployed - invWithdrawn;
               const pct = capital.invested ? Math.round(((+inv.amount || 0) / capital.invested) * 100) : 0;
+              const invProfit = capital.profitByInvestor[inv.id] || { realized: 0, expected: 0 };
               return (
                 <div key={inv.id} className="inv-card">
                   <div className="citem-top">
@@ -997,6 +1235,8 @@ export default function App() {
                     <div><span>В обороте</span><b className="num">{money(invDeployed)}</b></div>
                     <div><span>Выведено</span><b className="num">{money(invWithdrawn)}</b></div>
                     <div><span>Свободно</span><b className="num strong">{money(invFree)}</b></div>
+                    <div><span>Прибыль получена</span><b className="num">{money(invProfit.realized)}</b></div>
+                    <div><span>Прибыль ожидается</span><b className="num">{money(invProfit.expected)}</b></div>
                   </div>
                 </div>
               );
@@ -1047,6 +1287,7 @@ export default function App() {
           onClose={() => setOpenId(null)}
           onToggle={togglePay}
           onUpdatePaidDate={updatePaidDate}
+          onPay={payPayment}
           onAttachReceipt={attachReceipt}
           onRemoveReceipt={removeReceipt}
           onEarlyPayoff={earlyPayoff}
@@ -1163,7 +1404,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit }) {
+function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
@@ -1173,11 +1414,13 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
   const [payingIdx, setPayingIdx] = useState(null);
   const [payMode, setPayMode] = useState("new"); // "new" | "edit"
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payAmount, setPayAmount] = useState("");
 
-  const startPay = (idx) => {
+  const startPay = (idx, remainingDue) => {
     setPayingIdx(idx);
     setPayMode("new");
     setPayDate(new Date().toISOString().slice(0, 10));
+    setPayAmount(String(remainingDue));
   };
 
   const startEditDate = (idx, currentDate) => {
@@ -1188,7 +1431,7 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
 
   const confirmPay = (idx) => {
     if (payMode === "edit") onUpdatePaidDate(contract.id, idx, payDate);
-    else onToggle(contract.id, idx, payDate);
+    else onPay(contract.id, idx, payDate, +payAmount || 0);
     setPayingIdx(null);
   };
 
@@ -1197,6 +1440,62 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
     if (!file) return;
     onAttachReceipt(contract.id, idx, file);
     e.target.value = "";
+  };
+
+  const printContract = () => {
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rowsHtml = st.rows.map((r) => `
+      <tr>
+        <td>${r.n}</td>
+        <td>${fmtDate(r.dueDate)}</td>
+        <td class="num">${money(r.amountDue)}</td>
+        <td>${r.paid ? `Оплачен ${fmtDate(r.paidDate)}` : r.paidAmount > 0 ? `Частично: ${money(r.paidAmount)}` : ""}</td>
+      </tr>`).join("");
+    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<title>Договор рассрочки — ${esc(contract.clientName)}</title>
+<style>
+  body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;color:#16332E;margin:40px;font-size:14px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:#4E5C57;margin-bottom:24px}
+  table{border-collapse:collapse;width:100%;margin:14px 0 24px}
+  th,td{border:1px solid #C7CEBF;padding:7px 10px;text-align:left;font-size:13px}
+  th{background:#EEF1EB}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:10px}
+  .grid div{padding:3px 0}
+  .lbl{color:#4E5C57}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sign{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px}
+  .sign div{border-top:1px solid #16332E;padding-top:6px;font-size:12.5px;color:#4E5C57}
+  @media print{body{margin:16mm}}
+</style></head><body>
+<h1>Договор рассрочки</h1>
+<div class="sub">от ${fmtDate(contract.startDate)}</div>
+<div class="grid">
+  <div><span class="lbl">Клиент:</span> ${esc(contract.clientName)}</div>
+  <div><span class="lbl">Телефон:</span> ${esc(fmtPhone(contract.phone)) || "—"}</div>
+  <div><span class="lbl">Товар:</span> ${esc(contract.item) || "—"}</div>
+  <div><span class="lbl">Цена товара:</span> ${money(contract.totalPrice)}</div>
+  <div><span class="lbl">Первоначальный взнос:</span> ${money(contract.downPayment)}</div>
+  <div><span class="lbl">Наценка:</span> ${money(contract.markup)}${contract.markupPercent ? ` (${contract.markupPercent}%)` : ""}</div>
+  <div><span class="lbl">Срок:</span> ${contract.termMonths} мес</div>
+  <div><span class="lbl">К оплате в рассрочку:</span> ${money(st.financed)}</div>
+  <div><span class="lbl">Поручитель:</span> ${esc(contract.guarantorName) || "—"}</div>
+  <div><span class="lbl">Телефон поручителя:</span> ${esc(fmtPhone(contract.guarantorPhone)) || "—"}</div>
+</div>
+<table>
+  <thead><tr><th>№</th><th>Дата платежа</th><th>Сумма</th><th>Отметка об оплате</th></tr></thead>
+  <tbody>${rowsHtml}</tbody>
+</table>
+<div class="sign">
+  <div>Подпись продавца</div>
+  <div>Подпись клиента</div>
+</div>
+<script>window.onload = function(){ window.print(); };</script>
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) { alert("Разрешите всплывающие окна для печати"); return; }
+    win.document.write(html);
+    win.document.close();
   };
 
   const openReceipt = async (receipt) => {
@@ -1223,6 +1522,15 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
               <a className="sheet-phone" href={`tel:${contract.phone}`}><Phone size={12} /> {fmtPhone(contract.phone)}</a>
             )}
           </div>
+          {contract.phone && st.next && waReminderLink(contract.phone, contract.clientName, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate) && (
+            <a
+              className="icon-btn wa-green"
+              href={waReminderLink(contract.phone, contract.clientName, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate)}
+              target="_blank" rel="noreferrer" title="Напомнить в WhatsApp"
+            >
+              <MessageCircle size={18} />
+            </a>
+          )}
           <button className="icon-btn" onClick={() => onDelete(contract.id)} title="Удалить договор"><Trash2 size={18} /></button>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
         </div>
@@ -1246,9 +1554,14 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
             </div>
           </div>
 
-          <button type="button" className="btn ghost btn-sm det-edit-btn" onClick={() => onEdit(contract)}>
-            <Pencil size={13} /> Изменить договор
-          </button>
+          <div className="det-actions-row">
+            <button type="button" className="btn ghost btn-sm" onClick={() => onEdit(contract)}>
+              <Pencil size={13} /> Изменить договор
+            </button>
+            <button type="button" className="btn ghost btn-sm" onClick={printContract}>
+              <Printer size={13} /> Печать
+            </button>
+          </div>
 
           <div className="comment-block">
             <label className="field comment-field">
@@ -1295,14 +1608,38 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAt
                       <Pencil size={13} />
                     </button>
                   </div>
+                ) : r.paidAmount > 0 ? (
+                  <div className="lbtn-group">
+                    <button className="lbtn pay" onClick={() => (payingIdx === r.index && payMode === "new" ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
+                      <Check size={13} /> Доплатить
+                    </button>
+                    <button className="lbtn undo" title="Сбросить оплату" onClick={() => onToggle(contract.id, r.index)}>
+                      <Undo2 size={13} />
+                    </button>
+                  </div>
                 ) : (
-                  <button className="lbtn pay" onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startPay(r.index))}>
+                  <button className="lbtn pay" onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
                     <Check size={13} /> Оплатить
                   </button>
+                )}
+                {r.paidAmount > 0 && !r.paid && (
+                  <div className="partial-note">
+                    Оплачено {money(r.paidAmount)} из {money(r.amountDue)} — остаток {money(r.remainingDue)}
+                  </div>
                 )}
                 {payingIdx === r.index && (
                   <div className="pay-inline">
                     <DateFields value={payDate} onChange={setPayDate} />
+                    {payMode === "new" && (
+                      <input
+                        type="number"
+                        className="pay-amount"
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        placeholder="Сумма"
+                        title="Сумма оплаты — можно внести часть"
+                      />
+                    )}
                     <button className="btn primary btn-sm" onClick={() => confirmPay(r.index)}>Подтвердить</button>
                     <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
                   </div>
@@ -1788,9 +2125,13 @@ const css = `
 .panel-hd-title{display:flex;align-items:center;gap:8px}
 .empty{padding:26px 18px;text-align:center;color:var(--ink-soft);font-size:13px}
 .rows{display:flex;flex-direction:column}
-.prow{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:14px;
+.prow{display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:14px;
   padding:12px 18px;border:none;border-bottom:1px solid var(--line);background:transparent;
   cursor:pointer;font:inherit;text-align:left;width:100%}
+.wa-row-btn{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;
+  color:#1E7A54;border:1px solid var(--line);background:var(--surface)}
+.wa-row-btn:hover{border-color:var(--emerald);background:#E1F0E7}
+.icon-btn.wa-green{color:#7BE0A8}
 .prow:last-child{border-bottom:none}
 .prow:hover{background:#F3F5EF}
 .prow-name-block{display:flex;flex-direction:column;gap:1px}
@@ -1822,6 +2163,28 @@ const css = `
 .filter-chips button.on{background:var(--brass);color:#fff;border-color:var(--brass)}
 
 .clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
+.cgroup{grid-column:1/-1;border:1px solid var(--line);border-radius:14px;background:#F3F5EF;padding:12px}
+.cgroup-hd{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;
+  padding:2px 4px 12px}
+.cgroup-name{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:15px}
+.cgroup-stats{font-size:12.5px;color:var(--ink-soft)}
+.cgroup-stats b{color:var(--ink)}
+.cgroup-overdue{color:var(--clay);font-weight:600}
+.cgroup-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
+
+.monthly-panel{margin-bottom:16px}
+.monthly-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.monthly-col{padding:14px 18px}
+.monthly-col + .monthly-col{border-left:1px solid var(--line)}
+.month-row{display:grid;grid-template-columns:64px 1fr auto auto;align-items:center;gap:10px;padding:5px 0}
+.month-label{font-size:12px;color:var(--ink-soft);white-space:nowrap}
+.month-bar{display:block;height:8px;border-radius:6px;background:var(--line);overflow:hidden;min-width:40px}
+.month-bar-fill{display:block;height:100%;border-radius:6px}
+.fill-received{background:var(--emerald)}
+.fill-expected{background:var(--brass)}
+.month-val{font-size:12.5px;font-weight:600;white-space:nowrap}
+.month-profit{font-size:11.5px;color:var(--ink-soft);white-space:nowrap}
+.monthly-note{padding:0 18px 12px;font-size:11.5px;color:var(--ink-soft)}
 .citem{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;
   transition:border-color .15s}
 .citem:hover{border-color:var(--brass)}
@@ -1877,6 +2240,8 @@ const css = `
 .lrow:last-child{border-bottom:none}
 .lrow.overdue{background:#FBEEEC}
 .lrow.paid{background:#F1F6F1}
+.lrow.partial{background:#FBF4E4}
+.partial-note{grid-column:1/-1;font-size:12px;color:#8A6111;margin-top:2px}
 .lnum{color:var(--ink-soft);font-size:12px}
 .ldate{font-size:13px}
 .lsum{font-size:14px;font-weight:600}
@@ -1919,12 +2284,16 @@ const css = `
 .date-fields span{color:var(--ink-soft)}
 
 .det-edit-btn{margin-bottom:16px}
+.det-actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 .guarantor-toggle{margin-bottom:12px}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
 .comment-save{width:100%;justify-content:center}
 
-.pay-inline{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px}
+.pay-inline{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.pay-amount{width:110px;border:1px solid var(--line);background:var(--surface);border-radius:8px;
+  padding:6px 8px;font:inherit;font-size:12.5px;color:var(--ink)}
+.pay-amount:focus{outline:none;border-color:var(--brass)}
 .pay-inline .date-fields{width:auto;padding:6px 8px}
 .pay-inline .date-fields input{font-size:12.5px}
 
@@ -1979,6 +2348,9 @@ const css = `
   .lstatus{grid-column:2}
   .lbtn{grid-column:3}
   .lbtn-group{grid-column:3}
+  .monthly-grid{grid-template-columns:1fr}
+  .monthly-col + .monthly-col{border-left:none;border-top:1px solid var(--line)}
+  .month-profit{display:none}
   .wd-row{grid-template-columns:1fr auto;row-gap:6px}
   .wd-purpose{grid-column:1}
   .wd-investor{grid-column:1}
