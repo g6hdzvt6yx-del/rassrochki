@@ -238,7 +238,7 @@ const parseImportWorkbook = async (file, existingInvestors, existingContracts) =
         id: "c" + Date.now() + Math.random().toString(36).slice(2, 7),
         clientName, phone: String(row["Телефон"] || "").trim(), item: String(row["Товар"] || "").trim(),
         totalPrice, downPayment, markup, markupPercent, termMonths, startDate,
-        investorId: investor ? investor.id : "", payments: {},
+        investorId: investor ? investor.id : "", comment: String(row["Комментарий"] || "").trim(), payments: {},
       });
     });
   }
@@ -511,6 +511,18 @@ export default function App() {
     } else {
       payments[idx] = { ...(cur || {}), paidDate: paidDate || new Date().toISOString().slice(0, 10) };
     }
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    setStorageError(!!error);
+  };
+
+  const updatePaidDate = async (cid, idx, paidDate) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) return;
+    const payments = { ...(c.payments || {}) };
+    const cur = payments[idx];
+    if (!cur || !cur.paidDate) return;
+    payments[idx] = { ...cur, paidDate };
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
     setStorageError(!!error);
@@ -983,6 +995,7 @@ export default function App() {
           investors={investors}
           onClose={() => setOpenId(null)}
           onToggle={togglePay}
+          onUpdatePaidDate={updatePaidDate}
           onAttachReceipt={attachReceipt}
           onRemoveReceipt={removeReceipt}
           onEarlyPayoff={earlyPayoff}
@@ -1099,7 +1112,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit }) {
+function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
@@ -1107,15 +1120,24 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
 
   const [comment, setComment] = useState(contract.comment || "");
   const [payingIdx, setPayingIdx] = useState(null);
+  const [payMode, setPayMode] = useState("new"); // "new" | "edit"
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
 
   const startPay = (idx) => {
     setPayingIdx(idx);
+    setPayMode("new");
     setPayDate(new Date().toISOString().slice(0, 10));
   };
 
+  const startEditDate = (idx, currentDate) => {
+    setPayingIdx(idx);
+    setPayMode("edit");
+    setPayDate(currentDate);
+  };
+
   const confirmPay = (idx) => {
-    onToggle(contract.id, idx, payDate);
+    if (payMode === "edit") onUpdatePaidDate(contract.id, idx, payDate);
+    else onToggle(contract.id, idx, payDate);
     setPayingIdx(null);
   };
 
@@ -1203,15 +1225,24 @@ function Detail({ contract, investors, onClose, onToggle, onAttachReceipt, onRem
                 <span className="lsum num">{money(r.amountDue)}</span>
                 <span className="lstatus"><Badge s={r.status} /></span>
                 {r.paid ? (
-                  <button className="lbtn undo" onClick={() => onToggle(contract.id, r.index)}>
-                    <Undo2 size={13} /> Отменить
-                  </button>
+                  <div className="lbtn-group">
+                    <button className="lbtn undo" onClick={() => onToggle(contract.id, r.index)}>
+                      <Undo2 size={13} /> Отменить
+                    </button>
+                    <button
+                      className="lbtn undo edit-date"
+                      title="Изменить дату оплаты"
+                      onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startEditDate(r.index, r.paidDate))}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  </div>
                 ) : (
                   <button className="lbtn pay" onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startPay(r.index))}>
                     <Check size={13} /> Оплатить
                   </button>
                 )}
-                {payingIdx === r.index && !r.paid && (
+                {payingIdx === r.index && (
                   <div className="pay-inline">
                     <DateFields value={payDate} onChange={setPayDate} />
                     <button className="btn primary btn-sm" onClick={() => confirmPay(r.index)}>Подтвердить</button>
@@ -1310,7 +1341,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
 
   const markup = +f.markupAmount || 0;
   const financed = principal + markup;
-  const valid = f.clientName.trim() && +f.totalPrice > 0 && +f.termMonths > 0;
+  const valid = f.clientName.trim().length > 0;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -1363,7 +1394,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
               const { markupAmount: _markupAmount, monthlyPayment: _monthlyPayment, ...rest } = f;
               onSave({
                 ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
-                markup, markupPercent: +f.markupPercent || 0, termMonths: +f.termMonths,
+                markup, markupPercent: +f.markupPercent || 0, termMonths: Math.max(1, +f.termMonths || 1),
               });
             }}>{editing ? "Сохранить изменения" : "Создать договор"}</button>
           </div>
@@ -1771,6 +1802,8 @@ const css = `
 .lbtn.pay{background:var(--emerald);color:#fff}
 .lbtn.undo{background:transparent;color:var(--ink-soft);border:1px solid var(--line)}
 .lbtn.pay:hover{filter:brightness(1.06)}
+.lbtn-group{display:flex;gap:6px}
+.lbtn.edit-date{padding:6px 8px}
 
 .hidden-file-input{display:none}
 .receipt-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:2px}
@@ -1861,6 +1894,7 @@ const css = `
   .lrow{grid-template-columns:22px 1fr auto;row-gap:6px}
   .lstatus{grid-column:2}
   .lbtn{grid-column:3}
+  .lbtn-group{grid-column:3}
   .wd-row{grid-template-columns:1fr auto;row-gap:6px}
   .wd-purpose{grid-column:1}
   .wd-investor{grid-column:1}
