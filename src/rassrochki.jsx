@@ -880,6 +880,7 @@ export default function App() {
                     <span className="citem-name-block">
                       <span className="citem-name">{c.clientName}</span>
                       <span className="citem-investor muted">{investorLabel}</span>
+                      <span className="citem-amount">Остаток <b className="num">{money(st.remaining)}</b></span>
                     </span>
                     <span className="citem-status-right">
                       <Badge s={badge} />
@@ -1825,6 +1826,8 @@ const css = `
 .citem-name-block{display:flex;flex-direction:column;gap:2px}
 .citem-name{font-weight:600;font-size:15px}
 .citem-investor{font-size:11.5px}
+.citem-amount{font-size:12.5px;color:var(--ink-soft);margin-top:2px}
+.citem-amount b{color:var(--ink);font-size:13.5px}
 .citem-status-right{display:flex;align-items:center;gap:8px}
 .chev{color:var(--ink-soft);transition:transform .15s}
 .chev.on{transform:rotate(180deg)}
