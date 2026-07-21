@@ -1385,16 +1385,22 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
           {rows.length === 0 ? (
             <div className="empty">Пусто.</div>
           ) : (
-            <div className="rows">
-              {rows.map((r) => (
-                <button key={r.id} className="prow" onClick={() => onOpenContract(r.id)}>
-                  <span className="prow-name">{r.name}</span>
-                  <span className="prow-date">{r.item}</span>
-                  <span className="prow-sum num">{money(r.amount)}</span>
-                  <Badge s={r.badge} />
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="section-total">
+                <span>Итого · {rows.length} {rows.length === 1 ? "договор" : rows.length < 5 ? "договора" : "договоров"}</span>
+                <b className="num">{money(rows.reduce((s, r) => s + r.amount, 0))}</b>
+              </div>
+              <div className="rows">
+                {rows.map((r) => (
+                  <button key={r.id} className="prow" onClick={() => onOpenContract(r.id)}>
+                    <span className="prow-name">{r.name}</span>
+                    <span className="prow-date">{r.item}</span>
+                    <span className="prow-sum num">{money(r.amount)}</span>
+                    <Badge s={r.badge} />
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -2285,6 +2291,9 @@ const css = `
 
 .det-edit-btn{margin-bottom:16px}
 .det-actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.section-total{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--ink);color:#EFF3EC;border-radius:11px;padding:12px 16px;margin-bottom:14px;font-size:13px}
+.section-total b{font-size:18px;font-weight:600}
 .guarantor-toggle{margin-bottom:12px}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
