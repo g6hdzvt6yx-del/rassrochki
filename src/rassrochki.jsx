@@ -354,6 +354,8 @@ export default function App() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [investorFilter, setInvestorFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("created");
 
   // сессия входа
   useEffect(() => {
@@ -649,12 +651,13 @@ export default function App() {
 
   const filteredContracts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return contracts.filter((c) => {
+    const list = contracts.filter((c) => {
       if (statusFilter !== "all") {
         const st = contractStats(c);
         const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
         if (badge !== statusFilter) return false;
       }
+      if (investorFilter !== "all" && (c.investorId || "") !== investorFilter) return false;
       if (!q) return true;
       return (
         c.clientName.toLowerCase().includes(q) ||
@@ -662,7 +665,21 @@ export default function App() {
         (c.item || "").toLowerCase().includes(q)
       );
     });
-  }, [contracts, search, statusFilter]);
+
+    if (sortBy === "name") {
+      return [...list].sort((a, b) => a.clientName.localeCompare(b.clientName, "ru"));
+    }
+    if (sortBy === "dueDate") {
+      return [...list].sort((a, b) => {
+        const na = contractStats(a).next, nb = contractStats(b).next;
+        return (na ? na.dueDate.getTime() : Infinity) - (nb ? nb.dueDate.getTime() : Infinity);
+      });
+    }
+    if (sortBy === "remaining") {
+      return [...list].sort((a, b) => contractStats(b).remaining - contractStats(a).remaining);
+    }
+    return list; // "created" — уже отсортировано по дате создания (новые сверху)
+  }, [contracts, search, statusFilter, investorFilter, sortBy]);
 
   if (!supabaseConfigured)
     return (
@@ -806,6 +823,19 @@ export default function App() {
                 <button className="search-clear" onClick={() => setSearch("")} title="Очистить"><X size={13} /></button>
               )}
             </div>
+            <select className="toolbar-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="created">Сначала новые</option>
+              <option value="dueDate">По ближайшему платежу</option>
+              <option value="name">По имени (А-Я)</option>
+              <option value="remaining">По остатку долга</option>
+            </select>
+            <select className="toolbar-select" value={investorFilter} onChange={(e) => setInvestorFilter(e.target.value)}>
+              <option value="all">Все источники</option>
+              <option value="">Общий пул</option>
+              {investors.map((inv) => (
+                <option key={inv.id} value={inv.id}>{inv.name}</option>
+              ))}
+            </select>
             <div className="filter-chips">
               {[
                 ["all", "Все"], ["active", "Активные"], ["overdue", "Просрочка"], ["done", "Закрытые"],
@@ -1742,6 +1772,9 @@ const css = `
 .search-box input:focus{outline:none}
 .search-clear{background:transparent;border:none;color:var(--ink-soft);cursor:pointer;display:grid;place-items:center}
 .search-clear:hover{color:var(--clay)}
+.toolbar-select{border:1px solid var(--line);background:var(--surface);border-radius:9px;
+  padding:8px 10px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+.toolbar-select:focus{outline:none;border-color:var(--brass)}
 .filter-chips{display:flex;gap:6px;flex-wrap:wrap}
 .filter-chips button{border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer;
   font:inherit;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:20px;white-space:nowrap}
