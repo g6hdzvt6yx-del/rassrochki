@@ -888,6 +888,9 @@ export default function App() {
                   </button>
                   {expanded && (
                     <div className="citem-expand">
+                      <div className="mini-row citem-contract-date">
+                        <span>Дата составления договора</span><span className="num">{fmtDate(c.startDate)}</span>
+                      </div>
                       {overdueRows.length > 0 && (
                         <div className="mini-block">
                           <div className="mini-hd clay">Просрочено</div>
@@ -1827,6 +1830,8 @@ const css = `
 .mini-hd.emerald{color:var(--emerald)}
 .mini-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)}
 .mini-row:last-child{border-bottom:none}
+.citem-contract-date{margin-top:12px;color:var(--ink-soft)}
+.citem-contract-date .num{color:var(--ink);font-weight:600}
 .citem-open{margin-top:14px;width:100%;justify-content:center}
 
 .overlay{position:fixed;inset:0;background:rgba(18,32,28,.42);display:flex;justify-content:center;
