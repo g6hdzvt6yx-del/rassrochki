@@ -429,7 +429,7 @@ export default function App() {
   const [sectionModal, setSectionModal] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [importing, setImporting] = useState(false);
-  const [storageError, setStorageError] = useState(false);
+  const [storageError, setStorageError] = useState("");
   const [editingContract, setEditingContract] = useState(null);
 
   const [search, setSearch] = useState("");
@@ -540,7 +540,7 @@ export default function App() {
     setInvestors((prev) => [inv, ...prev]);
     setAddingInvestor(false);
     const { error } = await supabase.from("investors").insert(investorToRow(inv));
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const removeInvestor = async (id) => {
@@ -552,7 +552,7 @@ export default function App() {
     if (!window.confirm(msg)) return;
     setInvestors((prev) => prev.filter((i) => i.id !== id));
     const { error } = await supabase.from("investors").delete().eq("id", id);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const addWithdrawal = async (data) => {
@@ -560,7 +560,7 @@ export default function App() {
     setWithdrawals((prev) => [w, ...prev]);
     setAddingWithdrawal(false);
     const { error } = await supabase.from("withdrawals").insert(withdrawalToRow(w));
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const removeWithdrawal = async (id) => {
@@ -568,20 +568,20 @@ export default function App() {
     if (!window.confirm(`Удалить вывод ${money(w?.amount || 0)} от ${w ? fmtDate(w.date) : ""}?`)) return;
     setWithdrawals((prev) => prev.filter((x) => x.id !== id));
     const { error } = await supabase.from("withdrawals").delete().eq("id", id);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const importData = async (newInvestors, newContracts, paymentUpdates) => {
-    let failed = false;
+    let failMsg = "";
     if (newInvestors.length) {
       setInvestors((prev) => [...newInvestors, ...prev]);
       const { error } = await supabase.from("investors").insert(newInvestors.map(investorToRow));
-      if (error) failed = true;
+      if (error) failMsg = error.message;
     }
     if (newContracts.length) {
       setContracts((prev) => [...newContracts, ...prev]);
       const { error } = await supabase.from("contracts").insert(newContracts.map(contractToRow));
-      if (error) failed = true;
+      if (error) failMsg = error.message;
     }
     if (paymentUpdates && paymentUpdates.length) {
       const merged = new Map();
@@ -594,9 +594,10 @@ export default function App() {
       const results = await Promise.all(
         [...merged.entries()].map(([id, payments]) => supabase.from("contracts").update({ payments }).eq("id", id))
       );
-      if (results.some((r) => r.error)) failed = true;
+      const firstErr = results.find((r) => r.error);
+      if (firstErr) failMsg = firstErr.error.message;
     }
-    setStorageError(failed);
+    setStorageError(failMsg);
   };
 
   const togglePay = async (cid, idx, paidDate) => {
@@ -612,7 +613,7 @@ export default function App() {
     }
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   // внесение оплаты (полной или частичной): суммы накапливаются в paidAmount
@@ -633,7 +634,7 @@ export default function App() {
     payments[idx] = rec;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const updatePaidDate = async (cid, idx, paidDate) => {
@@ -645,7 +646,7 @@ export default function App() {
     payments[idx] = { ...cur, paidDate };
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const attachReceipt = async (cid, idx, file) => {
@@ -655,7 +656,7 @@ export default function App() {
     const { error: uploadError } = await supabase.storage.from("receipts").upload(path, file, {
       contentType: file.type || "application/octet-stream",
     });
-    if (uploadError) { setStorageError(true); alert(`Не удалось загрузить чек: ${uploadError.message}`); return; }
+    if (uploadError) { setStorageError(uploadError.message); alert(`Не удалось загрузить чек: ${uploadError.message}`); return; }
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
     const receipt = { name: file.name, type: file.type, path };
@@ -663,7 +664,7 @@ export default function App() {
     payments[idx] = { ...(payments[idx] || {}), receipt };
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const earlyPayoff = async (cid) => {
@@ -679,7 +680,7 @@ export default function App() {
     });
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const removeReceipt = async (cid, idx) => {
@@ -694,7 +695,7 @@ export default function App() {
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     if (receipt && receipt.path) await supabase.storage.from("receipts").remove([receipt.path]);
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const addContract = async (data) => {
@@ -702,7 +703,7 @@ export default function App() {
     setContracts((prev) => [c, ...prev]);
     setAdding(false);
     const { error } = await supabase.from("contracts").insert(contractToRow(c));
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const updateContract = async (data) => {
@@ -711,13 +712,13 @@ export default function App() {
     setContracts((prev) => prev.map((c) => (c.id === cid ? updated : c)));
     setEditingContract(null);
     const { error } = await supabase.from("contracts").update(contractToRow(updated)).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const updateComment = async (cid, comment) => {
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, comment } : x)));
     const { error } = await supabase.from("contracts").update({ comment }).eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const deleteContract = async (cid) => {
@@ -728,7 +729,7 @@ export default function App() {
     const receiptPaths = Object.values(c?.payments || {}).map((p) => p?.receipt?.path).filter(Boolean);
     if (receiptPaths.length) await supabase.storage.from("receipts").remove(receiptPaths);
     const { error } = await supabase.from("contracts").delete().eq("id", cid);
-    setStorageError(!!error);
+    setStorageError(error ? error.message : "");
   };
 
   const open = contracts.find((c) => c.id === openId) || null;
@@ -945,8 +946,11 @@ export default function App() {
         <div className="storage-warn-wrap">
           <div className="storage-warn">
             <AlertTriangle size={15} />
-            Не удалось сохранить последние изменения в базе данных — проверьте интернет-соединение.
-            Изменения видны сейчас, но могут не сохраниться на сервере.
+            <span>
+              Не удалось сохранить последние изменения в базе данных.
+              Изменения видны сейчас, но пропадут после перезагрузки страницы.
+              <span className="storage-warn-detail">Ошибка: {storageError}</span>
+            </span>
           </div>
         </div>
       )}
@@ -2100,6 +2104,7 @@ const css = `
 .storage-warn{display:flex;align-items:center;gap:10px;padding:11px 16px;
   background:#FBEEEC;color:var(--clay);border:1px solid #F0CAC4;border-radius:11px;font-size:12.5px;line-height:1.5}
 .storage-warn svg{flex-shrink:0}
+.storage-warn-detail{display:block;margin-top:3px;font-size:11.5px;opacity:.85;font-family:'IBM Plex Mono',monospace}
 
 .wrap{max-width:820px;margin:0 auto;padding:22px 18px 60px}
 
