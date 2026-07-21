@@ -423,7 +423,7 @@ export default function App() {
       financed += st.financed; paid += st.paidSum; overdue += st.overdueSum; remaining += st.remaining;
       if (st.overdueSum > 0) debtors += 1;
       if (!st.done) active += 1;
-      st.rows.filter((r) => !r.paid).forEach((r) => upcoming.push({ ...r, client: c.clientName, cid: c.id }));
+      st.rows.filter((r) => !r.paid).forEach((r) => upcoming.push({ ...r, client: c.clientName, phone: c.phone, cid: c.id }));
     });
     upcoming.sort((a, b) => a.dueDate - b.dueDate);
     return { financed, paid, overdue, remaining, debtors, active, upcoming: upcoming.slice(0, 8) };
@@ -802,7 +802,10 @@ export default function App() {
               <div className="rows">
                 {totals.upcoming.map((r) => (
                   <button key={r.cid + "-" + r.index} className="prow" onClick={() => { setOpenId(r.cid); }}>
-                    <span className="prow-name">{r.client}</span>
+                    <span className="prow-name-block">
+                      <span className="prow-name">{r.client}</span>
+                      {r.phone && <span className="prow-phone muted">{fmtPhone(r.phone)}</span>}
+                    </span>
                     <span className="prow-date">{fmtDate(r.dueDate)}</span>
                     <span className="prow-sum num">{money(r.amountDue)}</span>
                     <Badge s={r.status} />
@@ -1790,7 +1793,9 @@ const css = `
   cursor:pointer;font:inherit;text-align:left;width:100%}
 .prow:last-child{border-bottom:none}
 .prow:hover{background:#F3F5EF}
+.prow-name-block{display:flex;flex-direction:column;gap:1px}
 .prow-name{font-weight:500;font-size:14px}
+.prow-phone{font-size:11.5px}
 .prow-date{font-size:12.5px;color:var(--ink-soft)}
 .prow-sum{font-size:14px;font-weight:600}
 
