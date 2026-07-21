@@ -134,7 +134,12 @@ const withdrawalToRow = (w) => ({
 /* ------------------------------------------------------------------ */
 
 const excelDateToIso = (v) => {
-  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+  if (v instanceof Date && !isNaN(v)) {
+    // локальные компоненты даты, а не toISOString() (UTC) — иначе для часовых
+    // поясов восточнее UTC дата сдвигается на день назад
+    const y = v.getFullYear(), m = v.getMonth() + 1, d = v.getDate();
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
   if (typeof v === "number") {
     const d = XLSX.SSF.parse_date_code(v);
     if (d) return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
