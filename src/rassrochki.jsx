@@ -1351,6 +1351,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
     investorId: editing?.investorId || "",
     guarantorName: editing?.guarantorName || "", guarantorPhone: editing?.guarantorPhone || "",
   });
+  const [showGuarantor, setShowGuarantor] = useState(!!(editing?.guarantorName || editing?.guarantorPhone));
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }));
 
   const principal = Math.max(0, (+f.totalPrice || 0) - (+f.downPayment || 0));
@@ -1396,9 +1397,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
 
   const markup = +f.markupAmount || 0;
   const financed = principal + markup;
-  const valid = f.clientName.trim().length > 0
-    && f.guarantorName.trim().length > 0
-    && f.guarantorPhone.trim().length > 0;
+  const valid = f.clientName.trim().length > 0;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -1416,14 +1415,20 @@ function AddForm({ investors, onClose, onSave, editing }) {
             </Field>
           </div>
           <Field label="Товар"><input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" /></Field>
-          <div className="frow">
-            <Field label="Поручитель, ФИО *">
-              <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
-            </Field>
-            <Field label="Поручитель, телефон *">
-              <input value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
-            </Field>
-          </div>
+          {showGuarantor ? (
+            <div className="frow">
+              <Field label="Поручитель, ФИО">
+                <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
+              </Field>
+              <Field label="Поручитель, телефон">
+                <input value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
+              </Field>
+            </div>
+          ) : (
+            <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowGuarantor(true)}>
+              <Plus size={13} /> Добавить поручителя
+            </button>
+          )}
           <div className="frow">
             <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
@@ -1906,6 +1911,7 @@ const css = `
 .date-fields span{color:var(--ink-soft)}
 
 .det-edit-btn{margin-bottom:16px}
+.guarantor-toggle{margin-bottom:12px}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
 .comment-save{width:100%;justify-content:center}
