@@ -1701,31 +1701,34 @@ function AddForm({ investors, onClose, onSave, editing }) {
     startDate: editing?.startDate || new Date().toISOString().slice(0, 10),
     investorId: editing?.investorId || "",
     guarantorName: editing?.guarantorName || "", guarantorPhone: editing?.guarantorPhone || "",
+    markupBase: editing?.markupBase || "principal", // "principal" (цена−взнос) | "full" (полная цена)
   });
   const [showGuarantor, setShowGuarantor] = useState(!!(editing?.guarantorName || editing?.guarantorPhone));
   const set = (k) => (e) => setF((prev) => ({ ...prev, [k]: e.target.value }));
 
   const principal = Math.max(0, (+f.totalPrice || 0) - (+f.downPayment || 0));
+  // база, от которой считается процент наценки
+  const markupBaseValue = f.markupBase === "full" ? (+f.totalPrice || 0) : principal;
 
-  // цена/взнос меняются — сумма наценки и платёж в месяц пересчитываются от текущего процента
+  // цена/взнос/база меняются — сумма наценки и платёж в месяц пересчитываются от текущего процента
   useEffect(() => {
     setF((prev) => {
-      const amount = Math.round(principal * (+prev.markupPercent || 0) / 100);
+      const amount = Math.round(markupBaseValue * (+prev.markupPercent || 0) / 100);
       const monthly = Math.round((principal + amount) / Math.max(1, +prev.termMonths || 1));
       return { ...prev, markupAmount: String(amount), monthlyPayment: String(monthly) };
     });
-  }, [principal]);
+  }, [markupBaseValue, principal]);
 
   const onMarkupPercent = (e) => {
     const percent = e.target.value;
-    const amount = Math.round(principal * (+percent || 0) / 100);
+    const amount = Math.round(markupBaseValue * (+percent || 0) / 100);
     const monthly = Math.round((principal + amount) / Math.max(1, +f.termMonths || 1));
     setF((prev) => ({ ...prev, markupPercent: percent, markupAmount: String(amount), monthlyPayment: String(monthly) }));
   };
 
   const onMarkupAmount = (e) => {
     const amount = e.target.value;
-    const percent = principal > 0 ? Math.round(((+amount || 0) / principal) * 1000) / 10 : 0;
+    const percent = markupBaseValue > 0 ? Math.round(((+amount || 0) / markupBaseValue) * 1000) / 10 : 0;
     const monthly = Math.round((principal + (+amount || 0)) / Math.max(1, +f.termMonths || 1));
     setF((prev) => ({ ...prev, markupAmount: amount, markupPercent: String(percent), monthlyPayment: String(monthly) }));
   };
@@ -1735,7 +1738,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
     const term = Math.max(1, +f.termMonths || 1);
     const financedFromMonthly = Math.round((+monthlyInput || 0) * term);
     const amount = Math.max(0, financedFromMonthly - principal);
-    const percent = principal > 0 ? Math.round((amount / principal) * 1000) / 10 : 0;
+    const percent = markupBaseValue > 0 ? Math.round((amount / markupBaseValue) * 1000) / 10 : 0;
     setF((prev) => ({ ...prev, monthlyPayment: monthlyInput, markupAmount: String(amount), markupPercent: String(percent) }));
   };
 
@@ -1784,6 +1787,24 @@ function AddForm({ investors, onClose, onSave, editing }) {
             <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
           </div>
+          <Field label="Считать процент наценки от">
+            <div className="seg-toggle">
+              <button
+                type="button"
+                className={f.markupBase === "principal" ? "on" : ""}
+                onClick={() => setF((prev) => ({ ...prev, markupBase: "principal" }))}
+              >
+                Цена − взнос
+              </button>
+              <button
+                type="button"
+                className={f.markupBase === "full" ? "on" : ""}
+                onClick={() => setF((prev) => ({ ...prev, markupBase: "full" }))}
+              >
+                Полная цена
+              </button>
+            </div>
+          </Field>
           <div className="frow">
             <Field label="Наценка, %"><input type="number" value={f.markupPercent} onChange={onMarkupPercent} placeholder="20" /></Field>
             <Field label="Наценка, ₽"><input type="number" value={f.markupAmount} onChange={onMarkupAmount} placeholder="0" /></Field>
@@ -1812,7 +1833,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
           <div className="sheet-actions">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
             <button className="btn primary" disabled={!valid} onClick={() => {
-              const { markupAmount: _markupAmount, monthlyPayment: _monthlyPayment, ...rest } = f;
+              const { markupAmount: _markupAmount, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
               onSave({
                 ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
                 markup, markupPercent: +f.markupPercent || 0, termMonths: Math.max(1, +f.termMonths || 1),
@@ -2283,6 +2304,11 @@ const css = `
   padding:10px 12px;font:inherit;font-size:14px;color:var(--ink);resize:vertical}
 .field input:focus, .field select:focus, .field textarea:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(140,106,46,.12)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg-toggle button{border:none;background:var(--surface);color:var(--ink-soft);cursor:pointer;font:inherit;
+  font-size:13px;font-weight:600;padding:9px 12px}
+.seg-toggle button + button{border-left:1px solid var(--line)}
+.seg-toggle button.on{background:var(--brass);color:#fff}
 
 .date-fields{display:flex;align-items:center;gap:2px;width:100%;border:1px solid var(--line);
   background:var(--surface);border-radius:9px;padding:10px 12px}
