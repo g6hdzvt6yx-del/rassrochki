@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArchiveRestore, Download, FileClock, FolderOpen, HardDriveDownload, History, RotateCcw, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { localData } from "./dataClient";
+import { formatDataDateTime as formatDateTime, parseDataDate } from "./dataDates";
 
 const TYPE_LABELS = { contracts: "Договор", payments: "Платёж", contacts: "Контакт", investors: "Вкладчик", withdrawals: "Вывод", receipts: "Чек", export: "Экспорт", backup: "Резервная копия", drafts: "Черновик", import: "Импорт" };
 const ACTION_LABELS = {
@@ -16,9 +17,6 @@ const ACTION_LABELS = {
   export_backup: "Экспорт резервной копии", excel_backup: "Ежедневная Excel-копия",
   stage_restore: "Подготовка восстановления копии", delete_old_drafts: "Удаление старых черновиков",
 };
-const formatDateTime = (value) => value ? new Intl.DateTimeFormat("ru-RU", {
-  day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
-}).format(new Date(value.endsWith?.("Z") ? value : value.replace(" ", "T") + "Z")) : "—";
 
 const FIELD_LABELS = {
   client_name: "Клиент", clientName: "Клиент", phone: "Телефон", item: "Товар",
@@ -133,7 +131,7 @@ const SPECIALIZED_PAYMENT_ACTIONS = new Set([
   "create_payment", "full_payment", "partial_payment", "cancel_payment", "change_payment_date",
   "early_payoff", "defer_payment", "edit_deferral", "cancel_deferral", "whatsapp_notification", "cancel_whatsapp_notification", "attach_receipt",
 ]);
-const logTime = (value) => new Date(value?.endsWith?.("Z") ? value : String(value || "").replace(" ", "T") + "Z").getTime();
+const logTime = (value) => parseDataDate(value)?.getTime() ?? NaN;
 
 export default function DataCenter({ onClose, onRestored, onContinueDraft }) {
   const [section, setSection] = useState("journal");

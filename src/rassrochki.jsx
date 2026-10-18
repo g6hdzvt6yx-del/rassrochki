@@ -17,6 +17,7 @@ import ClientCard from "./ClientCard";
 import FinancialReport from "./FinancialReport.jsx";
 import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
+import DataPanelBoundary from "./DataPanelBoundary";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -2190,13 +2191,13 @@ export default function App() {
         />
       )}
       {dataCenterOpen && (
-        <React.Suspense fallback={<div className="overlay"><div className="loading">Загрузка данных приложения…</div></div>}>
+        <DataPanelBoundary onClose={() => setDataCenterOpen(false)}><React.Suspense fallback={<div className="overlay"><div className="loading">Загрузка данных приложения…</div></div>}>
           <DataCenter
             onClose={() => setDataCenterOpen(false)}
             onRestored={() => setReloadTick((t) => t + 1)}
             onContinueDraft={(draft) => { setDataCenterOpen(false); setDraftToContinue(draft); }}
           />
-        </React.Suspense>
+        </React.Suspense></DataPanelBoundary>
       )}
       {confirmDialog && <ConfirmDialog options={confirmDialog} onCancel={() => finishConfirm(false)} onConfirm={() => finishConfirm(true)} />}
       {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
