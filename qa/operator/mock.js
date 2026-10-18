@@ -1,0 +1,4 @@
+let logs=[];
+const date=(offset)=>{const d=new Date();d.setDate(d.getDate()+offset);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
+const clients=[{id:'demo-a',clientName:'Тестовый клиент',phone:'+7 000 000-00-00',item:'Тестовый договор',financed:12000,termMonths:1,startDate:date(-5),payments:{}},{id:'demo-b',clientName:'Пример ближайшего платежа',phone:'',item:'Демонстрация',financed:5000,termMonths:1,startDate:date(2),payments:{}}];
+export const supabase={rpc:async(name,args)=>{if(name==='operator_clients')return {data:clients};if(name==='record_call'){logs.unshift({id:crypto.randomUUID(),contract_id:args.cid,result:args.outcome,note:args.message,next_contact_at:args.next_at,promised_date:args.promise_date,promised_amount:args.promise_amount,created_at:new Date().toISOString()});return {data:true};}throw new Error('Unexpected RPC');},from:()=>({select:()=>({order:async()=>({data:[...logs]})})})};
