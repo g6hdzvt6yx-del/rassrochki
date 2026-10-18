@@ -1,17 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase, supabaseConfigured } from './supabaseClient';
 import { accessFor } from './access';
 import OperatorDesk from './OperatorDesk';
 import TeamPanel from './TeamPanel';
 import './webAccess.css';
+const MacBackupImport = React.lazy(() => import('./MacBackupImport'));
 const AdminApp = React.lazy(() => import('./rassrochki.jsx'));
 export default function WebAccess() {
   const [session,setSession]=useState(undefined), [profile,setProfile]=useState(null), [checked,setChecked]=useState(false);
-  const [error,setError]=useState(''), [busy,setBusy]=useState(false), [team,setTeam]=useState(false), [tick,setTick]=useState(0);
+  const [error,setError]=useState(''), [busy,setBusy]=useState(false), [team,setTeam]=useState(false), [importOpen,setImportOpen]=useState(false), [importBusy,setImportBusy]=useState(false), [appVersion,setAppVersion]=useState(0), [tick,setTick]=useState(0);
+  const sessionUser = useRef(null);
   useEffect(()=>{
     if (!supabaseConfigured) {setSession(null); return;}
     supabase.auth.getSession().then(({data,error})=>{if(error)setError(error.message);setSession(data.session);});
-    const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);setChecked(false);setProfile(null);});
+    const {data}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);if(sessionUser.current!==s?.user?.id){setChecked(false);setProfile(null);sessionUser.current=s?.user?.id;}});
     return ()=>data.subscription.unsubscribe();
   },[]);
   useEffect(()=>{
@@ -32,5 +34,5 @@ export default function WebAccess() {
   const role=accessFor(profile);
   if(role==='blocked') return <main className="web-card"><h1>Доступ не предоставлен</h1><p>{error||'Учётная запись не активирована администратором.'}</p><button onClick={()=>setTick(t=>t+1)}>Проверить снова</button> <button onClick={logout}>Выйти</button></main>;
   if(role==='operator') return <OperatorDesk onLogout={logout}/>;
-  return <><div className="web-admin-bar"><span>Администратор</span><button onClick={()=>setTeam(!team)}>{team?'Вернуться к приложению':'Операторы и назначения'}</button></div>{team?<TeamPanel/>:<React.Suspense fallback={<p>Загрузка…</p>}><AdminApp key={session.user.id}/></React.Suspense>}</>;
+  return <><div className="web-admin-bar"><span>Администратор</span><button disabled={importBusy} onClick={()=>{setImportOpen(false);setTeam(!team);}}>{team?'Вернуться к приложению':'Операторы и назначения'}</button><button disabled={importBusy} onClick={()=>{setTeam(false);setImportOpen(!importOpen);}}>{importOpen?'Вернуться к приложению':'Перенести копию с Mac'}</button></div>{importOpen?<React.Suspense fallback={<p>Загрузка импорта…</p>}><MacBackupImport ownerId={session.user.id} onBusyChange={setImportBusy} onDone={()=>setAppVersion(v=>v+1)}/></React.Suspense>:team?<TeamPanel/>:<React.Suspense fallback={<p>Загрузка…</p>}><AdminApp key={session.user.id+":"+appVersion}/></React.Suspense>}</>;
 }
