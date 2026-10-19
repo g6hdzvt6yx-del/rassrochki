@@ -1,3 +1,5 @@
+import Directories from "./Directories.jsx";
+import { saveDirectoryClient } from "./directories";
 import { waReminderLink } from "./whatsapp";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -1191,6 +1193,11 @@ export default function App() {
     return true;
   };
 
+  const updateDirectoryClient = async (ids, values) => {
+    const patch = await saveDirectoryClient(supabase, ids, values);
+    setContracts(prev => prev.map(c => ids.includes(c.id) ? {...c, ...patch} : c));
+  };
+
   const updateComment = async (cid, comment) => {
     const prevContracts = contracts;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, comment } : x)));
@@ -1562,6 +1569,7 @@ export default function App() {
         <button className={tab === "capital" ? "on" : ""} onClick={() => setTab("capital")}>
           <Landmark size={16} /> Капитал
         </button>
+        {!isDesktopApp && <button className={tab === "directories" ? "on" : ""} onClick={() => setTab("directories")}><Users size={16}/> Справочники</button>}
         {isDesktopApp && <button onClick={() => setDataCenterOpen(true)}>
           <Database size={16} /> Данные
         </button>}
@@ -1580,6 +1588,8 @@ export default function App() {
         </div>
       )}
       {appMessage && <button type="button" className={`app-toast ${appMessage.tone || "error"}`} onClick={() => setAppMessage(null)}>{appMessage.message}<X size={14}/></button>}
+
+      {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
 
       {tab === "dashboard" && (
         <main className="wrap">
