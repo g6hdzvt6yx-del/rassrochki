@@ -5,3 +5,5 @@
 
 .desk .operator-back{display:none}.desk-grid>section{min-width:0}.detail{overflow-wrap:anywhere;scroll-margin-top:16px}.desk .client-row[aria-pressed=true]{box-shadow:inset 0 0 0 2px #174e42}.client-row:focus-visible{outline:3px solid #27896f;outline-offset:2px}
 @media(max-width:760px){.desk-grid:not(.has-selection)>.detail{display:none}.desk-grid.has-selection>.operator-list{display:none}.desk .operator-back{display:inline-block;min-height:44px}}
+
+.operator-overdue-total{display:grid;gap:6px;padding:16px;margin:16px 0;background:#fff1ed;border:1px solid #efd0c6;border-radius:12px;color:#8a2e1b}.operator-overdue-total strong{font-size:28px;line-height:1.2}
