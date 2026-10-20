@@ -20,6 +20,7 @@ import ClientCard from "./ClientCard";
 import FinancialReport from "./FinancialReport.jsx";
 import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
+import {useCallLogs} from "./useCallLogs";
 import DataPanelBoundary from "./DataPanelBoundary";
 
 const APP_VERSION = __APP_VERSION__;
@@ -546,6 +547,7 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
+  const {logs:operatorLogs,error:operatorLogsError}=useCallLogs(!isDesktopApp ? session?.user?.id : null);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -1230,7 +1232,7 @@ export default function App() {
     if (!c || !contact) return;
     if (!await requestConfirm({
       title: "Удалить запись о контакте?",
-      message: `${CONTACT_TYPES[contact.type] || "Контакт"} с ${c.clientName} от ${fmtDateTime(contact.occurredAt)}. Запись будет удалена из истории, а удаление сохранится в журнале действий.`,
+      message: `${contact.resultLabel || CONTACT_TYPES[contact.type] || "Контакт"}{contact.readOnly ? " · Оператор" : ""} с ${c.clientName} от ${fmtDateTime(contact.occurredAt)}. Запись будет удалена из истории, а удаление сохранится в журнале действий.`,
       confirmLabel: "Удалить запись",
     })) return;
     const payments = { ...(c.payments || {}), __contacts: contacts.filter((item) => item.id !== contactId) };
@@ -1261,8 +1263,8 @@ export default function App() {
   };
 
   const open = contracts.find((c) => c.id === openId) || null;
-  const openClientContacts = useMemo(() => clientContacts(contracts, open), [contracts, open]);
-  const expandedClientContacts = useMemo(() => clientContacts(contracts, contracts.find((c) => c.id === expandedId)), [contracts, expandedId]);
+  const openClientContacts = useMemo(() => clientContacts(contracts, open, operatorLogs), [contracts, open, operatorLogs]);
+  const expandedClientContacts = useMemo(() => clientContacts(contracts, contracts.find((c) => c.id === expandedId), operatorLogs), [contracts, expandedId, operatorLogs]);
 
   const sectionTitles = {
     remaining: "Остаток к получению — по договорам",
@@ -1559,6 +1561,7 @@ export default function App() {
         {backupError && <span role="alert" style={{ color: 'var(--clay)' }}>Ошибка резервного копирования: {backupError}</span>}
       </div>}
 
+      {operatorLogsError && <p role="alert">{operatorLogsError}</p>}
       <nav className="tabs">
         <button className={tab === "dashboard" ? "on" : ""} onClick={() => setTab("dashboard")}>
           <LayoutGrid size={16} /> Сводка
@@ -2370,9 +2373,9 @@ function ContactEntries({ contacts, contractId, onDelete }) {
   return <div className="contact-list">
     {contacts.map((contact) => <article className="contact-entry" key={`${contact._contractId || contractId}:${contact.id}`}>
       <div className="contact-entry-hd">
-        <b>{CONTACT_TYPES[contact.type] || "Контакт"}</b>
+        <b>{contact.resultLabel || CONTACT_TYPES[contact.type] || "Контакт"}{contact.readOnly ? " · Оператор" : ""}</b>
         <time>{fmtDateTime(contact.occurredAt)}</time>
-        {onDelete && <button type="button" className="icon-btn-ghost" title="Удалить запись" onClick={() => onDelete(contact._contractId || contractId, contact.id)}><Trash2 size={13} /></button>}
+        {onDelete && !contact.readOnly && <button type="button" className="icon-btn-ghost" title="Удалить запись" onClick={() => onDelete(contact._contractId || contractId, contact.id)}><Trash2 size={13} /></button>}
       </div>
       {contact._contractId !== contractId && contact._item && <small className="contact-contract-label">Договор: {contact._item}</small>}
       <p>{contact.note}</p>
