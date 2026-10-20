@@ -1,4 +1,5 @@
 import { supabase as cloudClient, supabaseConfigured as cloudConfigured } from "./supabaseClient";
+import { guardedCloudClient } from "./guardedCloudClient";
 import { runLocalTask } from "./localTasks";
 
 export const isDesktopApp = Boolean(window.__TAURI_INTERNALS__);
@@ -526,5 +527,5 @@ const localClient = {
   },
 };
 
-export const supabase = isDesktopApp ? localClient : cloudClient;
+export const supabase = isDesktopApp ? localClient : guardedCloudClient(cloudClient);
 export const supabaseConfigured = isDesktopApp || cloudConfigured;

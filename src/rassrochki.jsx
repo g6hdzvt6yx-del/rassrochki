@@ -1,4 +1,5 @@
 import Directories from "./Directories.jsx";
+import WebSyncStatus from "./WebSyncStatus";
 import { saveDirectoryClient } from "./directories";
 import { waReminderLink } from "./whatsapp";
 import React, { useState, useEffect, useMemo, useRef } from "react";
@@ -1555,6 +1556,11 @@ export default function App() {
           </button>
         </div>
       </header>
+      {!isDesktopApp && <WebSyncStatus
+        rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
+        paused={Boolean(adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || tab === 'directories' || confirmDialog || sectionModal)}
+        onRefresh={() => setReloadTick(t => t + 1)}
+      />}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
         <span>{saveState.pending ? "Сохраняем…" : saveState.error ? `Ошибка сохранения: ${saveState.error}` : saveState.lastSavedAt ? `Сохранено · ${fmtDateTime(saveState.lastSavedAt)}` : "Данные загружены с Mac"}</span>
         <button className="btn ghost btn-sm" onClick={() => setDataCenterOpen(true)}>Последняя успешная копия: {lastBackupAt ? fmtDateTime(lastBackupAt) : "ещё не создана"}</button>
