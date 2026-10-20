@@ -7,3 +7,5 @@
 @media(max-width:760px){.desk-grid:not(.has-selection)>.detail{display:none}.desk-grid.has-selection>.operator-list{display:none}.desk .operator-back{display:inline-block;min-height:44px}}
 
 .operator-overdue-total{display:grid;gap:6px;padding:16px;margin:16px 0;background:#fff1ed;border:1px solid #efd0c6;border-radius:12px;color:#8a2e1b}.operator-overdue-total strong{font-size:28px;line-height:1.2}
+
+.desk .operator-search{display:grid;gap:8px;margin:16px 0}.operator-search input{width:100%;min-height:44px}
