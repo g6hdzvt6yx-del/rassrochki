@@ -35,23 +35,32 @@ export function guardedCloudClient(client) {
         delete() { return mutation(null); },
       };
       function mutation(value) {
-        return {
-          eq(column, id) {
+        let ids = [], invalid = false;
+        const query = {
+          eq(column, id) { invalid ||= column !== 'id'; ids = [id]; return query; },
+          in(column, values) { invalid ||= column !== 'id'; ids = [...new Set(values)]; return query; },
+          select() { return query; },
+          then(resolve, reject) {
             return (async () => {
               pending++;
+              const saved = [];
               try {
-                if (column !== 'id') throw new Error('Изменение поддерживается только по номеру записи.');
-                const before = rows.get(`${table}:${id}`);
-                if (!before) throw new Error('Сначала обновите данные страницы.');
-                const row = await checkedWrite(client, table, id, before, value);
-                if (value) rows.set(`${table}:${id}`, structuredClone(row));
-                else rows.delete(`${table}:${id}`);
-                return { data: row, error: null };
-              } catch (error) { return { data: null, error: { message: error.message } }; }
+                if (invalid || !ids.length) throw new Error('Укажите номера записей для изменения.');
+                for (const id of ids) if (!rows.has(`${table}:${id}`)) throw new Error('Сначала обновите данные страницы.');
+                for (const id of ids) {
+                  const before = rows.get(`${table}:${id}`);
+                  const row = await checkedWrite(client, table, id, before, value);
+                  if (value) rows.set(`${table}:${id}`, structuredClone(row));
+                  else rows.delete(`${table}:${id}`);
+                  saved.push(row);
+                }
+                return { data: saved, error: null };
+              } catch (error) { return { data: saved, error: { message: `${error.message}${saved.length ? ` Уже сохранено записей: ${saved.length}. Обновите страницу и проверьте остальные.` : ''}` } }; }
               finally { pending--; }
-            })();
+            })().then(resolve, reject);
           },
         };
+        return query;
       }
     },
   };
