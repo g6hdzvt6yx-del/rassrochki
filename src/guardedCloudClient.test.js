@@ -28,6 +28,14 @@ function fixture() {
   return { client: guardedCloudClient(client), remote: () => rows };
 }
 describe('защита редактирования сайта', () => {
+  it('поддерживает сохранение справочника через in и select', async () => {
+    const f = fixture();
+    f.remote().push({ ...structuredClone(f.remote()[0]), id: 'd' });
+    await f.client.from('contracts').select('*');
+    const result = await f.client.from('contracts').update({ client_name: 'Новое имя' }).in('id', ['c', 'd']).select('id');
+    expect(result.error).toBeNull(); expect(result.data).toHaveLength(2);
+    expect(f.remote().every(r => r.client_name === 'Новое имя')).toBe(true);
+  });
   it('не перезаписывает платёж, изменённый на Mac после открытия страницы', async () => {
     const f = fixture();
     await f.client.from('contracts').select('*').order('id');

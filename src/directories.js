@@ -27,7 +27,7 @@ export async function saveDirectoryClient(db, ids, values) {
  if (!ids.length) throw new Error('Договоры клиента не найдены. Обновите страницу.');
  const patch = {client_name:name, phone:formatPhone(phone)};
  const {data,error} = await db.from('contracts').update(patch).in('id',ids).select('id');
- if (error) throw new Error('Не удалось сохранить данные клиента. Повторите попытку.');
+ if (error) throw new Error(error.message || 'Не удалось сохранить данные клиента. Обновите страницу.');
  if (!data || data.length !== ids.length) throw new Error('Не все договоры доступны для изменения. Обновите страницу и проверьте данные.');
  return {clientName:patch.client_name,phone:patch.phone};
 }
