@@ -1613,8 +1613,8 @@ export default function App() {
                 <select aria-label="Режим выбора ожидаемых платежей" value={dailyRange ? "range" : "day"} onChange={(e) => { setDailyRange(e.target.value === "range"); if (dailyTo < dailyDate) setDailyTo(dailyDate); }}>
                   <option value="day">Один день</option><option value="range">Произвольный период</option>
                 </select>
-                <label>{dailyRange ? "С даты" : "Дата"}<input type="date" value={dailyDate} max={dailyRange ? dailyTo || undefined : undefined} onChange={(e) => setDailyDate(e.target.value)} aria-label="Выбрать дату ожидаемых платежей" /></label>
-                {dailyRange && <label>По дату включительно<input type="date" value={dailyTo} min={dailyDate || undefined} onChange={(e) => setDailyTo(e.target.value)} /></label>}
+                <label>{dailyRange ? "С даты" : "Дата"}<DateCalendar showValue value={dailyDate} max={dailyRange ? dailyTo || undefined : undefined} onChange={setDailyDate} label="Выбрать дату ожидаемых платежей" /></label>
+                {dailyRange && <label>По дату включительно<DateCalendar showValue value={dailyTo} min={dailyDate || undefined} onChange={setDailyTo} label="По дату включительно" /></label>}
                 <button className="btn ghost btn-sm" onClick={() => { const today = toIsoDate(new Date()); setDailyDate(today); setDailyTo(today); setDailyRange(false); }}>Сегодня</button>
               </div>
             </div>
@@ -2325,8 +2325,8 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
             </select>
           </div>
           {custom && <div className="received-period received-range">
-            <label>С даты<input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} /></label>
-            <label>По дату включительно<input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} /></label>
+            <label>С даты<DateCalendar showValue value={from} max={to || undefined} onChange={setFrom} label="С даты" /></label>
+            <label>По дату включительно<DateCalendar showValue value={to} min={from || undefined} onChange={setTo} label="По дату включительно" /></label>
           </div>}
           {periodError ? <p role="alert" className="storage-warn">{periodError}</p> : <>
           {view === "profit" ? <>
@@ -3745,6 +3745,7 @@ const css = `
 .date-fields .date-segment:nth-of-type(3){width:2.8em}
 .date-fields span{color:var(--ink-soft)}
 .date-picker-button{display:grid;place-items:center;margin-left:auto;padding:1px;border:0;background:transparent;color:var(--brass);cursor:pointer}
+.date-picker-button.date-picker-value{display:flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;white-space:nowrap;min-height:34px}.date-calendar button:disabled{opacity:.35;cursor:default;background:transparent}
 .date-picker-button:hover{color:var(--emerald)}
 .date-calendar{position:fixed;z-index:10000;box-sizing:border-box;padding:12px;background:#fafbf7;color:#173c34;border:1px solid #d9dfd3;border-radius:16px;box-shadow:0 12px 40px #173c3433;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-height:calc(100vh - 16px);overflow:auto}
 .date-calendar button{font:inherit;color:inherit;border:0;background:transparent;cursor:pointer;border-radius:8px}

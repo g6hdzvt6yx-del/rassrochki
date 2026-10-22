@@ -5,7 +5,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const dateLabel = (date) => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 
-export default function DateCalendar({ value, onChange }) {
+export default function DateCalendar({ value, onChange, showValue = false, label = "Выбрать дату в календаре", min, max }) {
   const [view, setView] = useState(null);
   const trigger = useRef(null);
   const panel = useRef(null);
@@ -45,7 +45,8 @@ export default function DateCalendar({ value, onChange }) {
       top: rect.bottom + height + 8 <= window.innerHeight ? rect.bottom + 8 : Math.max(8, rect.top - height - 8),
     });
   };
-  const select = (date) => { onChange(iso(date)); close(true); };
+  const allowed = (key) => (!min || key >= min) && (!max || key <= max);
+  const select = (date) => { const key = iso(date); if (!allowed(key)) return; onChange(key); close(true); };
   const move = (delta) => setView((current) => {
     const date = new Date(current.year, current.month + delta, 1);
     return { ...current, year: date.getFullYear(), month: date.getMonth() };
@@ -54,9 +55,9 @@ export default function DateCalendar({ value, onChange }) {
   const today = iso(new Date());
 
   return <>
-    <button ref={trigger} type="button" className="date-picker-button" onClick={open}
-      title="Выбрать дату в календаре" aria-label="Выбрать дату в календаре" aria-haspopup="dialog" aria-expanded={Boolean(view)}>
-      <CalendarDays size={15}/>
+    <button ref={trigger} type="button" className={`date-picker-button${showValue ? " date-picker-value" : ""}`} onClick={open}
+      title={label} aria-label={showValue ? `${label}: ${value ? value.split("-").reverse().join(".") : "не выбрана"}` : label} aria-haspopup="dialog" aria-expanded={Boolean(view)}>
+      <CalendarDays size={15}/>{showValue && <span>{value ? value.split("-").reverse().join(".") : "Выберите дату"}</span>}
     </button>
     {view && createPortal(<div ref={panel} className="date-calendar" role="dialog" aria-label="Выбор даты"
       style={{ top: view.top, left: view.left, width: view.width }} onClick={(event) => event.stopPropagation()}>
@@ -72,11 +73,11 @@ export default function DateCalendar({ value, onChange }) {
           const date = new Date(view.year, view.month, index - first + 1);
           const key = iso(date);
           return <button type="button" key={key} aria-label={dateLabel(date)} aria-pressed={key === value}
-            aria-current={key === today ? 'date' : undefined}
+            disabled={!allowed(key)} aria-current={key === today ? 'date' : undefined}
             className={date.getMonth() !== view.month ? 'other-month' : ''} onClick={() => select(date)}>{date.getDate()}</button>;
         })}
       </div>
-      <button type="button" className="date-calendar-today" onClick={() => select(new Date())}>Сегодня</button>
+      <button type="button" className="date-calendar-today" disabled={!allowed(today)} onClick={() => select(new Date())}>Сегодня</button>
     </div>, document.body)}
   </>;
 }
