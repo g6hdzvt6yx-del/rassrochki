@@ -2299,14 +2299,25 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 
 function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received", onClose, onOpenContract }) {
   const [month, setMonth] = useState("");
+  const [from, setFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [to, setTo] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
+  const custom = month === "custom";
+  const periodError = custom && (!from || !to ? "Укажите начало и конец периода." : from > to ? "Начало периода не может быть позже окончания." : "");
+  const range = useMemo(() => custom ? { from, to } : null, [custom, from, to]);
   const [profitMode, setProfitMode] = useState("actual");
   const monthlyProfit = useMemo(() => profitComparisonByMonth(contracts, contractStats), [contracts]);
-  const planned = useMemo(() => scheduledProfitSummary(contracts, contractStats, month), [contracts, month]);
+  const planned = useMemo(() => scheduledProfitSummary(contracts, contractStats, custom ? "" : month, range), [contracts, month, custom, range]);
   const showPlanned = view === "profit" && profitMode === "planned";
   const months = useMemo(() => monthlyProfit.map((row) => row.month), [monthlyProfit]);
   const summary = useMemo(
-    () => month ? receivedSummary(contracts, contractStats, month) : allTimeSummary,
-    [contracts, allTimeSummary, month]
+    () => month ? receivedSummary(contracts, contractStats, custom ? "" : month, range) : allTimeSummary,
+    [contracts, allTimeSummary, month, custom, range]
   );
   const monthLabel = (value) => new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" })
     .format(new Date(`${value}-01T12:00:00`));
@@ -2319,22 +2330,29 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
             <label htmlFor="received-month">Период</label>
             <select id="received-month" value={month} onChange={(e) => setMonth(e.target.value)}>
               <option value="">За всё время</option>
+              <option value="custom">Произвольный период</option>
               {months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}
             </select>
           </div>
+          {custom && <div className="received-period received-range">
+            <label>С даты<input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} /></label>
+            <label>По дату включительно<input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} /></label>
+          </div>}
+          {periodError ? <p role="alert" className="storage-warn">{periodError}</p> : <>
           {view === "profit" ? <>
             <div className="received-totals">
               <div><span>Обязательная прибыль (по графику)</span><b>{money(planned.profitScheduled)}</b></div>
               <div><span>Фактическая прибыль (получено)</span><b>{money(summary.profitReceived)}</b></div>
             </div>
             <p className="field-hint">План — наценка в полной сумме платежей по срокам с учётом переносов, включая уже оплаченные. Факт — наценка в поступлениях по дате оплаты. Разница не равна просрочке: возможны авансы и оплата старых долгов.</p>
-            <div className="monthly-profit-register profit-comparison">
+            {!custom && <div className="monthly-profit-register profit-comparison">
               <div className="monthly-profit-register-hd"><span>Месяц</span><span>Обязательная</span><span>Фактическая</span></div>
               {monthlyProfit.map((row) => <button type="button" key={row.month} className={month === row.month ? "on" : ""} onClick={() => setMonth((current) => current === row.month ? "" : row.month)}>
                 <span>{monthLabel(row.month)}</span><b className="num">{money(row.profitScheduled)}</b><strong className="num">{money(row.profitReceived)}</strong>
               </button>)}
               {!monthlyProfit.length && <div className="empty">Платежей пока нет.</div>}
             </div>
+            }
             <div className="seg-toggle">
               <button type="button" className={!showPlanned ? "on" : ""} onClick={() => setProfitMode("actual")}>Фактические поступления</button>
               <button type="button" className={showPlanned ? "on" : ""} onClick={() => setProfitMode("planned")}>Обязательные платежи</button>
@@ -2352,6 +2370,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
             </button>)}
             {!(showPlanned ? planned.rows : summary.rows).length && <div className="empty">За выбранный период платежей нет.</div>}
           </div>
+          </>}
         </div>
       </div>
     </div>
@@ -3847,6 +3866,7 @@ const css = `
 .data-list{border:1px solid var(--line);border-radius:12px;overflow:hidden}.data-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface)}.data-row:last-child{border-bottom:0}.data-row>div{display:flex;flex-direction:column;gap:3px}.data-row>div:last-child{align-items:flex-end}.data-row span,.data-row small{font-size:12px;color:var(--ink-soft)}.data-row-actions{flex-direction:row!important;align-items:center!important}.data-row-button{width:100%;border:0;text-align:left;cursor:pointer;font:inherit}.data-row-button:hover{background:var(--surface-2)}
 .journal-row{align-items:flex-start}.journal-row>div:first-child{min-width:0;flex:1}.journal-row .action-description{margin-top:3px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}.journal-row>div:last-child{flex:0 0 auto}
 .received-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.received-totals>div{background:var(--surface-2);border-radius:10px;padding:12px}.received-totals span{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:4px}.received-totals b{font-size:17px}
+.received-range{flex-wrap:wrap}.received-range label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px}.received-range input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}
 .received-period{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.received-period label{font-size:12.5px;font-weight:600;color:var(--ink-soft)}.received-period select{min-width:190px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}
 .monthly-profit-register{margin-bottom:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden}.monthly-profit-register-hd,.monthly-profit-register button{display:grid;grid-template-columns:1fr 150px 160px;align-items:center;gap:12px;width:100%;padding:10px 12px;box-sizing:border-box;text-align:left}.monthly-profit-register-hd{background:var(--surface-2);color:var(--ink-soft);font-size:10.5px}.monthly-profit-register-hd span:not(:first-child){text-align:right}.monthly-profit-register button{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}.monthly-profit-register button:hover,.monthly-profit-register button.on{background:#EDF6F1}.monthly-profit-register button b,.monthly-profit-register button strong{text-align:right;white-space:nowrap}.monthly-profit-register button strong{color:var(--emerald)}
 .investor-profit-panel{margin-top:14px}.profit-table-wrap{overflow-x:auto}.profit-table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}.profit-table th,.profit-table td{padding:10px 9px;border-bottom:1px solid var(--line);text-align:right}.profit-table th:first-child,.profit-table td:first-child{text-align:left}.profit-table tbody tr{cursor:pointer}.profit-table tbody tr:hover{background:var(--surface-2)}

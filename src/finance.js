@@ -28,7 +28,15 @@ export function splitScheduleAmount(total, parts) {
   return amounts;
 }
 
-export function receivedSummary(contracts, getStats, month = "") {
+// Границы произвольного периода включаются целиком, без преобразования часового пояса.
+function inDateRange(value, range) {
+  if (!range) return true;
+  const date = String(value || "").slice(0, 10);
+  return Boolean(range.from && range.to && range.from <= range.to
+    && /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= range.from && date <= range.to);
+}
+
+export function receivedSummary(contracts, getStats, month = "", range = null) {
   const rows = [];
   let received = 0, principalReturned = 0, profitReceived = 0;
   contracts.forEach((contract) => {
@@ -38,7 +46,7 @@ export function receivedSummary(contracts, getStats, month = "") {
       const events = Array.isArray(payment.paymentEvents) && payment.paymentEvents.length
         ? payment.paymentEvents
         : (payment.paidAmount > 0 ? [{ date: payment.paidDate, amount: payment.paidAmount, legacy: true }] : []);
-      return events.filter((event) => +event.amount > 0 && (!month || String(event.date || "").slice(0, 7) === month))
+      return events.filter((event) => +event.amount > 0 && inDateRange(event.date, range) && (!month || String(event.date || "").slice(0, 7) === month))
         .map((event) => ({ payment, event }));
     });
     const periodPaid = paidRows.reduce((sum, row) => sum + (+row.event.amount || 0), 0);
@@ -68,7 +76,7 @@ export function receivedProfitByMonth(contracts, getStats) {
 }
 
 // План включает полную сумму обязательства, даже если оно уже оплачено.
-export function scheduledProfitSummary(contracts, getStats, month = "") {
+export function scheduledProfitSummary(contracts, getStats, month = "", range = null) {
   let scheduled = 0, profitScheduled = 0;
   const rows = [];
   contracts.forEach((contract) => {
@@ -78,7 +86,7 @@ export function scheduledProfitSummary(contracts, getStats, month = "") {
       const dueDate = date instanceof Date
         ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
         : String(date || "").slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || (month && dueDate.slice(0, 7) !== month)) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || (month && dueDate.slice(0, 7) !== month) || !inDateRange(dueDate, range)) return;
       const value = Math.max(0, +payment.amountDue || 0);
       amount += value;
       rows.push({ contractId: contract.id, clientName: contract.clientName, item: contract.item || "", paymentNo: payment.n, dueDate, amount: value });
