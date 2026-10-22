@@ -130,3 +130,32 @@ describe("плановая и фактическая прибыль", () => {
     expect(scheduledProfitSummary([], stats).profitScheduled).toBe(0);
   });
 });
+
+
+describe("произвольный период", () => {
+  const dates = ["2026-09-30", "2026-10-01", "2026-10-15", "2026-10-30", "2026-10-31", "2026-11-01", "2027-01-01"];
+  const contracts = [{ id: "range", totalPrice: 1000, markup: 200, stats: { rows: [
+    ...dates.map((date, index) => ({ n: index + 1, dueDate: new Date(`${date}T12:00:00`), amountDue: 120,
+      paymentEvents: [{ date: `${date}T23:59:59`, amount: 120 }] })),
+    { n: 8, paidAmount: 120, paidDate: null },
+  ] } }];
+  it.each([
+    ["2026-10-01", "2026-10-30", 360],
+    ["2026-10-15", "2026-10-15", 120],
+    ["2026-09-30", "2027-01-01", 840],
+    ["2026-12-01", "2026-12-31", 0],
+    ["2026-10-30", "2026-10-01", 0],
+    ["", "2026-10-30", 0],
+  ])("учитывает обе границы %s — %s", (from, to, expected) => {
+    const actual = receivedSummary(contracts, stats, "", { from, to });
+    const planned = scheduledProfitSummary(contracts, stats, "", { from, to });
+    expect(actual.received).toBe(expected);
+    expect(planned.scheduled).toBe(expected);
+    expect(actual.profitReceived).toBe(expected / 6);
+    expect(planned.profitScheduled).toBe(expected / 6);
+    expect(actual.reconciled).toBe(true);
+  });
+  it("возвращает все поступления после сброса периода, включая недатированные", () => {
+    expect(receivedSummary(contracts, stats).received).toBe(960);
+  });
+});
