@@ -1,3 +1,4 @@
+import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
 import { saveDirectoryClient } from "./directories";
@@ -591,6 +592,10 @@ export default function App() {
   const [deferralFilter, setDeferralFilter] = useState("all");
   const [sortBy, setSortBy] = useState("created");
   const [dailyDate, setDailyDate] = useState(() => toIsoDate(new Date()));
+  const [dailyRange, setDailyRange] = useState(false);
+  const [dailyTo, setDailyTo] = useState(() => toIsoDate(new Date()));
+  const dailyEnd = dailyRange ? dailyTo : dailyDate;
+  const dailyError = !dailyDate || !dailyEnd ? "Укажите даты периода." : dailyDate > dailyEnd ? "Начало периода не может быть позже окончания." : "";
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [appMessage, setAppMessage] = useState(null);
 
@@ -766,45 +771,24 @@ export default function App() {
   }, [contracts, investors, withdrawals]);
 
   const received = useMemo(() => receivedSummary(contracts, contractStats), [contracts]);
-  const dailyPayments = useMemo(() => {
-    const rows = [];
-    contracts.forEach((contract) => {
-      const stats = contractStats(contract);
-      stats.rows.forEach((payment) => {
-        if (toIsoDate(payment.dueDate) !== dailyDate || payment.paid) return;
-        rows.push({
-          contractId: contract.id, clientName: contract.clientName, phone: contract.phone || "",
-          item: contract.item || "", paymentNo: payment.n, amount: payment.amountDue,
-          paidAmount: payment.paidAmount, remaining: payment.remainingDue,
-          totalDebt: stats.remaining, overdueDebt: stats.overdueSum,
-          status: payment.status, notifiedAt: payment.notifiedAt,
-        });
-      });
-    });
-    rows.sort((a, b) => a.clientName.localeCompare(b.clientName, "ru"));
-    return {
-      rows,
-      clients: new Set(rows.map((row) => row.clientName.trim().toLocaleLowerCase("ru"))).size,
-      remaining: rows.reduce((sum, row) => sum + row.remaining, 0),
-    };
-  }, [contracts, dailyDate]);
+  const dailyPayments = useMemo(() => expectedPayments(contracts, contractStats, dailyDate, dailyEnd), [contracts, dailyDate, dailyEnd]);
   const dailyContacts = useMemo(() => {
     const rows = [];
     contracts.forEach((contract) => {
       const contacts = Array.isArray(contract.payments?.__contacts) ? contract.payments.__contacts : [];
       contacts.forEach((contact) => {
-        const promised = contact.promisedDate === dailyDate;
-        const nextContact = contact.nextContactDate === dailyDate;
+        const promised = dateInPeriod(contact.promisedDate, dailyDate, dailyEnd);
+        const nextContact = dateInPeriod(contact.nextContactDate, dailyDate, dailyEnd);
         if (!promised && !nextContact) return;
         rows.push({
           id: contact.id, contractId: contract.id, clientName: contract.clientName,
           phone: contract.phone || "", item: contract.item || "", note: contact.note || "",
-          promised, nextContact, promisedAmount: +contact.promisedAmount || 0,
+          promised, nextContact, promisedDate: contact.promisedDate, nextContactDate: contact.nextContactDate, promisedAmount: +contact.promisedAmount || 0,
         });
       });
     });
     return rows.sort((a, b) => a.clientName.localeCompare(b.clientName, "ru"));
-  }, [contracts, dailyDate]);
+  }, [contracts, dailyDate, dailyEnd]);
   const investorProfits = useMemo(
     () => investorProfitBreakdown(contracts, investors, withdrawals, contractStats),
     [contracts, investors, withdrawals]
@@ -1625,11 +1609,16 @@ export default function App() {
           <section className="panel daily-panel">
             <div className="panel-hd daily-panel-hd">
               <span className="panel-hd-title"><CalendarDays size={15} /> Кто должен оплатить <span className="cnt">{dailyPayments.rows.length}</span></span>
-              <span className="daily-date-controls">
-                <input type="date" value={dailyDate} onChange={(e) => e.target.value && setDailyDate(e.target.value)} aria-label="Выбрать дату ожидаемых платежей" />
-                {dailyDate !== toIsoDate(new Date()) && <button className="btn ghost btn-sm" onClick={() => setDailyDate(toIsoDate(new Date()))}>Сегодня</button>}
-              </span>
+              <div className="daily-date-controls">
+                <select aria-label="Режим выбора ожидаемых платежей" value={dailyRange ? "range" : "day"} onChange={(e) => { setDailyRange(e.target.value === "range"); if (dailyTo < dailyDate) setDailyTo(dailyDate); }}>
+                  <option value="day">Один день</option><option value="range">Произвольный период</option>
+                </select>
+                <label>{dailyRange ? "С даты" : "Дата"}<input type="date" value={dailyDate} max={dailyRange ? dailyTo || undefined : undefined} onChange={(e) => setDailyDate(e.target.value)} aria-label="Выбрать дату ожидаемых платежей" /></label>
+                {dailyRange && <label>По дату включительно<input type="date" value={dailyTo} min={dailyDate || undefined} onChange={(e) => setDailyTo(e.target.value)} /></label>}
+                <button className="btn ghost btn-sm" onClick={() => { const today = toIsoDate(new Date()); setDailyDate(today); setDailyTo(today); setDailyRange(false); }}>Сегодня</button>
+              </div>
             </div>
+            {dailyError ? <div className="empty" role="alert">{dailyError}</div> : <>
             <div className="received-totals daily-totals">
               <div><span>Клиентов должны оплатить</span><b className="num">{dailyPayments.clients}</b></div>
               <div><span>Платежей ожидается</span><b className="num">{dailyPayments.rows.length}</b></div>
@@ -1642,7 +1631,7 @@ export default function App() {
               >
                 <div>
                   <b>{row.clientName}</b>
-                  <span>{row.phone ? fmtPhone(row.phone) : "Номер не указан"} · {row.item || "Без товара"} · платёж №{row.paymentNo}</span>
+                  <span>{row.phone ? fmtPhone(row.phone) : "Номер не указан"} · {row.item || "Без товара"} · платёж №{row.paymentNo}{row.dueDate ? ` · срок ${fmtDate(row.dueDate)}` : ""}</span>
                   <small>{row.notifiedAt ? `WhatsApp: уведомлён ${fmtDate(row.notifiedAt)}` : "WhatsApp: не уведомлён"}</small>
                 </div>
                 <div>
@@ -1653,17 +1642,18 @@ export default function App() {
                   {row.paidAmount > 0 && <small>Частично внесено {money(row.paidAmount)} из {money(row.amount)}</small>}
                 </div>
               </button>)}
-            </div> : <div className="empty daily-empty">На {dailyDate ? fmtDate(`${dailyDate}T00:00:00`) : "выбранную дату"} неоплаченных платежей по графику нет.</div>}
+            </div> : <div className="empty daily-empty">За выбранный {dailyRange ? "период" : "день"} неоплаченных платежей по графику нет.</div>}
+            </>}
           </section>
 
           <section className="panel daily-panel contact-tasks-panel">
             <div className="panel-hd"><Phone size={15} /> Связаться и проверить обещания <span className="cnt">{dailyContacts.length}</span></div>
             {dailyContacts.length ? <div className="data-list daily-payment-list">
               {dailyContacts.map((row) => <button type="button" className="data-row data-row-button" key={`${row.contractId}-${row.id}`} onClick={() => setOpenId(row.contractId)}>
-                <div><b>{row.clientName}</b><span>{row.phone ? fmtPhone(row.phone) : "Номер не указан"} · {row.item || "Без товара"}</span><small>{row.note}</small></div>
+                <div><b>{row.clientName}</b><span>{row.phone ? fmtPhone(row.phone) : "Номер не указан"} · {row.item || "Без товара"}</span><small>{row.note}</small>{row.promised && <small>Обещал оплатить: {fmtDate(row.promisedDate)}</small>}{row.nextContact && <small>Связаться: {fmtDate(row.nextContactDate)}</small>}</div>
                 <div>{row.nextContact && <span className="badge b-brass">Связаться</span>}{row.promised && <span className="badge b-emerald">Обещал оплатить</span>}{row.promisedAmount > 0 && <b className="num">{money(row.promisedAmount)}</b>}</div>
               </button>)}
-            </div> : <div className="empty daily-empty">На выбранную дату контактов и обещаний нет.</div>}
+            </div> : <div className="empty daily-empty">За выбранный {dailyRange ? "период" : "день"} контактов и обещаний нет.</div>}
           </section>
 
           <section className="panel monthly-panel">
@@ -3591,10 +3581,10 @@ const css = `
 .cgroup-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
 
 .monthly-panel{margin-bottom:16px}
-.daily-panel{margin-bottom:16px}.daily-panel-hd{justify-content:space-between;color:var(--brass)}
+.daily-panel{margin-bottom:16px}.daily-panel-hd{justify-content:space-between;color:var(--brass);flex-wrap:wrap;gap:12px}
 .daily-panel .cnt{display:inline-grid;min-width:20px;height:20px;padding:0 6px;place-items:center;border-radius:10px;
   background:var(--surface-2);color:var(--ink-soft);font-size:10.5px}
-.daily-date-controls{display:flex;align-items:center;gap:8px}.daily-date-controls input{border:1px solid var(--line);border-radius:8px;
+.daily-date-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px}.daily-date-controls label{display:flex;flex-direction:column;gap:5px;font-size:11px}.daily-date-controls input,.daily-date-controls select{border:1px solid var(--line);border-radius:8px;
   background:var(--surface);padding:7px 9px;font:inherit;font-size:12.5px;color:var(--ink)}
 .daily-totals{margin:14px 18px}.daily-payment-list{margin:0 18px 16px}.daily-empty{padding-top:12px}
 .daily-total-debt strong{color:var(--ink)}.daily-overdue-debt,.daily-overdue-debt strong{color:var(--clay)}
