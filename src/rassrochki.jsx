@@ -16,7 +16,7 @@ import {
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 import { formatPhone as fmtPhone, formatPhoneForExcel, normalizePhone } from "./phone";
-import { allocateContractPayment } from "./payments";
+import { allocateContractPayment, editPaymentEvent } from "./payments";
 import { actualPaid, prepareContractEdit, draftContractId } from "./contractSafety";
 import { flushLocalTasks } from "./localTasks";
 import DateCalendar from "./DateCalendar";
@@ -1063,6 +1063,19 @@ export default function App() {
     if (result.remainder > 0) {
       showAppMessage(`В договоре осталось к оплате только ${money(result.appliedAmount)}. Лишние ${money(result.remainder)} не внесены.`, "warning");
     }
+    return true;
+  };
+
+  const editPaidPayment = async (cid, idx, eventIndex, expectedRecord, values) => {
+    const c = contracts.find(x=>x.id===cid);
+    if (!c) throw new Error('Договор не найден');
+    const row = buildSchedule(c).find(r=>r.index===idx);
+    const payments = editPaymentEvent({payments:c.payments,row,eventIndex,expectedRecord,...values});
+    const {error} = await supabase.from('contracts').update({payments}).eq('id',cid);
+    if (error) throw new Error(error.message);
+    setContracts(prev=>prev.map(x=>x.id===cid?{...x,payments}:x));
+    try { await localData.log({actionType:'edit_payment',entityType:'payments',entityId:`${cid}:${idx}`,contractId:cid,entityName:c.clientName,before:expectedRecord,after:payments[idx]}); }
+    catch(error) { showAppMessage(`Платёж сохранён, но журнал не записан: ${error.message}`); }
     return true;
   };
 
@@ -2132,6 +2145,7 @@ export default function App() {
           onUndoNotify={undoPaymentNotification}
           onDefer={deferPayment}
           onUpdatePaidDate={updatePaidDate}
+          onEditPayment={editPaidPayment}
           onPay={payPayment}
           cards={cards}
           onAttachReceipt={attachReceipt}
@@ -2435,7 +2449,7 @@ function Detail(props) {
     renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} />;
 }
 
-function ContractDetail({ cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
+function ContractDetail({ onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
   const actionArea = useRef(null);
   useEffect(() => {
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
@@ -2447,6 +2461,8 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
 
   const [comment, setComment] = useState(contract.comment || "");
   const [payingIdx, setPayingIdx] = useState(initialAction === "pay" ? st.next?.index ?? null : null);
+  const [editEventIndex,setEditEventIndex] = useState(0);
+  const [editRecord,setEditRecord] = useState(null);
   const [payMode, setPayMode] = useState("new"); // "new" | "edit"
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const [payAmount, setPayAmount] = useState(initialAction === "pay" && st.next ? String(st.next.remainingDue) : "");
@@ -2492,24 +2508,25 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
     setPayComment("");
   };
 
-  const startEditDate = (idx, currentDate) => {
-    setDeferringIdx(null);
-    setPayingIdx(idx);
-    setPayMode("edit");
-    setPayDate(currentDate);
+  const startEditDate = (idx, currentDate, eventIndex) => {
+    const row = st.rows.find(r=>r.index===idx);
+    const index = eventIndex ?? Math.max(0,row.paymentEvents.length-1);
+    const event = row.paymentEvents[index];
+    if (!event) return;
+    setDeferringIdx(null); setPayingIdx(idx); setPayMode('edit'); setPayError('');
+    setEditEventIndex(index); setEditRecord(JSON.parse(JSON.stringify(contract.payments[idx])));
+    setPayDate(event.date); setPayAmount(String(event.amount)); setPayComment(event.comment || '');
+    setPayMethod(event.method || ''); setPayCard(event.card || '');
   };
 
   const confirmPay = async (idx) => {
-    if (payMode === "edit") {
-      await onUpdatePaidDate(contract.id, idx, payDate);
-      setPayingIdx(null);
-      return;
-    }
     if (paymentLock.current) return;
     paymentLock.current = true; setPayBusy(true); setPayError('');
     try {
-      const destination = paymentDestination(payMethod,payCard);
-      const saved = await onPay(contract.id, idx, payDate, +payAmount || 0, payComment, destination);
+      const destination = payMode === 'edit' && !payMethod ? {} : paymentDestination(payMethod,payCard);
+      const saved = payMode === 'edit'
+        ? await onEditPayment(contract.id,idx,editEventIndex,editRecord,{date:payDate,amount:payAmount,comment:payComment,destination})
+        : await onPay(contract.id, idx, payDate, +payAmount || 0, payComment, destination);
       if (saved) setPayingIdx(null);
     } catch(e) {setPayError(e.message);} finally {paymentLock.current=false;setPayBusy(false);}
   };
@@ -2766,7 +2783,7 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
                     </button>
                     <button
                       className="lbtn undo edit-date"
-                      title="Изменить дату оплаты"
+                      title="Редактировать платёж" aria-label="Редактировать платёж"
                       onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startEditDate(r.index, r.paidDate))}
                     >
                       <Pencil size={13} />
@@ -2777,6 +2794,7 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
                     <button className="lbtn pay" onClick={() => (payingIdx === r.index && payMode === "new" ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
                       <Check size={13} /> Доплатить
                     </button>
+                    <button className="lbtn undo" title="Редактировать платёж" onClick={() => startEditDate(r.index,r.paidDate)}><Pencil size={13}/> Изменить</button>
                     <button className="lbtn undo" title="Сбросить оплату" onClick={() => onToggle(contract.id, r.index)}>
                       <Undo2 size={13} />
                     </button>
@@ -2843,10 +2861,11 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
                 )}
                 {payingIdx === r.index && (
                   <div className="pay-inline" ref={initialAction === "pay" ? actionArea : null}>
+                    {payMode === 'edit' && <label>Поступление <select aria-label="Редактируемое поступление" disabled={payBusy} value={editEventIndex} onChange={e=>startEditDate(r.index,r.paidDate,+e.target.value)}>{r.paymentEvents.map((event,i)=><option key={i} value={i}>{fmtDate(event.date)} · {money(event.amount)} · {event.method === 'cash' ? 'Наличные' : event.card || 'Способ не указан'}</option>)}</select></label>}
                     <DateFields value={payDate} onChange={setPayDate} />
-                    {payMode === 'new' && <PaymentDestination method={payMethod} card={payCard} onMethod={setPayMethod} onCard={setPayCard} cards={cards}/>}
+                    {<PaymentDestination method={payMethod} card={payCard} onMethod={setPayMethod} onCard={setPayCard} cards={cards}/>}
                     {payError && <p role="alert">{payError}</p>}
-                    {payMode === "new" && (
+                    {(
                       <>
                         <input
                           type="number"
@@ -2855,7 +2874,7 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
                           value={payAmount}
                           onChange={(e) => setPayAmount(e.target.value)}
                           placeholder="Сумма"
-                          title="Сумма распределится по старым просрочкам и следующим платежам"
+                          aria-label="Сумма платежа" title={payMode === "edit" ? "Сумма выбранного поступления" : "Сумма распределится по старым просрочкам и следующим платежам"}
                         />
                         <input
                           type="text"
@@ -2866,7 +2885,7 @@ function ContractDetail({ cards = [], contract, clientContacts, investors, onClo
                         />
                       </>
                     )}
-                    <button className="btn primary btn-sm" disabled={payBusy || !payDate || (payMode === "new" && (!(+payAmount > 0) || !payMethod || (payMethod === "bank" && !payCard.trim())))} onClick={() => confirmPay(r.index)}>Подтвердить</button>
+                    <button className="btn primary btn-sm" disabled={payBusy || !payDate || !(+payAmount > 0) || (payMode === "new" && !payMethod) || (payMethod === "bank" && !payCard.trim())} onClick={() => confirmPay(r.index)}>{payBusy ? "Сохраняем…" : payMode === "edit" ? "Сохранить изменения" : "Подтвердить"}</button>
                     <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
                     {payMode === "new" && +payAmount > r.remainingDue && (
                       <small className="payment-allocation-note">Сначала закроются старые просрочки, затем следующие платежи.</small>

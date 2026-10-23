@@ -1,0 +1,8 @@
+import {it,expect} from 'vitest';
+import {editPaymentEvent} from './payments';
+const rec={paidDate:'2026-10-23',receipt:{name:'чек'},paymentEvents:[{date:'2026-10-22',amount:40,method:'bank',card:'1234'},{date:'2026-10-23',amount:60,comment:'старый'}]};
+const args={payments:{0:rec,__cashCards:['1234']},row:{index:0,amountDue:100},expectedRecord:rec,eventIndex:0,amount:20,date:'2026-10-21',comment:'исправлен',destination:{method:'cash'}};
+it('редактирует одно поступление, сохраняет остальные и пересчитывает остаток',()=>{const p=editPaymentEvent(args);expect(p[0].paidAmount).toBe(80);expect(p[0].paymentEvents[0]).toMatchObject({amount:20,method:'cash',comment:'исправлен'});expect(p[0].paymentEvents[0].card).toBeUndefined();expect(p[0].paymentEvents[1]).toEqual(rec.paymentEvents[1]);expect(p[0].receipt).toEqual(rec.receipt);expect(p.__cashCards).toEqual(['1234']);expect(rec.paymentEvents[0].amount).toBe(40);});
+it('редактирует старую полную оплату без событий',()=>{const old={paidDate:'2026-10-23'};expect(editPaymentEvent({...args,payments:{0:old},expectedRecord:old,row:{index:0,amountDue:100,paymentEvents:[{date:old.paidDate,amount:100,legacy:true}]},amount:90})[0].paidAmount).toBe(90);});
+it('отклоняет устаревшую запись, превышение и некорректные значения',()=>{expect(()=>editPaymentEvent({...args,expectedRecord:{}})).toThrow();for(const amount of [0,-1,NaN,Infinity,41])expect(()=>editPaymentEvent({...args,amount})).toThrow();expect(()=>editPaymentEvent({...args,date:'2026-02-30'})).toThrow();});
+it('восстанавливает полный статус без дублирования',()=>{const p=editPaymentEvent({...args,amount:40});expect(p[0].paidAmount).toBeUndefined();expect(p[0].paymentEvents).toHaveLength(2);});
