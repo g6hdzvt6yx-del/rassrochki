@@ -1631,7 +1631,7 @@ export default function App() {
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
 
       {tab === "dashboard" && (
-        <main className="wrap">
+        <main className="wrap dashboard-wrap">
           <button type="button" className="hero hero-btn" onClick={() => setSectionModal("remaining")}>
             <div className="hero-label">Остаток к получению</div>
             <div className="hero-num num">{money(totals.remaining)}</div>
@@ -3594,6 +3594,35 @@ const css = `
 .stat-val.clay{color:var(--clay)}
 .stat-btn{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%;transition:border-color .15s}
 .stat-btn:hover{border-color:var(--brass)}
+
+/* Dashboard metric cards, styled after the compact mobile reference. */
+.dashboard-wrap .hero{background:linear-gradient(135deg,#243144,#182231);border-color:#354155;color:#f7f9ff;border-radius:22px;box-shadow:inset 0 1px 0 #ffffff0a}
+.dashboard-wrap .hero-label{color:#a993f5}
+.dashboard-wrap .hero-num{font-family:inherit;font-variant-numeric:tabular-nums;font-size:clamp(26px,5vw,40px);letter-spacing:-.035em}
+.dashboard-wrap .hero-legend{color:#b3bfd0}
+.dashboard-wrap .s-paid{background:#00c99a}.dashboard-wrap .s-over{background:#ff616e}.dashboard-wrap .s-rem{background:#536179}
+.dashboard-wrap .cards{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dashboard-wrap .stat{--metric-accent:#00c99a;--metric-tint:#00c99a16;position:relative;isolation:isolate;overflow:hidden;min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;min-height:160px;padding:17px 16px;background:linear-gradient(135deg,#243144,#182231);border:1px solid #354155;border-radius:20px;box-shadow:inset 0 1px 0 #ffffff0a;color:#f7f9ff;transition:border-color .15s,transform .15s}
+.dashboard-wrap .stat:nth-child(2){--metric-accent:#4c9aff;--metric-tint:#3866ff20}
+.dashboard-wrap .stat:nth-child(3){--metric-accent:#a78bfa;--metric-tint:#8649ee20}
+.dashboard-wrap .stat:nth-child(5){--metric-accent:#ffbd00;--metric-tint:#ff8a0019}
+.dashboard-wrap .stat:nth-child(6){--metric-accent:#ff616e;--metric-tint:#ff425b1c}
+.dashboard-wrap .stat::before{content:"";position:absolute;z-index:-1;right:-22px;top:-25px;width:112px;height:112px;border-radius:50%;background:var(--metric-tint);opacity:.5}
+.dashboard-wrap .stat-btn::after{content:"";position:absolute;right:20px;top:24px;width:8px;height:8px;border-top:2px solid #64748b;border-right:2px solid #64748b;transform:rotate(45deg)}
+.dashboard-wrap .stat-ic{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:42px;height:42px;border-radius:14px;margin:0 0 18px;background:var(--metric-tint);color:var(--metric-accent)}
+.dashboard-wrap .stat-ic svg{width:22px;height:22px;stroke-width:2.2}
+.dashboard-wrap .stat-label{margin:0 0 5px;color:#9baac0;font-size:10px;font-weight:700;line-height:1.35;text-transform:uppercase;letter-spacing:.025em}
+.dashboard-wrap .stat-val{max-width:100%;font-family:inherit;font-variant-numeric:tabular-nums;font-size:clamp(17px,2.7vw,25px);font-weight:700;line-height:1.2;letter-spacing:-.045em;white-space:nowrap}
+.dashboard-wrap .stat-val.clay{color:#ff616e}
+.dashboard-wrap .stat-btn:hover{border-color:var(--metric-accent);transform:translateY(-2px)}
+.dashboard-wrap .stat-btn:focus-visible,.dashboard-wrap .hero-btn:focus-visible{outline:3px solid #a78bfa;outline-offset:3px}
+@media(max-width:560px){
+  .dashboard-wrap .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .dashboard-wrap .stat{min-height:150px;padding:15px 13px;border-radius:19px}
+  .dashboard-wrap .stat-val{font-size:clamp(16px,4.6vw,25px)}
+  .dashboard-wrap .hero{padding:20px}
+  .dashboard-wrap .hero-legend{gap:10px;font-size:11px}
+}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .panel-hd{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);
