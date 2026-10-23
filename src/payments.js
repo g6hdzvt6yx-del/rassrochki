@@ -7,7 +7,7 @@ const byDueDate = (left, right) => {
  * Распределяет одно фактическое поступление по графику договора.
  * Порядок: старые просрочки -> выбранный платёж -> следующие платежи.
  */
-export const allocateContractPayment = ({ payments = {}, rows = [], selectedIndex, amount, date, createdAt, comment = "" }) => {
+export const allocateContractPayment = ({ payments = {}, rows = [], selectedIndex, amount, date, createdAt, comment = "", destination = {} }) => {
   const requestedAmount = Math.max(0, Number(amount) || 0);
   const paymentComment = String(comment || "").trim();
   const eligible = rows.filter((row) => !row.paid && row.remainingDue > 0);
@@ -40,7 +40,7 @@ export const allocateContractPayment = ({ payments = {}, rows = [], selectedInde
         ? [{ date: current.paidDate, amount: row.paidAmount, legacy: true }]
         : []);
     const totalPaid = row.paidAmount + allocated;
-    const event = { date, amount: allocated, createdAt };
+    const event = { date, amount: allocated, createdAt, ...destination };
     if (paymentComment) event.comment = paymentComment;
     const record = {
       ...current,
