@@ -2407,7 +2407,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
           <p className="field-hint">По плану — полная сумма платежей по графику за выбранный период с учётом переносов, включая уже оплаченные. Фактически получено — поступления по дате оплаты.</p>
           </>}
           {!summary.reconciled && <div className="storage-warn">Полученная сумма не сходится с капиталом и прибылью.</div>}
-          <div className="data-list">
+          <div className="data-list received-payment-list">
             {(showPlanned ? planned.rows : summary.rows).map((row, index) => <button className="data-row data-row-button" key={`${row.contractId}-${row.paymentNo}-${index}`} onClick={() => onOpenContract(row.contractId)}>
               <div><b>{row.clientName}</b><span>{row.item} · платёж №{row.paymentNo}</span></div><div><b className="num">{money(row.amount)}</b><small>{(showPlanned ? row.dueDate : row.paidDate) ? fmtDate(showPlanned ? row.dueDate : row.paidDate) : "дата не указана"}</small></div>
             </button>)}
@@ -3980,6 +3980,16 @@ body:has(.dashboard-wrap){background:#0f172a}
 .received-period{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.received-period label{font-size:12.5px;font-weight:600;color:var(--ink-soft)}.received-period select{min-width:190px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}
 .monthly-profit-register{margin-bottom:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden}.monthly-profit-register-hd,.monthly-profit-register button{display:grid;grid-template-columns:1fr 150px 160px;align-items:center;gap:12px;width:100%;padding:10px 12px;box-sizing:border-box;text-align:left}.monthly-profit-register-hd{background:var(--surface-2);color:var(--ink-soft);font-size:10.5px}.monthly-profit-register-hd span:not(:first-child){text-align:right}.monthly-profit-register button{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}.monthly-profit-register button:hover,.monthly-profit-register button.on{background:#EDF6F1}.monthly-profit-register button b,.monthly-profit-register button strong{text-align:right;white-space:nowrap}.monthly-profit-register button strong{color:var(--emerald)}
 .investor-profit-panel{margin-top:14px}.profit-table-wrap{overflow-x:auto}.profit-table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}.profit-table th,.profit-table td{padding:10px 9px;border-bottom:1px solid var(--line);text-align:right}.profit-table th:first-child,.profit-table td:first-child{text-align:left}.profit-table tbody tr{cursor:pointer}.profit-table tbody tr:hover{background:var(--surface-2)}
+
+/* Separate summary figures and receipts into clearly outlined cards. */
+.received-totals>div{border:1px solid #b8c7bf;background:var(--surface);box-shadow:0 2px 5px #16332e08;padding:15px;border-radius:12px}
+.received-totals span{line-height:1.45;margin-bottom:7px}
+.received-payment-list.data-list{display:flex;flex-direction:column;gap:12px;border:0;border-radius:0;overflow:visible}
+.received-payment-list .data-row{border:1px solid #b8c7bf;border-radius:12px;padding:16px;color:var(--ink);box-shadow:0 2px 5px #16332e08}
+.received-payment-list .data-row:last-child{border-bottom:1px solid #b8c7bf}
+.received-payment-list .data-row>div{min-width:0;gap:6px;overflow-wrap:anywhere}
+.received-payment-list .data-row:hover{border-color:var(--emerald)}
+.received-payment-list .data-row:focus-visible{outline:2px solid var(--emerald);outline-offset:3px}
 
 @media(max-width:560px){
   .cards{grid-template-columns:1fr}
