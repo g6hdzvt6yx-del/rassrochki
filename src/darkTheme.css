@@ -1,0 +1,45 @@
+/* Shared dark visual system for every workspace tab and dialog. */
+:root{color-scheme:dark;background:#0f172a;color:#f1f5fb}
+body{margin:0;background:#0f172a}
+html body .app{
+ --paper:#0f172a;--surface:#1c2839;--surface-2:#243247;
+ --ink:#f1f5fb;--ink-soft:#aab8cb;--line:#3c4b61;
+ --brass:#b39aff;--emerald:#37d5ac;--clay:#ff7b86;--amber:#f5c35c;
+ min-height:100vh;background:var(--paper);color:var(--ink);color-scheme:dark
+}
+html body .app :is(.hd,.tabs,.sheet-hd){background:#111b2e;color:#f1f5fb}
+html body .app .tabs button.on{background:#26334b;color:#c4b5fd}
+html body .app :is(.panel,.card,.stat,.hero,.citem,.sheet,.confirm-card,.client-total,.client-facts>div,.det-item,.received-totals>div,.data-row,.directory-row,.client-choice,.client-history-row,.client-contract,.client-history,.mini-row,.prow,.lrow,.wd-row,.investor-accrual-grid>div,.cash-summary>p){background:linear-gradient(135deg,#233146,#192435);color:var(--ink);border-color:var(--line);box-shadow:inset 0 1px 0 #ffffff05;border-radius:14px}
+html body .app :is(input,select,textarea){background:#152134;color:#edf2fb;border:1px solid #42526b;border-radius:9px;padding:9px 11px;font:inherit;color-scheme:dark}
+html body .app input::placeholder,html body .app textarea::placeholder{color:#8f9eb5}
+html body .app :is(.btn,.icon-btn){background:#26354b;color:#dce5f3;border-color:#455670}
+html body .app :is(.btn.primary,.seg-toggle button.on,.directory-tabs .primary){background:#7750d5;color:#fff;border-color:#9c7aee}
+html body .app :is(.btn,.icon-btn):hover{background:#344563}
+html body .app :is(.data-row-button,.directory-row,.client-choice,.client-history-row,.citem-status-row,.prow,.monthly-profit-register button):hover{background:#2a3b53}
+html body .app :is(.btag,.build-info,.directory-row small,.client-muted){color:#aab8cb}
+html body .app :is(.filtered-summary,.client-group,.cgroup,.client-picker,.citem-comment,.monthly-profit-register-hd,.data-header,.data-center-tabs,.backup-ok){background:#202e43;color:var(--ink);border-color:var(--line)}
+html body .app :is(.filtered-summary span,.badge,.cnt){background:#2e3d51;color:#c3cedd;border:1px solid #43536b}
+html body .app :is(.badge.overdue,.citem-overdue-summary,.client-overdue,.storage-warn,.login-error){background:#402733;color:#ffadb4;border-color:#80505c}
+html body .app :is(.badge.paid,.citem-card-wa,.filtered-summary-profit){background:#173d39;color:#69e1be;border-color:#32685b}
+html body .app :is(.badge.soon,.badge.partial){background:#413827;color:#f5d590;border-color:#766343}
+html body .app :is(.citem-overdue-meta,.daily-overdue-debt){color:#ffadb4}
+html body .app :is(.received-totals>div,.received-payment-list .data-row,.received-payment-list .data-row:last-child){border-color:#43536b}
+html body .app :is(td,th){border-color:#3c4b61;background:#1c2839;color:#e6edf8}
+html body .app th{background:#26354b;color:#c7d2e5}
+html body .app a{color:#a9bfff}
+html body .app :is(button,input,select,textarea,a,summary):focus-visible{outline:2px solid #b39aff;outline-offset:3px}
+html body .app .directory-list{background:transparent;border:0}
+html body .app .directory-row{margin-bottom:12px}
+html body .app .s-rem{background:#536179}
+html body .app .month-bar{background:#38485e}
+html body .app :is(.b-emerald,.lrow.paid){background:#183c36;color:#73e5bd}
+html body .app :is(.b-clay,.lrow.overdue,.filtered-summary-overdue,.app-toast){background:#402733;color:#ffadb4;border-color:#80505c}
+html body .app :is(.b-amber,.b-brass,.lrow.partial,.duplicate-client-hint,.toolbar-filter-label.active,.lbtn.defer){background:#3b3344;color:#dbc4ff;border-color:#665575}
+html body .app .b-line{background:#2e3d51;color:#c3cedd}
+html body .date-calendar{background:#1c2839;color:#edf2fb;border-color:#43536b;color-scheme:dark}
+html body .date-calendar button{color:#edf2fb;background:transparent}
+html body .date-calendar button:hover{background:#344563}
+html body .date-calendar-grid button[aria-pressed="true"]{background:#7750d5;color:white}
+html body :is(.web-card,.desk){color:#edf2fb;background:#1c2839;border-color:#43536b}
+html body :is(.web-admin-bar,.operator-client,.desk section,.desk article,.backup-import .backup-picker,.backup-compare section){color:#edf2fb;background:#202e43;border-color:#43536b}
+html body :is(.web-card,.desk) :is(input,select,textarea,button){background:#26354b;color:#edf2fb;border-color:#43536b}
