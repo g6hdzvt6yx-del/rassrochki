@@ -71,3 +71,25 @@ export const allocateContractPayment = ({ payments = {}, rows = [], selectedInde
     remainder,
   };
 };
+
+// Edit one receipt within a schedule row, preserving other receipts and metadata.
+export function editPaymentEvent({payments, row, eventIndex, expectedRecord, amount, date, comment, destination}) {
+  const current = payments[row.index];
+  if (JSON.stringify(current) !== JSON.stringify(expectedRecord)) throw new Error('Платёж изменился. Закройте форму и откройте заново.');
+  const events = current?.paymentEvents?.length ? current.paymentEvents : row.paymentEvents;
+  if (!events?.[eventIndex]) throw new Error('Поступление не найдено');
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) throw new Error('Сумма должна быть больше нуля');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10) !== date) throw new Error('Укажите корректную дату');
+  const total = events.reduce((sum,e,i)=>sum+(i===eventIndex ? value : Number(e.amount)),0);
+  if (total > row.amountDue + 0.001) throw new Error('Сумма поступлений превышает платёж по графику. Для дополнительной оплаты используйте «Доплатить» или следующий платёж.');
+  const nextEvents = events.map((event,i)=> {
+    if (i !== eventIndex) return event;
+    const {method,card,...rest}=event;
+    return {...rest,amount:value,date,comment:String(comment || '').trim(),...destination,updatedAt:new Date().toISOString()};
+  });
+  const record = {...current,paymentEvents:nextEvents,paidDate:nextEvents.map(e=>e.date).sort().at(-1)};
+  if (total >= row.amountDue) delete record.paidAmount;
+  else record.paidAmount=total;
+  return {...payments,[row.index]:record};
+}
