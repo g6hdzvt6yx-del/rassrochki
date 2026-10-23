@@ -2348,11 +2348,15 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
               <button type="button" className={showPlanned ? "on" : ""} onClick={() => setProfitMode("planned")}>Обязательные платежи</button>
             </div>
             <p className="field-hint">Ниже — полные суммы {showPlanned ? "платежей по графику" : "поступлений"}, включая возврат капитала.</p>
-          </> : <div className="received-totals">
+          </> : <>
+          <div className="received-totals received-plan-totals">
+            <div><span>По плану за период</span><b>{money(planned.scheduled)}</b></div>
             <div><span>Фактически получено</span><b>{money(summary.received)}</b></div>
             <div><span>Возвращённый капитал</span><b>{money(summary.principalReturned)}</b></div>
             <div><span>Полученная прибыль</span><b>{money(summary.profitReceived)}</b></div>
-          </div>}
+          </div>
+          <p className="field-hint">По плану — полная сумма платежей по графику за выбранный период с учётом переносов, включая уже оплаченные. Фактически получено — поступления по дате оплаты.</p>
+          </>}
           {!summary.reconciled && <div className="storage-warn">Полученная сумма не сходится с капиталом и прибылью.</div>}
           <div className="data-list">
             {(showPlanned ? planned.rows : summary.rows).map((row, index) => <button className="data-row data-row-button" key={`${row.contractId}-${row.paymentNo}-${index}`} onClick={() => onOpenContract(row.contractId)}>
@@ -3856,7 +3860,7 @@ const css = `
 .data-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.data-toolbar select{border:1px solid var(--line);border-radius:9px;padding:9px;background:var(--surface);font:inherit}.data-toolbar label{font-size:13px;color:var(--ink-soft)}
 .data-list{border:1px solid var(--line);border-radius:12px;overflow:hidden}.data-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface)}.data-row:last-child{border-bottom:0}.data-row>div{display:flex;flex-direction:column;gap:3px}.data-row>div:last-child{align-items:flex-end}.data-row span,.data-row small{font-size:12px;color:var(--ink-soft)}.data-row-actions{flex-direction:row!important;align-items:center!important}.data-row-button{width:100%;border:0;text-align:left;cursor:pointer;font:inherit}.data-row-button:hover{background:var(--surface-2)}
 .journal-row{align-items:flex-start}.journal-row>div:first-child{min-width:0;flex:1}.journal-row .action-description{margin-top:3px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}.journal-row>div:last-child{flex:0 0 auto}
-.received-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.received-totals>div{background:var(--surface-2);border-radius:10px;padding:12px}.received-totals span{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:4px}.received-totals b{font-size:17px}
+.received-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.received-plan-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.received-totals>div{background:var(--surface-2);border-radius:10px;padding:12px}.received-totals span{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:4px}.received-totals b{font-size:17px}
 .received-range{flex-wrap:wrap}.received-range label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px}.received-range input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}
 .received-period{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.received-period label{font-size:12.5px;font-weight:600;color:var(--ink-soft)}.received-period select{min-width:190px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}
 .monthly-profit-register{margin-bottom:14px;border:1px solid var(--line);border-radius:11px;overflow:hidden}.monthly-profit-register-hd,.monthly-profit-register button{display:grid;grid-template-columns:1fr 150px 160px;align-items:center;gap:12px;width:100%;padding:10px 12px;box-sizing:border-box;text-align:left}.monthly-profit-register-hd{background:var(--surface-2);color:var(--ink-soft);font-size:10.5px}.monthly-profit-register-hd span:not(:first-child){text-align:right}.monthly-profit-register button{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}.monthly-profit-register button:hover,.monthly-profit-register button.on{background:#EDF6F1}.monthly-profit-register button b,.monthly-profit-register button strong{text-align:right;white-space:nowrap}.monthly-profit-register button strong{color:var(--emerald)}
