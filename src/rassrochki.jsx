@@ -3991,6 +3991,23 @@ body:has(.dashboard-wrap){background:#0f172a}
 .received-payment-list .data-row:hover{border-color:var(--emerald)}
 .received-payment-list .data-row:focus-visible{outline:2px solid var(--emerald);outline-offset:3px}
 
+/* Consistent readable frames across tabs and detail sheets. */
+.app{--line:#b8c7bf}
+.app :is(.panel,.citem,.stat,.card,.client-total,.client-facts>div,.det-item,.investor-accrual-grid>div){border:1px solid var(--line);border-radius:12px}
+.app :is(.client-facts>div,.det-item,.investor-accrual-grid>div){padding:12px;background:var(--surface)}
+.app .data-list{border:0;overflow:visible}
+.app :is(.data-row,.directory-row,.client-choice,.client-history-row,.client-contract,.client-history,.mini-row,.prow,.lrow,.wd-row){border:1px solid var(--line);border-radius:10px;margin-bottom:10px;padding:12px;background:var(--surface)}
+.app .data-row-button{color:var(--ink)}
+.app :is(.data-row,.directory-row,.client-choice,.client-history-row):last-child{border-bottom:1px solid var(--line)}
+.app :is(.data-row-button,.client-choice,.client-history-row):hover{border-color:var(--emerald);background:var(--surface-2)}
+.app .panel>.prow{margin:10px;width:calc(100% - 20px)}
+.app .card{background:var(--surface)}
+.app table{border-collapse:separate;border-spacing:0 6px}
+.app :is(td,th){padding:10px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.app :is(td,th):first-child{border-left:1px solid var(--line);border-radius:8px 0 0 8px}
+.app :is(td,th):last-child{border-right:1px solid var(--line);border-radius:0 8px 8px 0}
+.app .cash-summary>p{border:1px solid var(--line);border-radius:12px;padding:14px;margin:0;background:var(--surface)}
+
 @media(max-width:560px){
   .cards{grid-template-columns:1fr}
   .det-grid{grid-template-columns:repeat(2,1fr)}
