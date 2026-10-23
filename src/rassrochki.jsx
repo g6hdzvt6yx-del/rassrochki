@@ -16,7 +16,7 @@ import {
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 import { formatPhone as fmtPhone, formatPhoneForExcel, normalizePhone } from "./phone";
-import { allocateContractPayment, editPaymentEvent } from "./payments";
+import { allocateContractPayment, editPaymentEvent, deletePaymentEvent } from "./payments";
 import { actualPaid, prepareContractEdit, draftContractId } from "./contractSafety";
 import { flushLocalTasks } from "./localTasks";
 import DateCalendar from "./DateCalendar";
@@ -1063,6 +1063,21 @@ export default function App() {
     if (result.remainder > 0) {
       showAppMessage(`В договоре осталось к оплате только ${money(result.appliedAmount)}. Лишние ${money(result.remainder)} не внесены.`, "warning");
     }
+    return true;
+  };
+
+  const deletePaidPayment = async (cid, idx, eventIndex, expectedRecord) => {
+    const c = contracts.find(x=>x.id===cid);
+    if (!c) throw new Error('Договор не найден');
+    const row = buildSchedule(c).find(r=>r.index===idx);
+    const payments = deletePaymentEvent({payments:c.payments,row,eventIndex,expectedRecord});
+    const event = row.paymentEvents[eventIndex];
+    if (!await requestConfirm({title:'Удалить это поступление?',message:`Будет удалено только поступление ${money(event.amount)} от ${fmtDate(event.date)}. Остальные оплаты сохранятся. Остаток долга и касса пересчитаются.`,confirmLabel:'Удалить поступление',danger:true})) return false;
+    const {error} = await supabase.from('contracts').update({payments}).eq('id',cid);
+    if (error) throw new Error(error.message);
+    setContracts(prev=>prev.map(x=>x.id===cid?{...x,payments}:x));
+    try { await localData.log({actionType:'delete_payment_event',entityType:'payments',entityId:`${cid}:${idx}`,contractId:cid,entityName:c.clientName,before:expectedRecord,after:payments[idx] || null}); }
+    catch(error) { showAppMessage(`Поступление удалено, но журнал не записан: ${error.message}`); }
     return true;
   };
 
@@ -2146,6 +2161,7 @@ export default function App() {
           onDefer={deferPayment}
           onUpdatePaidDate={updatePaidDate}
           onEditPayment={editPaidPayment}
+          onDeletePayment={deletePaidPayment}
           onPay={payPayment}
           cards={cards}
           onAttachReceipt={attachReceipt}
@@ -2449,7 +2465,7 @@ function Detail(props) {
     renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} />;
 }
 
-function ContractDetail({ onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
+function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
   const actionArea = useRef(null);
   useEffect(() => {
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
@@ -2517,6 +2533,14 @@ function ContractDetail({ onEditPayment, cards = [], contract, clientContacts, i
     setEditEventIndex(index); setEditRecord(JSON.parse(JSON.stringify(contract.payments[idx])));
     setPayDate(event.date); setPayAmount(String(event.amount)); setPayComment(event.comment || '');
     setPayMethod(event.method || ''); setPayCard(event.card || '');
+  };
+
+  const deleteSelectedPayment = async idx => {
+    if (paymentLock.current) return;
+    paymentLock.current = true; setPayBusy(true); setPayError('');
+    try {
+      if (await onDeletePayment(contract.id,idx,editEventIndex,editRecord)) setPayingIdx(null);
+    } catch(e) {setPayError(e.message);} finally {paymentLock.current=false;setPayBusy(false);}
   };
 
   const confirmPay = async (idx) => {
@@ -2886,6 +2910,7 @@ function ContractDetail({ onEditPayment, cards = [], contract, clientContacts, i
                       </>
                     )}
                     <button className="btn primary btn-sm" disabled={payBusy || !payDate || !(+payAmount > 0) || (payMode === "new" && !payMethod) || (payMethod === "bank" && !payCard.trim())} onClick={() => confirmPay(r.index)}>{payBusy ? "Сохраняем…" : payMode === "edit" ? "Сохранить изменения" : "Подтвердить"}</button>
+                    {payMode === 'edit' && <button type="button" className="btn ghost btn-sm" style={{color:'var(--clay)'}} disabled={payBusy} onClick={()=>deleteSelectedPayment(r.index)}><Trash2 size={13}/> Удалить поступление</button>}
                     <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
                     {payMode === "new" && +payAmount > r.remainingDue && (
                       <small className="payment-allocation-note">Сначала закроются старые просрочки, затем следующие платежи.</small>

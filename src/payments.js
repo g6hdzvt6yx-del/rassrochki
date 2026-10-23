@@ -93,3 +93,22 @@ export function editPaymentEvent({payments, row, eventIndex, expectedRecord, amo
   else record.paidAmount=total;
   return {...payments,[row.index]:record};
 }
+
+export function deletePaymentEvent({payments, row, eventIndex, expectedRecord}) {
+  const current = payments[row.index];
+  if (JSON.stringify(current) !== JSON.stringify(expectedRecord)) throw new Error('Платёж изменился. Закройте форму и откройте заново.');
+  const events = current?.paymentEvents?.length ? current.paymentEvents : row.paymentEvents;
+  if (!Number.isInteger(eventIndex) || !events?.[eventIndex]) throw new Error('Поступление не найдено');
+  const nextEvents = events.filter((_,i)=>i !== eventIndex);
+  const {paidDate,paidAmount,paymentEvents,...metadata} = current;
+  const next = {...payments};
+  if (!nextEvents.length) {
+    if (Object.keys(metadata).length) next[row.index] = metadata;
+    else delete next[row.index];
+  } else {
+    const total = nextEvents.reduce((sum,e)=>sum+Number(e.amount),0);
+    next[row.index] = {...metadata,paymentEvents:nextEvents,paidDate:nextEvents.map(e=>e.date).sort().at(-1)};
+    if (total < row.amountDue) next[row.index].paidAmount=total;
+  }
+  return next;
+}
