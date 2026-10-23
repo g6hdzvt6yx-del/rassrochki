@@ -3595,6 +3595,13 @@ const css = `
 .stat-btn{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%;transition:border-color .15s}
 .stat-btn:hover{border-color:var(--brass)}
 
+/* Dark canvas around the dashboard cards. */
+.app:has(.dashboard-wrap){background:#0f172a;min-height:100vh}
+.app:has(.dashboard-wrap) .hd,.app:has(.dashboard-wrap) .tabs{background:#11192c}
+.app:has(.dashboard-wrap) .tabs button.on{background:#0f172a;color:#c4b5fd}
+.app:has(.dashboard-wrap) .build-info{color:#9baac0}
+body:has(.dashboard-wrap){background:#0f172a}
+
 /* Dashboard metric cards, styled after the compact mobile reference. */
 .dashboard-wrap .hero{background:linear-gradient(135deg,#243144,#182231);border-color:#354155;color:#f7f9ff;border-radius:22px;box-shadow:inset 0 1px 0 #ffffff0a}
 .dashboard-wrap .hero-label{color:#a993f5}
