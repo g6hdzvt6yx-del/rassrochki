@@ -2817,9 +2817,9 @@ function ContractDetail({ onEditPayment, cards = [], contract, clientContacts, i
                     Оплачено {money(r.paidAmount)} из {money(r.amountDue)} — остаток {money(r.remainingDue)}
                   </div>
                 )}
-                {r.paymentEvents.some((event) => event.comment) && <div className="payment-comments">
-                  {r.paymentEvents.filter((event) => event.comment).map((event, index) => <span key={`${event.createdAt || event.date}-${index}`}>
-                    <ScrollText size={12}/><span>{fmtDate(event.date)} · {money(event.amount)} — {event.comment}</span>
+                {r.paymentEvents.length > 0 && <div className="payment-comments" aria-label="Фактические оплаты">
+                  {r.paymentEvents.map((event, index) => <span key={`${event.createdAt || event.date}-${index}`}>
+                    <CheckCircle2 size={12}/><span>Оплата {fmtDate(event.date)} · {money(event.amount)}{event.method === 'cash' ? ' · Наличные' : event.method === 'bank' ? ` · Безнал · ${event.card || 'Карта не указана'}` : ''}{event.comment ? ` — ${event.comment}` : ''}</span>
                   </span>)}
                 </div>}
                 {r.notifiedAt && (
