@@ -1,3 +1,5 @@
+import CashDesk, { PaymentDestination } from "./CashDesk";
+import { cashCards, paymentDestination } from "./cash";
 import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
@@ -1020,14 +1022,25 @@ export default function App() {
     return true;
   };
 
+  const cards = cashCards(contracts);
+  const addCashCard = async name => {
+    const c = contracts[0];
+    if (!c) throw new Error('Сначала создайте договор. Карту также можно указать при первой оплате.');
+    if (cards.includes(name)) return;
+    const payments = {...c.payments, __cashCards: [...new Set([...(c.payments?.__cashCards || []), name])]};
+    const {error} = await supabase.from('contracts').update({payments}).eq('id',c.id);
+    if (error) throw new Error(error.message);
+    setContracts(prev=>prev.map(x=>x.id===c.id?{...x,payments}:x));
+  };
+
   // Одно поступление закрывает старые просрочки, затем выбранный и следующие платежи.
-  const payPayment = async (cid, idx, paidDate, amount, comment = "") => {
+  const payPayment = async (cid, idx, paidDate, amount, comment = "", destination = {}) => {
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
     const date = paidDate || toIsoDate(new Date());
     const result = allocateContractPayment({
       payments: c.payments || {}, rows: buildSchedule(c), selectedIndex: idx,
-      amount, date, createdAt: new Date().toISOString(), comment,
+      amount, date, createdAt: new Date().toISOString(), comment, destination: paymentDestination(destination.method, destination.card),
     });
     if (!result.allocations.length) return false;
     const { payments } = result;
@@ -1157,7 +1170,8 @@ export default function App() {
 
   const addContract = async (data) => {
     const { newContractId, ...fields } = data;
-    const c = { ...fields, id: newContractId || `c${crypto.randomUUID()}`, payments: {} };
+    const initialDestination = +data.downPayment > 0 ? paymentDestination(data.downPaymentMethod,data.downPaymentCard) : null;
+    const c = { ...fields, id: newContractId || `c${crypto.randomUUID()}`, payments: initialDestination ? {__downPaymentDestination:initialDestination} : {} };
     const { error } = isDesktopApp ? await localData.saveContract(contractToRow(c), true)
       : await supabase.from("contracts").insert(contractToRow(c));
     if (error) { rollback(error.message); return false; }
@@ -1169,7 +1183,9 @@ export default function App() {
     const original = contracts.find((contract) => contract.id === contractId);
     if (!original) { showAppMessage("Исходный договор не найден. Черновик сохранён."); return false; }
     let updated;
-    try { updated = prepareContractEdit(original, data); }
+    try { updated = prepareContractEdit(original, data);
+      if (+data.downPayment > 0 && data.downPaymentMethod) updated.payments.__downPaymentDestination = paymentDestination(data.downPaymentMethod,data.downPaymentCard);
+    }
     catch (error) { showAppMessage(error.message); return false; }
     const cid = original.id;
     if (isDesktopApp) await localData.createBackup("Перед изменением договора");
@@ -1563,6 +1579,7 @@ export default function App() {
           <Landmark size={16} /> Капитал
         </button>
         {!isDesktopApp && <button className={tab === "directories" ? "on" : ""} onClick={() => setTab("directories")}><Users size={16}/> Справочники</button>}
+        <button className={tab === "cash" ? "on" : ""} onClick={() => setTab("cash")}><Wallet size={16}/> Касса</button>
         {isDesktopApp && <button onClick={() => setDataCenterOpen(true)}>
           <Database size={16} /> Данные
         </button>}
@@ -1582,6 +1599,7 @@ export default function App() {
       )}
       {appMessage && <button type="button" className={`app-toast ${appMessage.tone || "error"}`} onClick={() => setAppMessage(null)}>{appMessage.message}<X size={14}/></button>}
 
+      {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
 
       {tab === "dashboard" && (
@@ -2115,6 +2133,7 @@ export default function App() {
           onDefer={deferPayment}
           onUpdatePaidDate={updatePaidDate}
           onPay={payPayment}
+          cards={cards}
           onAttachReceipt={attachReceipt}
           onRemoveReceipt={removeReceipt}
           onEarlyPayoff={earlyPayoff}
@@ -2125,9 +2144,9 @@ export default function App() {
           onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
         />
       )}
-      {adding && <AddForm investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} />}
+      {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} />}
       {editingContract && (
-        <AddForm
+        <AddForm cards={cards}
           investors={investors}
           clients={clientOptions} products={productOptions}
           editing={editingContract}
@@ -2136,7 +2155,7 @@ export default function App() {
         />
       )}
       {draftToContinue && draftToContinue.draft_type !== "Импорт Excel" && (
-        <AddForm
+        <AddForm cards={cards}
           investors={investors}
           clients={clientOptions} products={productOptions}
           draft={draftToContinue}
@@ -2416,7 +2435,7 @@ function Detail(props) {
     renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} />;
 }
 
-function ContractDetail({ contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
+function ContractDetail({ cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
   const actionArea = useRef(null);
   useEffect(() => {
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
@@ -2432,6 +2451,11 @@ function ContractDetail({ contract, clientContacts, investors, onClose, onToggle
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const [payAmount, setPayAmount] = useState(initialAction === "pay" && st.next ? String(st.next.remainingDue) : "");
   const [payComment, setPayComment] = useState("");
+  const [payMethod,setPayMethod] = useState("");
+  const [payCard,setPayCard] = useState("");
+  const [payBusy,setPayBusy] = useState(false);
+  const paymentLock = useRef(false);
+  const [payError,setPayError] = useState("");
   const [deferringIdx, setDeferringIdx] = useState(null);
   const [deferDate, setDeferDate] = useState("");
   const [deferReason, setDeferReason] = useState("");
@@ -2481,8 +2505,13 @@ function ContractDetail({ contract, clientContacts, investors, onClose, onToggle
       setPayingIdx(null);
       return;
     }
-    const saved = await onPay(contract.id, idx, payDate, +payAmount || 0, payComment);
-    if (saved) setPayingIdx(null);
+    if (paymentLock.current) return;
+    paymentLock.current = true; setPayBusy(true); setPayError('');
+    try {
+      const destination = paymentDestination(payMethod,payCard);
+      const saved = await onPay(contract.id, idx, payDate, +payAmount || 0, payComment, destination);
+      if (saved) setPayingIdx(null);
+    } catch(e) {setPayError(e.message);} finally {paymentLock.current=false;setPayBusy(false);}
   };
 
   const startDeferral = (row, mode = row.deferredUntil ? 'edit' : 'add') => {
@@ -2718,7 +2747,7 @@ function ContractDetail({ contract, clientContacts, investors, onClose, onToggle
           <div className="ledger-hd-row">
             <div className="ledger-hd ledger-hd-inline">График платежей</div>
             {!st.done && (
-              <button className="btn ghost btn-sm" onClick={() => onEarlyPayoff(contract.id)}>
+              <button className="btn ghost btn-sm" onClick={() => startPay(st.next?.index ?? st.rows?.find(r => !r.paid)?.index ?? 0, st.remaining)}>
                 <CheckCircle2 size={13} /> Досрочное погашение
               </button>
             )}
@@ -2815,6 +2844,8 @@ function ContractDetail({ contract, clientContacts, investors, onClose, onToggle
                 {payingIdx === r.index && (
                   <div className="pay-inline" ref={initialAction === "pay" ? actionArea : null}>
                     <DateFields value={payDate} onChange={setPayDate} />
+                    {payMode === 'new' && <PaymentDestination method={payMethod} card={payCard} onMethod={setPayMethod} onCard={setPayCard} cards={cards}/>}
+                    {payError && <p role="alert">{payError}</p>}
                     {payMode === "new" && (
                       <>
                         <input
@@ -2835,7 +2866,7 @@ function ContractDetail({ contract, clientContacts, investors, onClose, onToggle
                         />
                       </>
                     )}
-                    <button className="btn primary btn-sm" disabled={payMode === "new" && !(+payAmount > 0)} onClick={() => confirmPay(r.index)}>Подтвердить</button>
+                    <button className="btn primary btn-sm" disabled={payBusy || !payDate || (payMode === "new" && (!(+payAmount > 0) || !payMethod || (payMethod === "bank" && !payCard.trim())))} onClick={() => confirmPay(r.index)}>Подтвердить</button>
                     <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
                     {payMode === "new" && +payAmount > r.remainingDue && (
                       <small className="payment-allocation-note">Сначала закроются старые просрочки, затем следующие платежи.</small>
@@ -2876,7 +2907,7 @@ function ContractDetail({ contract, clientContacts, investors, onClose, onToggle
 
 /* --------------------------- Новый договор ------------------------- */
 
-function AddForm({ investors, clients = [], products = [], onClose, onSave, editing, draft }) {
+function AddForm({ cards = [], investors, clients = [], products = [], onClose, onSave, editing, draft }) {
   const draftData = draft?.data || null;
   const source = draftData || editing;
   const [f, setF] = useState({
@@ -2884,6 +2915,8 @@ function AddForm({ investors, clients = [], products = [], onClose, onSave, edit
     comment: source?.comment || "",
     totalPrice: source ? String(source.totalPrice || "") : "",
     downPayment: source ? String(source.downPayment || "") : "",
+    downPaymentMethod: source?.downPaymentMethod || source?.payments?.__downPaymentDestination?.method || "",
+    downPaymentCard: source?.downPaymentCard || source?.payments?.__downPaymentDestination?.card || "",
     markupPercent: source ? String(source.markupPercent || 0) : "20",
     markupAmount: source ? String(source.markupAmount ?? source.markup ?? 0) : "0",
     totalPayable: source ? String(source.totalPayable ?? Math.max(0,
@@ -3090,6 +3123,7 @@ function AddForm({ investors, clients = [], products = [], onClose, onSave, edit
           <div className="frow">
             <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
+            {+f.downPayment > 0 && <PaymentDestination method={f.downPaymentMethod} card={f.downPaymentCard} onMethod={v=>setF(prev=>({...prev,downPaymentMethod:v}))} onCard={v=>setF(prev=>({...prev,downPaymentCard:v}))} cards={cards}/>}
           </div>
           <Field label="Считать процент наценки от">
             <div className="seg-toggle">
@@ -3153,6 +3187,7 @@ function AddForm({ investors, clients = [], products = [], onClose, onSave, edit
               saveInProgress.current = true; setSaving(true); setFormError("");
               try {
               await draftWrite.current;
+              if (+f.downPayment > 0 && (!editing || f.downPaymentMethod)) paymentDestination(f.downPaymentMethod,f.downPaymentCard);
               const { markupAmount: _markupAmount, totalPayable: _totalPayable, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
               const success = await onSave({
                 ...rest, newContractId: newContractId.current, phone: fmtPhone(f.phone.trim()), guarantorPhone: fmtPhone(f.guarantorPhone.trim()), totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
