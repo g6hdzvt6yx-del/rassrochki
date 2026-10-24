@@ -70,3 +70,29 @@ html body .app .cash-client{display:inline;text-align:left;padding:0;border:0;bo
 html body .app .cash-client:hover{background:transparent;text-decoration:underline}
 .cash-item{display:block;font-size:11px;color:var(--ink-soft);margin-top:5px}
 @media(max-width:600px){html body .app .cash-desk{margin:12px;padding:16px}.cash-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.cash-summary b{font-size:16px}.cash-filters label{flex:1;min-width:120px}.cash-filters select{width:100%}}
+
+/* Contract workbench */
+.advanced-filters{display:flex;flex-wrap:wrap;gap:10px;flex-basis:100%;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.workbench-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.workbench-views{display:flex;flex-wrap:wrap;gap:8px}.workbench-hint{flex-basis:100%;color:var(--ink-soft);font-size:12px}
+.select-visible,.card-select{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-soft)}
+.card-select{padding:12px 18px 0}.app input[type=checkbox]{width:17px;height:17px;padding:0;accent-color:#a78bfa;flex-shrink:0}
+html body .app .citem-open-row{display:flex;flex-direction:column;gap:8px}
+html body .app .citem-overdue-main{flex-direction:column;align-items:flex-start;gap:8px}
+html body .app .overdue-days{font-size:17px;font-weight:750}
+html body .app .citem.has-overdue{border-color:var(--line)}
+html body .app .filter-chips button{color:var(--ink-soft);background:var(--surface);border-color:var(--line)}
+html body .app .filter-chips button.on{background:#3c315c;color:#e4d6ff;border-color:#a78bfa}
+html body .app .filtered-summary{position:sticky;top:0;z-index:15;background:#1b273b;box-shadow:0 8px 20px #0004;margin-bottom:14px}
+html body .app .filtered-summary-overdue{background:#2e3d51;color:var(--ink)}
+.contracts-table-wrap{overflow:auto}.app .contracts-table{width:100%;min-width:800px;font-size:12px;border-spacing:0 3px}
+html body .app .contracts-table :is(td,th){padding:6px 10px;text-align:left;vertical-align:middle}
+.contracts-table td small{display:block;color:var(--ink-soft);font-size:11px;margin-top:2px}
+.contract-link{border:0;background:transparent;color:#c4b5fd;font:inherit;font-weight:650;text-align:left;cursor:pointer;padding:0}
+.table-overdue{display:flex;flex-direction:column;color:#ffadb4;gap:2px;white-space:nowrap}
+.contracts-table td.num{white-space:nowrap}.contracts-table .btn{font-size:11px;padding:6px 9px;white-space:nowrap}
+.reminder-preview{white-space:pre-wrap;font:inherit;font-size:13px;padding:14px;border:1px solid var(--line);border-radius:10px;max-height:35vh;overflow:auto}
+.sync-indicator{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-soft);padding:6px 0}.sync-indicator .sync-dot{width:6px;height:6px;border-radius:50%;background:#37d5ac}.sync-indicator button{padding:3px 6px}
+@media(max-width:560px){.app .filtered-summary{gap:5px;padding:8px;font-size:10px}.app .filtered-summary strong{font-size:11px}.workbench-controls .seg-toggle{margin:0}.advanced-filters>select{width:100%}}
+
+html body .app .filtered-summary .filtered-summary-overdue{background:#2e3d51;color:var(--ink)}
