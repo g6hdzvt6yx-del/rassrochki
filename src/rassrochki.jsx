@@ -1,3 +1,5 @@
+import ContractTable from "./ContractTable";
+import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contractWorkbench";
 import CashDesk, { PaymentDestination } from "./CashDesk";
 import { cashCards, paymentDestination } from "./cash";
 import { expectedPayments, dateInPeriod } from "./expectedPayments";
@@ -561,6 +563,16 @@ export default function App() {
   const [reloadTick, setReloadTick] = useState(0);
   const [tab, setTab] = useState("dashboard");
   const [openId, setOpenId] = useState(null);
+  const [quickPayId, setQuickPayId] = useState(null);
+  const [advancedFilters, setAdvancedFilters] = useState(false);
+  const [workView, setWorkView] = useState("");
+  const [listMode, setListMode] = useState("cards");
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [reminderQueue, setReminderQueue] = useState(null);
+  const [queueBusy, setQueueBusy] = useState(false);
+  const toggleSelected = id => setSelectedIds(prev => { const next=new Set(prev); next.has(id)?next.delete(id):next.add(id); return next; });
+  const openQuickPay = id => { setQuickPayId(id); setOpenId(id); };
+  useEffect(() => { if (!openId) setQuickPayId(null); }, [openId]);
   const [adding, setAdding] = useState(false);
 
   const [investors, setInvestors] = useState([]);
@@ -965,6 +977,7 @@ export default function App() {
       actionType: "whatsapp_notification", entityType: "payments", entityId: `${cid}:${idx}`,
       entityName: c.clientName, contractId: cid, before, after: payments[idx],
     });
+    return true;
   };
 
   const undoPaymentNotification = async (cid, idx) => {
@@ -1369,7 +1382,8 @@ export default function App() {
   };
 
   const matchesContactFilters = (contract) => {
-    const contacts = Array.isArray(contract.payments?.__contacts) ? contract.payments.__contacts : [];
+    const contacts = clientContacts(contracts, contract, operatorLogs);
+    if (!matchesWorkView(workView, contractStats(contract), contacts, contract.payments)) return false;
     if (contactFilter === "has" && contacts.length === 0) return false;
     if (contactFilter === "none" && contacts.length > 0) return false;
     if (notificationFilter !== "all") {
@@ -1377,6 +1391,7 @@ export default function App() {
       if (!next) return false;
       if (notificationFilter === "notified" && !next.notifiedAt) return false;
       if (notificationFilter === "unnotified" && next.notifiedAt) return false;
+      if (notificationFilter === "stale" && !staleNotification(contract.payments)) return false;
     }
     if (deferralFilter !== "all") {
       const deferrals = contractStats(contract).deferrals;
@@ -1401,7 +1416,7 @@ export default function App() {
       result[status] += 1;
     });
     return result;
-  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, investors]);
+  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, investors, workView, operatorLogs]);
 
   const filteredContracts = useMemo(() => {
     const list = contracts.filter((c) => {
@@ -1428,7 +1443,7 @@ export default function App() {
       return [...list].sort((a, b) => contractStats(b).remaining - contractStats(a).remaining);
     }
     return list; // "created" — уже отсортировано по дате создания (новые сверху)
-  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, sortBy, investors]);
+  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, sortBy, investors, workView, operatorLogs]);
 
   const filteredSummary = useMemo(() => filteredContracts.reduce((summary, contract) => {
     const stats = contractStats(contract);
@@ -1441,6 +1456,11 @@ export default function App() {
     return summary;
   }, { financed: 0, remaining: 0, overdue: 0, profitReceived: 0, profitExpected: 0 }), [filteredContracts]);
 
+  const visibleSelected = filteredContracts.filter(c => selectedIds.has(c.id));
+  const reminderFor = c => { const st=contractStats(c); return st.next ? waReminderLink(c.phone,c.clientName,c.item,st.next.remainingDue,st.next.dueDate,st.next.status,st.rows) : null; };
+  const beginReminders = () => setReminderQueue(visibleSelected.filter(c=>reminderFor(c)).map(c=>c.id));
+  const queueContract = contracts.find(c=>c.id===reminderQueue?.[0]);
+  const queueUrl = queueContract && reminderFor(queueContract);
   const exportFilteredContracts = async () => {
     const XLSX = await import("xlsx");
     const names = { all: "vse", active: "aktivnye", overdue: "prosrochka", done: "zakrytye" };
@@ -1586,7 +1606,7 @@ export default function App() {
       </header>
       {!isDesktopApp && <WebSyncStatus
         rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
-        paused={Boolean(adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || tab === 'directories' || confirmDialog || sectionModal)}
+        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || tab === 'directories' || confirmDialog || sectionModal)}
         onRefresh={() => setReloadTick(t => t + 1)}
       />}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
@@ -1796,6 +1816,8 @@ export default function App() {
               <option value="name">По имени (А-Я)</option>
               <option value="remaining">По остатку долга</option>
             </select>
+            <button className="btn ghost btn-sm" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>Фильтры{[investorFilter,contactFilter,notificationFilter,deferralFilter].filter(v=>v!=="all").length ? ` · ${[investorFilter,contactFilter,notificationFilter,deferralFilter].filter(v=>v!=="all").length}` : ""}</button>
+            {advancedFilters && <div className="advanced-filters">
             <select className="toolbar-select" value={investorFilter} onChange={(e) => setInvestorFilter(e.target.value)}>
               <option value="all">Все источники</option>
               <option value="">Общий пул</option>
@@ -1812,6 +1834,7 @@ export default function App() {
               <option value="all">Все уведомления</option>
               <option value="notified">Текущий платёж уведомлён</option>
               <option value="unnotified">Текущий платёж не уведомлён</option>
+              <option value="stale">Не уведомлены за 3 дня</option>
             </select>
             <label className={`toolbar-filter-label ${deferralFilter !== "all" ? "active" : ""}`}>
               <CalendarDays size={14}/><span>Отсрочка</span>
@@ -1822,6 +1845,7 @@ export default function App() {
                 <option value="none">Без отсрочки</option>
               </select>
             </label>
+            </div>}
             <div className="filter-chips">
               {[
                 ["all", "Все"], ["active", "Активные"], ["overdue", "Просрочка"], ["done", "Закрытые"],
@@ -1834,11 +1858,18 @@ export default function App() {
             <button className="btn ghost btn-sm export-filtered" disabled={!filteredContracts.length} onClick={exportFilteredContracts}>
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
-            {(search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setSortBy("created");
+            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
+              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setSortBy("created");
             }}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
+          <div className="workbench-controls">
+            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setSortBy(key==="large"?"remaining":"dueDate");}}>{label}</button>)}</div>
+            <div className="seg-toggle" aria-label="Вид списка"><button className={listMode==="cards"?"on":""} onClick={()=>setListMode("cards")}>Карточки</button><button className={listMode==="table"?"on":""} onClick={()=>setListMode("table")}>Таблица</button></div>
+            {workView && <small className="workbench-hint">{workView==="large"?"Просрочка от 100 000 ₽, по убыванию остатка долга":workView==="promised"?"Незакрытые договоры с обещанием на сегодня или будущую дату":"Контакты и обещания на сегодня или раньше; просрочки без уведомления за 72 часа"}</small>}
+            <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>
+            {visibleSelected.length>0 && <><button className="btn primary btn-sm" disabled={!visibleSelected.some(reminderFor)} onClick={beginReminders}>Напомнить выбранным в WhatsApp ({visibleSelected.filter(reminderFor).length})</button><button className="btn ghost btn-sm" onClick={()=>setSelectedIds(new Set())}>Снять выбор ({visibleSelected.length})</button>{visibleSelected.filter(c=>!reminderFor(c)).length>0 && <small>Без номера или открытого платежа: {visibleSelected.filter(c=>!reminderFor(c)).length}</small>}</>}
+          </div>
           <div className="filtered-summary" aria-label="Итоги отфильтрованных договоров">
             <b>Итого по выборке</b>
             <span>Договоров <strong className="num">{filteredContracts.length}</strong></span>
@@ -1851,7 +1882,7 @@ export default function App() {
 
           {filteredContracts.length === 0 ? (
             <div className="panel"><div className="empty">Ничего не найдено по этому запросу или фильтру.</div></div>
-          ) : (
+          ) : listMode === "table" ? <ContractTable contracts={filteredContracts} getStats={contractStats} selected={selectedIds} onSelect={toggleSelected} onPay={openQuickPay} onOpen={setOpenId} money={money}/> : (
           <div className="clist">
             {groupedContracts.map((g) => {
             const renderCard = (c) => {
@@ -1869,6 +1900,7 @@ export default function App() {
                 : null;
               return (
                 <div key={c.id} className={`citem ${overdueRows.length ? "has-overdue" : ""} ${c.comment?.trim() ? "has-comment" : ""}`}>
+                  <label className="card-select"><input type="checkbox" checked={selectedIds.has(c.id)} onChange={()=>toggleSelected(c.id)}/> Выбрать</label>
                   <div
                     className="citem-status-row"
                     role="button"
@@ -1887,9 +1919,9 @@ export default function App() {
                           if (isDesktopApp) { e.preventDefault(); openExternalUrl(e.currentTarget.href); }
                         }}
                       ><Phone size={12} /> {fmtPhone(c.phone)}</a> : <span className="citem-phone shown"><Phone size={12} /> Номер не указан</span>}
-                      <span className="citem-meta"><span className="citem-investor muted" title={investorLabel}>{investorLabel}</span><Badge s={badge} /></span>
+                      {(c.investorId || !st.overdueSum) && <span className="citem-meta">{c.investorId && <span className="citem-investor muted" title={investorLabel}>{investorLabel}</span>}{!st.overdueSum && <Badge s={badge} />}</span>}
                       {overdueRows.length > 0 ? <span className="citem-overdue-summary">
-                        <span className="citem-overdue-main"><span><AlertTriangle size={13}/> Просрочка</span><b className="num">{money(st.overdueSum)}</b></span>
+                        <span className="citem-overdue-main"><span className="overdue-days"><AlertTriangle size={16}/> Просрочка {daysLabel(overdueDays(st.rows))}</span><b className="num">{money(st.overdueSum)}</b></span>
                         <span className="citem-overdue-meta">{overdueRows.length} {paymentWord(overdueRows.length)} · с {fmtDate(overdueRows[0].dueDate)}</span>
                       </span> : <span className={`citem-next-payment ${st.next || st.done ? "shown" : ""} ${st.done ? "closed" : ""}`}>
                         {st.done ? <CheckCircle2 size={12} /> : <CalendarDays size={12} />}
@@ -1925,8 +1957,9 @@ export default function App() {
                     </span>
                   </div>
                   <div className="citem-open-row">
+                    {!st.done && st.next && <button type="button" className="btn primary citem-open" onClick={()=>openQuickPay(c.id)}>Принять платёж</button>}
                     <button type="button" className="btn ghost btn-sm citem-open" onClick={() => setOpenId(c.id)}>
-                      Открыть карточку клиента
+                      Карточка клиента
                     </button>
                   </div>
                   {expanded && (
@@ -2002,7 +2035,7 @@ export default function App() {
                   <span className="cgroup-name"><Users size={14} /> {g.list[0].clientName}</span>
                   <span className="cgroup-stats">
                     Договоров: {g.list.length} · Остаток <b className="num">{money(g.remaining)}</b>
-                    {g.overdue > 0 && <span className="cgroup-overdue"> · Просрочка {money(g.overdue)}</span>}
+
                   </span>
                 </div>
                 <div className="cgroup-items">{g.list.map(renderCard)}</div>
@@ -2147,14 +2180,18 @@ export default function App() {
         </main>
       )}
 
+      {reminderQueue && <div className="overlay"><div className="sheet reminder-queue" role="dialog" aria-modal="true" aria-label="Очередь напоминаний"><div className="sheet-hd"><b>Напоминания · осталось {reminderQueue.length}</b><button className="icon-btn" disabled={queueBusy} onClick={()=>setReminderQueue(null)} aria-label="Закрыть"><X size={18}/></button></div><div className="sheet-body">
+        {queueContract ? <><h3>{queueContract.clientName}</h3><p>{queueContract.phone} · {queueContract.item}</p>{queueUrl && <pre className="reminder-preview">{new URL(queueUrl).searchParams.get("text")}</pre>}<p className="field-hint">Отправьте сообщение в WhatsApp и подтвердите отправку. Затем откроется следующий клиент очереди.</p><div className="sheet-actions"><button className="btn primary" disabled={queueBusy || !queueUrl} onClick={async()=>{setQueueBusy(true);try{const sent=await notifyPayment(queueContract.id,contractStats(queueContract).next.index,queueUrl);if(sent)setReminderQueue(q=>q.slice(1));}finally{setQueueBusy(false);}}}>Открыть WhatsApp</button><button className="btn ghost" disabled={queueBusy} onClick={()=>setReminderQueue(q=>q.slice(1))}>Пропустить</button></div></>:<><p>Очередь завершена.</p><button className="btn primary" onClick={()=>{setReminderQueue(null);setSelectedIds(new Set());}}>Готово</button></>}
+      </div></div></div>}
       {open && (
         <Detail
-          key={open.id}
+          key={`${open.id}:${quickPayId===open.id ? "pay":"view"}`}
+          initialAction={quickPayId===open.id ? "pay":undefined}
           contracts={contracts}
           contract={open}
           clientContacts={openClientContacts}
           investors={investors}
-          onClose={() => setOpenId(null)}
+          onClose={() => { setOpenId(null); setQuickPayId(null); }}
           onToggle={togglePay}
           onNotify={notifyPayment}
           onUndoNotify={undoPaymentNotification}
@@ -2456,7 +2493,7 @@ function ContactEntries({ contacts, contractId, onDelete }) {
 }
 
 function Detail(props) {
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(props.initialAction ? {id:props.contract.id,mode:props.initialAction} : null);
   const selectedContract = props.contracts.find(c => c.id === selected?.id);
   if (selectedContract) return <ContractDetail {...props} key={`${selected.id}:${selected.mode || 'view'}`} contract={selectedContract} initialAction={selected.mode} onClose={() => setSelected(null)} />;
   return <ClientCard contract={props.contract} contracts={props.contracts} contacts={props.clientContacts}
