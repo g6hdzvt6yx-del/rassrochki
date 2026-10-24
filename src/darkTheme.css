@@ -43,3 +43,30 @@ html body .date-calendar-grid button[aria-pressed="true"]{background:#7750d5;col
 html body :is(.web-card,.desk){color:#edf2fb;background:#1c2839;border-color:#43536b}
 html body :is(.web-admin-bar,.operator-client,.desk section,.desk article,.backup-import .backup-picker,.backup-compare section){color:#edf2fb;background:#202e43;border-color:#43536b}
 html body :is(.web-card,.desk) :is(input,select,textarea,button){background:#26354b;color:#edf2fb;border-color:#43536b}
+
+/* Cash ledger: balanced typography, stable columns, compact controls. */
+html body .app .cash-desk{max-width:1180px;margin:22px auto;padding:24px;font-size:13px;line-height:1.5}
+.cash-desk h2{font-size:24px;line-height:1.25;margin:0 0 12px}
+.cash-desk>p{max-width:850px;color:var(--ink-soft);font-size:13px;margin:0 0 20px}
+.cash-desk h3{font-size:21px;margin:22px 0 14px;font-variant-numeric:tabular-nums}
+.cash-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.cash-filters label{display:flex;flex-direction:column;gap:6px;color:var(--ink-soft);font-size:12px}
+html body .app .cash-filters :is(input,select){height:40px;font-size:13px}
+.cash-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:20px}
+html body .app .cash-summary>p{font-size:12px;color:var(--ink-soft);padding:14px;line-height:1.5}
+.cash-summary b{display:block;margin-top:6px;font-size:18px;color:var(--ink);font-variant-numeric:tabular-nums}
+.cash-desk details{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:16px 0}
+.cash-desk summary{cursor:pointer;font-size:13px;font-weight:600}
+.cash-desk details form{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.cash-table-wrap{overflow-x:auto;margin-top:20px}
+html body .app .cash-desk table{width:100%;min-width:850px;table-layout:fixed;border-spacing:0 8px;font-size:12px;line-height:1.45}
+html body .app .cash-desk :is(th,td){padding:12px 14px;text-align:left;vertical-align:middle;overflow-wrap:anywhere}
+html body .app .cash-desk th{font-size:11px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ink-soft)}
+.cash-desk th:nth-child(1){width:12%}.cash-desk th:nth-child(2){width:26%}.cash-desk th:nth-child(3){width:17%}.cash-desk th:nth-child(4){width:17%}.cash-desk th:nth-child(5){width:16%}.cash-desk th:nth-child(6){width:12%}
+html body .app .cash-desk :is(td,th):nth-child(5){text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cash-desk td:nth-child(5){font-weight:650;font-size:13px}
+.cash-desk td:first-child{white-space:nowrap;color:var(--ink-soft)}
+html body .app .cash-client{display:inline;text-align:left;padding:0;border:0;border-radius:0;background:transparent;color:#c4b5fd;font-size:13px;font-weight:600;line-height:1.4;cursor:pointer}
+html body .app .cash-client:hover{background:transparent;text-decoration:underline}
+.cash-item{display:block;font-size:11px;color:var(--ink-soft);margin-top:5px}
+@media(max-width:600px){html body .app .cash-desk{margin:12px;padding:16px}.cash-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.cash-summary b{font-size:16px}.cash-filters label{flex:1;min-width:120px}.cash-filters select{width:100%}}
