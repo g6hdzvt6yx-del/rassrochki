@@ -2553,6 +2553,8 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   };
 
   const startPay = (idx, remainingDue) => {
+    if (paymentLock.current) return;
+    setPayError("");
     setDeferringIdx(null);
     setPayingIdx(idx);
     setPayMode("new");
@@ -2725,7 +2727,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet contract-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <button className="icon-btn" onClick={onClose}><ChevronLeft size={18} /></button>
           <div>
@@ -2852,7 +2854,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                   </div>
                 ) : r.paidAmount > 0 ? (
                   <div className="lbtn-group">
-                    <button className="lbtn pay" onClick={() => (payingIdx === r.index && payMode === "new" ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
+                    <button hidden={payingIdx === r.index} className="lbtn pay" onClick={() => (payingIdx === r.index && payMode === "new" ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
                       <Check size={13} /> Доплатить
                     </button>
                     <button className="lbtn undo" title="Редактировать платёж" onClick={() => startEditDate(r.index,r.paidDate)}><Pencil size={13}/> Изменить</button>
@@ -2865,7 +2867,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                   </div>
                 ) : (
                   <div className="lbtn-group">
-                    <button className="lbtn pay" onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
+                    <button hidden={payingIdx === r.index} className="lbtn pay" onClick={() => (payingIdx === r.index ? setPayingIdx(null) : startPay(r.index, r.remainingDue))}>
                       <Check size={13} /> Оплатить
                     </button>
                     <button className="lbtn defer" disabled={deferBusy} title={r.deferredUntil ? "Изменить отсрочку" : "Отсрочить платёж"} onClick={() => deferringIdx === r.index ? setDeferringIdx(null) : startDeferral(r)}>
@@ -2875,21 +2877,22 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 )}
                 {r.paidAmount > 0 && !r.paid && (
                   <div className="partial-note">
-                    Оплачено {money(r.paidAmount)} из {money(r.amountDue)} — остаток {money(r.remainingDue)}
+                    <strong>К доплате — <span className="money-nowrap">{money(r.remainingDue)}</span></strong>
+                    <span>Внесено <span className="money-nowrap">{money(r.paidAmount)}</span> из <span className="money-nowrap">{money(r.amountDue)}</span>.</span>
                   </div>
                 )}
-                {r.paymentEvents.length > 0 && <div className="payment-comments" aria-label="Фактические оплаты">
+                {r.paymentEvents.length > 0 && <details className="payment-details"><summary>История платежей · {r.paymentEvents.length}</summary><div className="payment-comments" aria-label="Фактические оплаты">
                   {r.paymentEvents.map((event, index) => <span key={`${event.createdAt || event.date}-${index}`}>
                     <CheckCircle2 size={12}/><span>Оплата {fmtDate(event.date)} · {money(event.amount)}{event.method === 'cash' ? ' · Наличные' : event.method === 'bank' ? ` · Безнал · ${event.card || 'Карта не указана'}` : ''}{event.comment ? ` — ${event.comment}` : ''}</span>
                   </span>)}
-                </div>}
+                </div></details>}
                 {r.notifiedAt && (
-                  <div className="notification-note" title="Отметка ставится при открытии напоминания в WhatsApp">
+                  <details className="payment-details"><summary>Уведомление WhatsApp</summary><div className="notification-note" title="Отметка ставится при открытии напоминания в WhatsApp">
                     <MessageCircle size={13} /> Уведомлён через WhatsApp · {fmtDateTime(r.notifiedAt)}
                     <button type="button" className="notification-undo" onClick={() => onUndoNotify(contract.id, r.index)}>
                       <Undo2 size={12} /> Отменить отметку
                     </button>
-                  </div>
+                  </div></details>
                 )}
                 {r.deferredUntil && (
                   <div className="deferral-history">
@@ -2923,12 +2926,12 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 {payingIdx === r.index && (
                   <div className="pay-inline" ref={initialAction === "pay" ? actionArea : null}>
                     {payMode === 'edit' && <label>Поступление <select aria-label="Редактируемое поступление" disabled={payBusy} value={editEventIndex} onChange={e=>startEditDate(r.index,r.paidDate,+e.target.value)}>{r.paymentEvents.map((event,i)=><option key={i} value={i}>{fmtDate(event.date)} · {money(event.amount)} · {event.method === 'cash' ? 'Наличные' : event.card || 'Способ не указан'}</option>)}</select></label>}
-                    <DateFields value={payDate} onChange={setPayDate} />
-                    {<PaymentDestination method={payMethod} card={payCard} onMethod={setPayMethod} onCard={setPayCard} cards={cards}/>}
+                    <div className="pay-date-field"><span>Дата оплаты</span><DateFields value={payDate} onChange={setPayDate} /></div>
+                    <div className="pay-destination"><PaymentDestination method={payMethod} card={payCard} onMethod={setPayMethod} onCard={setPayCard} cards={cards}/></div>
                     {payError && <p role="alert">{payError}</p>}
                     {(
                       <>
-                        <input
+                        <label className="pay-amount-field"><span>Сумма, ₽</span><input
                           type="number"
                           className="pay-amount"
                           min="1"
@@ -2937,24 +2940,24 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                           placeholder="Сумма"
                           aria-label="Сумма платежа" title={payMode === "edit" ? "Сумма выбранного поступления" : "Сумма распределится по старым просрочкам и следующим платежам"}
                         />
-                        <input
+                        </label><label className="pay-comment-field"><span>Комментарий (необязательно)</span><input
                           type="text"
                           className="pay-comment"
                           value={payComment}
                           onChange={(e) => setPayComment(e.target.value)}
-                          placeholder="Комментарий к оплате (необязательно)"
-                        />
+                          placeholder="Комментарий к оплате"
+                        /></label>
                       </>
                     )}
-                    <button className="btn primary btn-sm" disabled={payBusy || !payDate || !(+payAmount > 0) || (payMode === "new" && !payMethod) || (payMethod === "bank" && !payCard.trim())} onClick={() => confirmPay(r.index)}>{payBusy ? "Сохраняем…" : payMode === "edit" ? "Сохранить изменения" : "Подтвердить"}</button>
+                    <div className="pay-form-actions"><button className="btn primary btn-sm" disabled={payBusy || !payDate || !(+payAmount > 0) || (payMode === "new" && !payMethod) || (payMethod === "bank" && !payCard.trim())} onClick={() => confirmPay(r.index)}>{payBusy ? "Сохраняем…" : payMode === "edit" ? "Сохранить изменения" : "Сохранить платёж"}</button>
                     {payMode === 'edit' && <button type="button" className="btn ghost btn-sm" style={{color:'var(--clay)'}} disabled={payBusy} onClick={()=>deleteSelectedPayment(r.index)}><Trash2 size={13}/> Удалить поступление</button>}
-                    <button className="btn ghost btn-sm" onClick={() => setPayingIdx(null)}>Отмена</button>
+                    <button className="btn ghost btn-sm" disabled={payBusy} onClick={() => setPayingIdx(null)}>Отмена</button></div>
                     {payMode === "new" && +payAmount > r.remainingDue && (
                       <small className="payment-allocation-note">Сначала закроются старые просрочки, затем следующие платежи.</small>
                     )}
                   </div>
                 )}
-                <div className="receipt-row">
+                <details className="payment-details"><summary>Чеки{r.receipt ? " · 1" : " · прикрепить"}</summary><div className="receipt-row">
                   {r.receipt ? (
                     <>
                       <button type="button" className="receipt-link" onClick={() => openReceipt(r.receipt)}>
@@ -2976,7 +2979,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                       />
                     </label>
                   )}
-                </div>
+                </div></details>
               </div>
             ))}
           </div>
