@@ -13,7 +13,7 @@ import {
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
   Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
-  Database, RotateCcw,
+  Database, RotateCcw, History,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
@@ -1628,9 +1628,9 @@ export default function App() {
         </button>
         {!isDesktopApp && <button className={tab === "directories" ? "on" : ""} onClick={() => setTab("directories")}><Users size={16}/> Справочники</button>}
         <button className={tab === "cash" ? "on" : ""} onClick={() => setTab("cash")}><Wallet size={16}/> Касса</button>
-        {isDesktopApp && <button onClick={() => setDataCenterOpen(true)}>
-          <Database size={16} /> Данные
-        </button>}
+        <button onClick={() => setDataCenterOpen(true)}>
+          {isDesktopApp ? <Database size={16} /> : <History size={16} />} {isDesktopApp ? "Данные" : "История"}
+        </button>
       </nav>
 
       {storageError && (
@@ -2209,6 +2209,7 @@ export default function App() {
           onAddContact={addContact}
           onDeleteContact={deleteContact}
           onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
+          onHistory={(c) => setDataCenterOpen({ contract: { id: c.id, name: c.clientName || c.client_name || c.id } })}
         />
       )}
       {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} />}
@@ -2260,6 +2261,7 @@ export default function App() {
       {dataCenterOpen && (
         <DataPanelBoundary onClose={() => setDataCenterOpen(false)}><React.Suspense fallback={<div className="overlay"><div className="loading">Загрузка данных приложения…</div></div>}>
           <DataCenter
+            contractFilter={dataCenterOpen?.contract || null}
             onClose={() => setDataCenterOpen(false)}
             onRestored={() => setReloadTick((t) => t + 1)}
             onContinueDraft={(draft) => { setDataCenterOpen(false); setDraftToContinue(draft); }}
@@ -2502,7 +2504,7 @@ function Detail(props) {
     renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} />;
 }
 
-function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, initialAction }) {
+function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, onHistory, initialAction }) {
   const actionArea = useRef(null);
   useEffect(() => {
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
@@ -2780,6 +2782,9 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
             </button>
             {!isDesktopApp && <button type="button" className="btn ghost btn-sm" onClick={printContract}>
               <Printer size={13} /> Печать
+            </button>}
+            {onHistory && <button type="button" className="btn ghost btn-sm" onClick={() => onHistory(contract)}>
+              <History size={13} /> История
             </button>}
           </div>
 

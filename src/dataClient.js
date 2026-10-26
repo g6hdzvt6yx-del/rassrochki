@@ -64,6 +64,26 @@ const writeActionLog = async (db, entry) => {
   );
 };
 
+// Веб-версия: журнал заполняет сама база (триггеры на договорах, вкладчиках и
+// выводах), сайт его только читает. Оператору строки не видны по правилам RLS.
+export async function listCloudActions(filters = {}, client = cloudClient) {
+  if (!client) return [];
+  let query = client.from("action_log").select("*").order("occurred_at", { ascending: false }).limit(1000);
+  if (filters.entityType) query = query.eq("entity_type", filters.entityType);
+  if (filters.actionType) query = query.eq("action_type", filters.actionType);
+  if (filters.onlyErrors) query = query.eq("result", "error");
+  if (filters.contractId) query = query.eq("contract_id", filters.contractId);
+  if (filters.from) query = query.gte("occurred_at", new Date(filters.from).toISOString());
+  if (filters.to) query = query.lte("occurred_at", new Date(filters.to).toISOString());
+  const [{ data, error }, people] = await Promise.all([
+    query,
+    client.rpc("action_log_people").then(({ data: rows }) => rows || [], () => []),
+  ]);
+  if (error) throw new Error(error.message || "Не удалось загрузить историю изменений");
+  const names = new Map(people.map((person) => [person.user_id, person.display_name]));
+  return (data || []).map((row) => ({ ...row, actor_name: names.get(row.actor_id) || "" }));
+}
+
 class LocalQuery {
   constructor(table) {
     if (!["contracts", "investors", "withdrawals"].includes(table)) throw new Error("Недопустимая таблица локальной базы");
@@ -317,13 +337,14 @@ export const localData = {
     await invoke('import_rows', { investors: investorRows, contracts: contractRows, payments: contractPaymentRows, summary });
   },
   async listActions(filters = {}) {
-    if (!isDesktopApp) return [];
+    if (!isDesktopApp) return listCloudActions(filters);
     const db = await getDatabase();
     const clauses = [], params = [];
     const add = (sql, value) => { params.push(value); clauses.push(sql.replace("?", `$${params.length}`)); };
     if (filters.entityType) add("entity_type = ?", filters.entityType);
     if (filters.actionType) add("action_type = ?", filters.actionType);
     if (filters.onlyErrors) clauses.push("result = 'error'");
+    if (filters.contractId) add("contract_id = ?", filters.contractId);
     if (filters.from) add("occurred_at >= ?", filters.from);
     if (filters.to) add("occurred_at <= ?", filters.to);
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
