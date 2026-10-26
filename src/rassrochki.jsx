@@ -27,6 +27,7 @@ import FinancialReport from "./FinancialReport.jsx";
 import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
 import {useCallLogs} from "./useCallLogs";
+import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
 import DataPanelBoundary from "./DataPanelBoundary";
 
 const APP_VERSION = __APP_VERSION__;
@@ -604,6 +605,7 @@ export default function App() {
   const [contactFilter, setContactFilter] = useState("all");
   const [notificationFilter, setNotificationFilter] = useState("all");
   const [deferralFilter, setDeferralFilter] = useState("all");
+  const [callResultFilter, setCallResultFilter] = useState("all");
   const [sortBy, setSortBy] = useState("created");
   const [dailyDate, setDailyDate] = useState(() => toIsoDate(new Date()));
   const [dailyRange, setDailyRange] = useState(false);
@@ -1381,7 +1383,10 @@ export default function App() {
     return `${contract.phone || ""} ${contract.guarantorPhone || ""}`.replace(/\D/g, "").includes(queryDigits);
   };
 
+  const latestOperatorResults = useMemo(() => latestCallResults(operatorLogs), [operatorLogs]);
+
   const matchesContactFilters = (contract) => {
+    if (!matchesCallResultFilter(callResultFilter, latestOperatorResults[contract.id])) return false;
     const contacts = clientContacts(contracts, contract, operatorLogs);
     if (!matchesWorkView(workView, contractStats(contract), contacts, contract.payments)) return false;
     if (contactFilter === "has" && contacts.length === 0) return false;
@@ -1416,7 +1421,7 @@ export default function App() {
       result[status] += 1;
     });
     return result;
-  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, investors, workView, operatorLogs]);
+  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, callResultFilter, investors, workView, operatorLogs, latestOperatorResults]);
 
   const filteredContracts = useMemo(() => {
     const list = contracts.filter((c) => {
@@ -1443,7 +1448,7 @@ export default function App() {
       return [...list].sort((a, b) => contractStats(b).remaining - contractStats(a).remaining);
     }
     return list; // "created" — уже отсортировано по дате создания (новые сверху)
-  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, sortBy, investors, workView, operatorLogs]);
+  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, callResultFilter, sortBy, investors, workView, operatorLogs, latestOperatorResults]);
 
   const filteredSummary = useMemo(() => filteredContracts.reduce((summary, contract) => {
     const stats = contractStats(contract);
@@ -1468,7 +1473,7 @@ export default function App() {
     XLSX.writeFile(buildFilteredContractsWorkbook(XLSX, filteredContracts, investors), fileName);
     await localData.log({
       actionType: "export_excel", entityType: "export", entityName: fileName,
-      after: { statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, search, contracts: filteredContracts.length },
+      after: { statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, callResultFilter, search, contracts: filteredContracts.length },
     });
   };
 
@@ -1816,7 +1821,7 @@ export default function App() {
               <option value="name">По имени (А-Я)</option>
               <option value="remaining">По остатку долга</option>
             </select>
-            <button className="btn ghost btn-sm" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>Фильтры{[investorFilter,contactFilter,notificationFilter,deferralFilter].filter(v=>v!=="all").length ? ` · ${[investorFilter,contactFilter,notificationFilter,deferralFilter].filter(v=>v!=="all").length}` : ""}</button>
+            <button className="btn ghost btn-sm" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>Фильтры{[investorFilter,contactFilter,notificationFilter,deferralFilter,callResultFilter].filter(v=>v!=="all").length ? ` · ${[investorFilter,contactFilter,notificationFilter,deferralFilter,callResultFilter].filter(v=>v!=="all").length}` : ""}</button>
             {advancedFilters && <div className="advanced-filters">
             <select className="toolbar-select" value={investorFilter} onChange={(e) => setInvestorFilter(e.target.value)}>
               <option value="all">Все источники</option>
@@ -1845,6 +1850,14 @@ export default function App() {
                 <option value="none">Без отсрочки</option>
               </select>
             </label>
+            {!isDesktopApp && <label className={`toolbar-filter-label ${callResultFilter !== "all" ? "active" : ""}`}>
+              <Phone size={14}/><span>Отметка оператора</span>
+              <select aria-label="Последняя отметка оператора" value={callResultFilter} onChange={(e) => setCallResultFilter(e.target.value)}>
+                <option value="all">Все</option>
+                {Object.entries(callResults).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                <option value="none">Без отметок оператора</option>
+              </select>
+            </label>}
             </div>}
             <div className="filter-chips">
               {[
@@ -1858,13 +1871,13 @@ export default function App() {
             <button className="btn ghost btn-sm export-filtered" disabled={!filteredContracts.length} onClick={exportFilteredContracts}>
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
-            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setSortBy("created");
+            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || callResultFilter !== "all" || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
+              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setCallResultFilter("all"); setSortBy("created");
             }}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
           <div className="workbench-controls">
-            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setSortBy(key==="large"?"remaining":"dueDate");}}>{label}</button>)}</div>
+            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setCallResultFilter("all");setSortBy(key==="large"?"remaining":"dueDate");}}>{label}</button>)}</div>
             <div className="seg-toggle" aria-label="Вид списка"><button className={listMode==="cards"?"on":""} onClick={()=>setListMode("cards")}>Карточки</button><button className={listMode==="table"?"on":""} onClick={()=>setListMode("table")}>Таблица</button></div>
             {workView && <small className="workbench-hint">{workView==="large"?"Просрочка от 100 000 ₽, по убыванию остатка долга":workView==="promised"?"Незакрытые договоры с обещанием на сегодня или будущую дату":"Контакты и обещания на сегодня или раньше; просрочки без уведомления за 72 часа"}</small>}
             <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>
