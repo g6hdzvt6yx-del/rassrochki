@@ -1,5 +1,6 @@
 import {it,expect} from 'vitest';
 import {matchesOperatorSearch} from './operatorSearch';
+// Только вымышленные данные: репозиторий открыт, реальных клиентов сюда не вписывать.
 const client={clientName:'Семён Тестов',item:'Часы Garmin Instinct 3',phone:'8-900-000-12-34'};
 it('matches keywords across fields, regardless of case, order and ё',()=>{
  expect(matchesOperatorSearch(client,'  GARMIN семен  ')).toBe(true);
