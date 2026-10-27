@@ -7,22 +7,26 @@ const byDueDate = (left, right) => {
  * Распределяет одно фактическое поступление по графику договора.
  * Порядок: старые просрочки -> выбранный платёж -> следующие платежи.
  */
-export const allocateContractPayment = ({ payments = {}, rows = [], selectedIndex, amount, date, createdAt, comment = "", destination = {} }) => {
+export const allocateContractPayment = ({ payments = {}, rows = [], selectedIndex, amount, date, createdAt, comment = "", destination = {}, order = null, extra = null }) => {
   const requestedAmount = Math.max(0, Number(amount) || 0);
   const paymentComment = String(comment || "").trim();
   const eligible = rows.filter((row) => !row.paid && row.remainingDue > 0);
-  const overdue = eligible.filter((row) => row.status === "overdue").sort(byDueDate);
-  const selected = eligible.find((row) => row.index === selectedIndex);
-  const alreadyQueued = new Set(overdue.map((row) => row.index));
-  const ordered = [...overdue];
-
-  if (selected && !alreadyQueued.has(selected.index)) {
-    ordered.push(selected);
-    alreadyQueued.add(selected.index);
+  let ordered;
+  if (order) {
+    ordered = order(eligible);
+  } else {
+    const overdue = eligible.filter((row) => row.status === "overdue").sort(byDueDate);
+    const selected = eligible.find((row) => row.index === selectedIndex);
+    const alreadyQueued = new Set(overdue.map((row) => row.index));
+    ordered = [...overdue];
+    if (selected && !alreadyQueued.has(selected.index)) {
+      ordered.push(selected);
+      alreadyQueued.add(selected.index);
+    }
+    eligible.sort(byDueDate).forEach((row) => {
+      if (!alreadyQueued.has(row.index)) ordered.push(row);
+    });
   }
-  eligible.sort(byDueDate).forEach((row) => {
-    if (!alreadyQueued.has(row.index)) ordered.push(row);
-  });
 
   const nextPayments = { ...payments };
   const allocations = [];
@@ -40,7 +44,7 @@ export const allocateContractPayment = ({ payments = {}, rows = [], selectedInde
         ? [{ date: current.paidDate, amount: row.paidAmount, legacy: true }]
         : []);
     const totalPaid = row.paidAmount + allocated;
-    const event = { date, amount: allocated, createdAt, ...destination };
+    const event = { date, amount: allocated, createdAt, ...destination, ...(extra || {}) };
     if (paymentComment) event.comment = paymentComment;
     const record = {
       ...current,
@@ -111,4 +115,38 @@ export function deletePaymentEvent({payments, row, eventIndex, expectedRecord}) 
     if (total < row.amountDue) next[row.index].paidAmount=total;
   }
   return next;
+}
+
+/**
+ * Изменение поступления с переплатой: выбранный платёж закрывается полностью,
+ * а лишнее зачитывается в следующие платежи (затем — в более ранние неоплаченные).
+ */
+export function editPaymentEventWithCarry({ payments, row, rows = [], eventIndex, expectedRecord, amount, date, comment, destination = {}, createdAt = new Date().toISOString() }) {
+  const current = payments[row.index];
+  const events = current?.paymentEvents?.length ? current.paymentEvents : row.paymentEvents;
+  const value = Number(amount);
+  const others = (events || []).reduce((sum, event, i) => sum + (i === eventIndex ? 0 : Number(event.amount) || 0), 0);
+  const capacity = Math.round((row.amountDue - others) * 100) / 100;
+  if (!Number.isFinite(value) || value <= capacity + 0.001) {
+    return { payments: editPaymentEvent({ payments, row, eventIndex, expectedRecord, amount, date, comment, destination }), excess: 0, allocations: [] };
+  }
+  if (capacity <= 0) throw new Error('Этот платёж уже закрыт другими поступлениями. Внесите переплату через следующий платёж.');
+  const excess = Math.round((value - capacity) * 100) / 100;
+  const edited = editPaymentEvent({ payments, row, eventIndex, expectedRecord, amount: capacity, date, comment, destination });
+  const userComment = String(comment || '').trim();
+  const carry = allocateContractPayment({
+    payments: edited,
+    rows: rows.filter((r) => r.index !== row.index),
+    amount: excess, date, createdAt, destination,
+    comment: `Переплата по платежу №${row.index + 1}${userComment ? ` · ${userComment}` : ''}`,
+    extra: { carriedFrom: row.index },
+    order: (eligible) => [
+      ...eligible.filter((r) => r.index > row.index).sort((a, b) => a.index - b.index),
+      ...eligible.filter((r) => r.index < row.index).sort((a, b) => a.index - b.index),
+    ],
+  });
+  if (carry.remainder > 0.001) {
+    throw new Error(`Переплата ${carry.remainder.toLocaleString('ru-RU')} ₽ больше, чем осталось оплатить по договору. Уменьшите сумму.`);
+  }
+  return { payments: carry.payments, excess, allocations: carry.allocations };
 }

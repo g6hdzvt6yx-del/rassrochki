@@ -18,7 +18,7 @@ import {
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 import { formatPhone as fmtPhone, formatPhoneForExcel, normalizePhone } from "./phone";
-import { allocateContractPayment, editPaymentEvent, deletePaymentEvent } from "./payments";
+import { allocateContractPayment, editPaymentEventWithCarry, deletePaymentEvent } from "./payments";
 import { actualPaid, prepareContractEdit, draftContractId } from "./contractSafety";
 import { flushLocalTasks } from "./localTasks";
 import DateCalendar from "./DateCalendar";
@@ -1102,13 +1102,22 @@ export default function App() {
   const editPaidPayment = async (cid, idx, eventIndex, expectedRecord, values) => {
     const c = contracts.find(x=>x.id===cid);
     if (!c) throw new Error('Договор не найден');
-    const row = buildSchedule(c).find(r=>r.index===idx);
-    const payments = editPaymentEvent({payments:c.payments,row,eventIndex,expectedRecord,...values});
+    const rows = buildSchedule(c);
+    const row = rows.find(r=>r.index===idx);
+    const result = editPaymentEventWithCarry({payments:c.payments,row,rows,eventIndex,expectedRecord,...values});
+    const {payments} = result;
+    suppressNextActionLog();
     const {error} = await supabase.from('contracts').update({payments}).eq('id',cid);
     if (error) throw new Error(error.message);
     setContracts(prev=>prev.map(x=>x.id===cid?{...x,payments}:x));
-    try { await localData.log({actionType:'edit_payment',entityType:'payments',entityId:`${cid}:${idx}`,contractId:cid,entityName:c.clientName,before:expectedRecord,after:payments[idx]}); }
+    try {
+      await localData.log({actionType:'edit_payment',entityType:'payments',entityId:`${cid}:${idx}`,contractId:cid,entityName:c.clientName,before:expectedRecord,after:payments[idx]});
+      for (const allocation of result.allocations) {
+        await localData.log({actionType:allocation.full?'full_payment':'partial_payment',entityType:'payments',entityId:`${cid}:${allocation.index}`,contractId:cid,entityName:c.clientName,before:allocation.before,after:allocation.after});
+      }
+    }
     catch(error) { showAppMessage(`Платёж сохранён, но журнал не записан: ${error.message}`); }
+    if (result.excess > 0) showAppMessage(`Переплата ${money(result.excess)} зачтена: ${result.allocations.map(a=>`платёж №${a.number} — ${money(a.amount)}${a.full?' (закрыт)':''}`).join(', ')}.`, "success");
     return true;
   };
 
@@ -3002,6 +3011,11 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                     {payMode === "new" && +payAmount > r.remainingDue && (
                       <small className="payment-allocation-note">Сначала закроются старые просрочки, затем следующие платежи.</small>
                     )}
+                    {payMode === "edit" && (() => {
+                      const others = r.paymentEvents.reduce((sum, event, i) => sum + (i === editEventIndex ? 0 : +event.amount || 0), 0);
+                      const excess = Math.round(((+payAmount || 0) - (r.amountDue - others)) * 100) / 100;
+                      return excess > 0 ? <small className="payment-allocation-note">Платёж №{r.n} будет закрыт полностью, а переплата {money(excess)} уменьшит следующий платёж.</small> : null;
+                    })()}
                   </div>
                 )}
                 <details className="payment-details"><summary>Чеки{r.receipts.length ? ` · ${r.receipts.length}` : " · прикрепить"}</summary><div className="receipt-row">
