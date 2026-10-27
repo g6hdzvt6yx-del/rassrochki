@@ -71,7 +71,7 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
 
   const contractSheet = addSheet(XLSX, workbook, "Договоры", [
     "ID", "Клиент", "Телефон", "Товар", "Цена", "Первоначальный взнос", "Наценка", "Наценка, %",
-    "Срок, мес", "Дата первого платежа", "Источник финансирования", "Комментарий", "Поручитель", "Телефон поручителя", "Удалён",
+    "Срок, мес", "Дата первого платежа", "Источник финансирования", "Комментарий", "Поручитель", "Телефон поручителя", "Удалён", "Дата составления договора",
   ], contracts.map((item) => [
     item.id || item.__id, item.client_name || item.clientName || "", formatPhoneForExcel(item.phone), item.item || "",
     +item.total_price || +item.totalPrice || 0, +item.down_payment || +item.downPayment || 0, +item.markup || 0,
@@ -79,7 +79,8 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
     localDate(item.start_date || item.startDate), item.investor_id || item.investorId || "Общий пул", item.comment || "",
     item.guarantor_name || item.guarantorName || "", formatPhoneForExcel(item.guarantor_phone || item.guarantorPhone),
     item.__deletedAt ? localDateTime(item.__deletedAt) : "",
-  ]), [24, 25, 18, 25, 14, 18, 14, 12, 11, 18, 24, 36, 25, 18, 20]);
+    localDate(item.contract_date || item.contractDate),
+  ]), [24, 25, 18, 25, 14, 18, 14, 12, 11, 18, 24, 36, 25, 18, 20, 18]);
   textColumns(XLSX, contractSheet, [2, 13]);
 
   const scheduleRows = [];

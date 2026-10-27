@@ -10,7 +10,7 @@ const date = (value) => {
 };
 export function contractPdfFilename(contract) {
   const name = String(contract.clientName || 'Клиент').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim().slice(0, 80);
-  return `Договор - ${name} - ${String(contract.startDate || '').slice(0, 10)}.pdf`;
+  return `Договор - ${name} - ${String(contract.contractDate || contract.startDate || '').slice(0, 10)}.pdf`;
 }
 
 // Embedded font keeps Cyrillic readable on the recipient's device, offline.
@@ -24,7 +24,7 @@ export function createContractPdf(contract, stats, fontBase64) {
   doc.setFontSize(20);
   doc.text('Договор рассрочки', 16, 22);
   doc.setFontSize(10);
-  doc.text(`Дата договора: ${date(contract.startDate)}`, 16, 31);
+  doc.text(contract.contractDate ? `Дата договора: ${date(contract.contractDate)}` : `Первый платёж: ${date(contract.startDate)}`, 16, 31);
   const styles = { font: 'Contract', fontStyle: 'normal', fontSize: 9, cellPadding: 2, overflow: 'linebreak', textColor: '#16332E' };
   autoTable(doc, {
     startY: 38, margin: { left: 16, right: 16 }, theme: 'plain', styles,

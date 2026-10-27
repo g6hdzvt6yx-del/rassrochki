@@ -189,6 +189,7 @@ const contractFromRow = (r) => ({
   termMonths: Number(r.term_months) || 1, startDate: r.start_date,
   investorId: r.investor_id || "", payments: r.payments || {}, comment: r.comment || "",
   guarantorName: r.guarantor_name || "", guarantorPhone: r.guarantor_phone || "",
+  contractDate: r.contract_date || "",
 });
 
 const contractToRow = (c) => ({
@@ -198,6 +199,7 @@ const contractToRow = (c) => ({
   term_months: c.termMonths, start_date: c.startDate,
   investor_id: c.investorId || "", payments: c.payments || {}, comment: c.comment || "",
   guarantor_name: c.guarantorName || "", guarantor_phone: c.guarantorPhone || "",
+  contract_date: c.contractDate || null,
 });
 
 const investorFromRow = (r) => ({
@@ -2021,7 +2023,7 @@ export default function App() {
                         <ContactEntries contacts={expandedClientContacts} contractId={c.id} />
                       </section>
                       <div className="mini-row citem-contract-date">
-                        <span>Дата составления договора</span><span className="num">{fmtDate(c.startDate)}</span>
+                        <span>Дата составления договора</span><span className="num">{c.contractDate ? fmtDate(c.contractDate) : "не указана"}</span>
                       </div>
                       {st.deferrals.length > 0 && (
                         <div className="mini-block">
@@ -2735,7 +2737,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   @media print{body{margin:16mm}}
 </style></head><body>
 <h1>Договор рассрочки</h1>
-<div class="sub">от ${fmtDate(contract.startDate)}</div>
+<div class="sub">${contract.contractDate ? `от ${fmtDate(contract.contractDate)}` : ""}</div>
 <div class="grid">
   <div><span class="lbl">Клиент:</span> ${esc(contract.clientName)}</div>
   <div><span class="lbl">Телефон:</span> ${esc(fmtPhone(contract.phone)) || "—"}</div>
@@ -3070,6 +3072,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     monthlyPayment: source ? String(source.monthlyPayment || 0) : "0",
     termMonths: source ? String(source.termMonths || 1) : "6",
     startDate: source?.startDate || new Date().toISOString().slice(0, 10),
+    contractDate: source ? (source.contractDate || "") : toIsoDate(new Date()),
     investorId: source?.investorId || "",
     guarantorName: source?.guarantorName || "", guarantorPhone: source?.guarantorPhone || "",
     markupBase: source?.markupBase || (source ? "principal" : "full"), // "principal" (цена−взнос) | "full" (полная цена)
@@ -3209,6 +3212,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     ["Наценка", money(editing.markup), money(markup)],
     ["К оплате", money(contractStats(editing).financed), money(financed)],
     ["Срок", `${editing.termMonths} мес.`, `${f.termMonths} мес.`],
+    ["Дата договора", editing.contractDate, f.contractDate],
     ["Первый платёж", editing.startDate, f.startDate],
     ["Остаток", money(contractStats(editing).remaining), money(financed - contractStats(editing).paidSum)],
     ["Комментарий", editing.comment, f.comment],
@@ -3239,8 +3243,11 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             renderOption={(client) => <><b>{client.name}</b><small>{[client.phone && fmtPhone(client.phone), client.contractCount > 1 && `договоров ${client.contractCount}`].filter(Boolean).join(" · ")}</small></>}
           />}
           <Field label="ФИО клиента"><input value={f.clientName} onChange={set("clientName")} placeholder="Иванов Иван" /></Field>
+          <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
           <div className="frow">
-            <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
+            <Field label="Дата договора">
+              <DateFields value={f.contractDate} onChange={(v) => setF((prev) => ({ ...prev, contractDate: v }))} />
+            </Field>
             <Field label="Дата 1-го платежа">
               <DateFields value={f.startDate} onChange={(v) => setF((prev) => ({ ...prev, startDate: v }))} />
             </Field>
