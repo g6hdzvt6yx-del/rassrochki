@@ -28,6 +28,7 @@ import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
 import {useCallLogs} from "./useCallLogs";
 import SearchPicker from "./SearchPicker";
+import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
 import {PASSPORT_FIELDS, emptyPassport, normalizePassport, passportOf, withPassport, passportLines, passportSummary} from "./passport";
 import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
 import DataPanelBoundary from "./DataPanelBoundary";
@@ -120,7 +121,7 @@ const buildSchedule = (c) => {
     return {
       n: i + 1, index: i, dueDate: due, scheduledDueDate: scheduledDue, amountDue: amt,
       paid, partial, paidAmount, remainingDue: Math.max(0, amt - paidAmount),
-      paidDate: hasPay ? rec.paidDate : null, receipt: rec ? rec.receipt : null,
+      paidDate: hasPay ? rec.paidDate : null, receipts: receiptsOf(rec),
       paymentEvents,
       notifiedAt: rec ? rec.notifiedAt : null, deferredUntil,
       deferralReason: rec?.deferralReason || "", deferralHistory, status,
@@ -1131,29 +1132,43 @@ export default function App() {
     await localData.log({ actionType: "change_payment_date", entityType: "payments", entityId: `${cid}:${idx}`, entityName: c.clientName, contractId: cid, before: cur, after: payments[idx] });
   };
 
-  const attachReceipt = async (cid, idx, file) => {
-    const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
-    const safeExt = /^\.[a-z0-9]{1,6}$/.test(ext) ? ext : "";
-    const path = `${cid}/${idx}-${Date.now()}${safeExt}`;
-    const { error: uploadError } = await supabase.storage.from("receipts").upload(path, file, {
-      contentType: file.type || "application/octet-stream",
-    });
-    if (uploadError) { setStorageError((prev) => prev || uploadError.message); showAppMessage(`Не удалось загрузить чек: ${uploadError.message}`); return; }
+  // Несколько файлов загружаются по очереди, а в договор записываются одним сохранением,
+  // чтобы чеки не перезаписали друг друга.
+  const attachReceipts = async (cid, idx, fileList) => {
+    const files = [...(fileList || [])];
+    if (!files.length) return false;
+    const stamp = Date.now();
+    const uploaded = [];
+    const failed = [];
+    for (const [order, file] of files.entries()) {
+      const path = receiptStoragePath(cid, idx, file.name, order, stamp);
+      const { error: uploadError } = await supabase.storage.from("receipts").upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+      });
+      if (uploadError) { failed.push(`${file.name}: ${uploadError.message}`); setStorageError((prev) => prev || uploadError.message); continue; }
+      uploaded.push({ name: file.name, type: file.type, path, addedAt: new Date().toISOString() });
+    }
+    if (!uploaded.length) { showAppMessage(`Не удалось загрузить чек${files.length > 1 ? "и" : ""}: ${failed.join("; ")}`); return false; }
     const c = contracts.find((x) => x.id === cid);
-    if (!c) return;
-    const receipt = { name: file.name, type: file.type, path };
+    if (!c) { await supabase.storage.from("receipts").remove(uploaded.map((r) => r.path)); return false; }
     const payments = { ...(c.payments || {}) };
-    payments[idx] = { ...(payments[idx] || {}), receipt };
+    payments[idx] = withAddedReceipts(payments[idx], uploaded);
     const prevContracts = contracts;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     suppressNextActionLog();
     const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
     if (error) {
-      // update не прошёл — файл в Storage остался бы бесхозным, удаляем его
-      await supabase.storage.from("receipts").remove([path]);
-      return rollback(error.message, () => setContracts(prevContracts));
+      // update не прошёл — файлы в Storage остались бы бесхозными, удаляем их
+      await supabase.storage.from("receipts").remove(uploaded.map((r) => r.path));
+      rollback(error.message, () => setContracts(prevContracts));
+      return false;
     }
-    await localData.log({ actionType: "attach_receipt", entityType: "receipts", entityId: path, entityName: file.name, contractId: cid, after: receipt });
+    for (const receipt of uploaded) {
+      await localData.log({ actionType: "attach_receipt", entityType: "receipts", entityId: receipt.path, entityName: receipt.name, contractId: cid, after: receipt });
+    }
+    if (failed.length) showAppMessage(`Прикреплено чеков: ${uploaded.length}. Не загрузились: ${failed.join("; ")}`);
+    else showAppMessage(uploaded.length > 1 ? `Прикреплено чеков: ${uploaded.length}` : "Чек прикреплён", "success");
+    return true;
   };
 
   const earlyPayoff = async (cid) => {
@@ -1192,15 +1207,17 @@ export default function App() {
     });
   };
 
-  const removeReceipt = async (cid, idx) => {
+  const removeReceipt = async (cid, idx, target) => {
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
     const payments = { ...(c.payments || {}) };
     const cur = payments[idx];
     if (!cur) return;
-    const { receipt, ...rest } = cur;
-    if (Object.keys(rest).length === 0) delete payments[idx];
-    else payments[idx] = rest;
+    const { record, removed: receipt } = withoutReceipt(cur, target);
+    if (!receipt) return;
+    if (!await requestConfirm({ title: "Удалить чек?", message: `Файл «${receipt.name || "чек"}» будет удалён из платежа №${+idx + 1}. Остальные чеки останутся.`, confirmLabel: "Удалить чек", danger: true })) return;
+    if (record) payments[idx] = record;
+    else delete payments[idx];
     const prevContracts = contracts;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     // сначала убираем ссылку в БД; файл удаляем только после успешного update
@@ -2220,7 +2237,7 @@ export default function App() {
           onDeletePayment={deletePaidPayment}
           onPay={payPayment}
           cards={cards}
-          onAttachReceipt={attachReceipt}
+          onAttachReceipt={attachReceipts}
           onRemoveReceipt={removeReceipt}
           onEarlyPayoff={earlyPayoff}
           onDelete={deleteContract}
@@ -2635,11 +2652,15 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
     finally { deferralPending.current = false; setDeferBusy(false); }
   };
 
+  const [receiptBusyIdx, setReceiptBusyIdx] = useState(null);
   const handleFile = async (e, idx) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    onAttachReceipt(contract.id, idx, file);
-    e.target.value = "";
+    const input = e.target;
+    const files = [...(input.files || [])];
+    input.value = "";
+    if (!files.length) return;
+    setReceiptBusyIdx(idx);
+    try { await onAttachReceipt(contract.id, idx, files); }
+    finally { setReceiptBusyIdx(null); }
   };
 
   const [pdfSaving, setPdfSaving] = useState(false);
@@ -2983,28 +3004,29 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                     )}
                   </div>
                 )}
-                <details className="payment-details"><summary>Чеки{r.receipt ? " · 1" : " · прикрепить"}</summary><div className="receipt-row">
-                  {r.receipt ? (
-                    <>
-                      <button type="button" className="receipt-link" onClick={() => openReceipt(r.receipt)}>
-                        <FileText size={13} /> {r.receipt.name}
+                <details className="payment-details"><summary>Чеки{r.receipts.length ? ` · ${r.receipts.length}` : " · прикрепить"}</summary><div className="receipt-row">
+                  {r.receipts.map((receipt, receiptIndex) => (
+                    <span className="receipt-item" key={receipt.path || `embedded-${receiptIndex}`}>
+                      <button type="button" className="receipt-link" onClick={() => openReceipt(receipt)} title={receipt.name}>
+                        <FileText size={13} /> <span className="receipt-name">{receipt.name || `Чек ${receiptIndex + 1}`}</span>
                       </button>
-                      <button className="receipt-remove" onClick={() => onRemoveReceipt(contract.id, r.index)} title="Удалить чек">
+                      <button type="button" className="receipt-remove" onClick={() => onRemoveReceipt(contract.id, r.index, receipt)} title="Удалить этот чек" aria-label={`Удалить чек ${receipt.name || receiptIndex + 1}`}>
                         <X size={13} />
                       </button>
-                    </>
-                  ) : (
-                    <label className="receipt-btn" htmlFor={`receipt-${contract.id}-${r.index}`}>
-                      <Paperclip size={13} /> Прикрепить чек
-                      <input
-                        id={`receipt-${contract.id}-${r.index}`}
-                        type="file"
-                        accept="image/*,application/pdf"
-                        className="hidden-file-input"
-                        onChange={(e) => handleFile(e, r.index)}
-                      />
-                    </label>
-                  )}
+                    </span>
+                  ))}
+                  <label className={`receipt-btn${receiptBusyIdx === r.index ? " busy" : ""}`} htmlFor={`receipt-${contract.id}-${r.index}`}>
+                    <Paperclip size={13} /> {receiptBusyIdx === r.index ? "Загрузка…" : r.receipts.length ? "Добавить ещё чек" : "Прикрепить чеки"}
+                    <input
+                      id={`receipt-${contract.id}-${r.index}`}
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf"
+                      className="hidden-file-input"
+                      disabled={receiptBusyIdx !== null}
+                      onChange={(e) => handleFile(e, r.index)}
+                    />
+                  </label>
                 </div></details>
               </div>
             ))}
@@ -3924,7 +3946,10 @@ body:has(.dashboard-wrap){background:#0f172a}
   border-radius:8px;background:var(--surface);padding:8px 10px;font:inherit;font-size:12.5px;color:var(--ink)}
 
 .hidden-file-input{display:none}
-.receipt-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:2px}
+.receipt-row{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:2px}
+.receipt-item{display:inline-flex;align-items:center;gap:2px;max-width:100%}
+.receipt-name{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.receipt-btn.busy{opacity:.6;pointer-events:none}
 .receipt-btn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink-soft);
   border:1px dashed var(--line);padding:5px 10px;border-radius:8px;cursor:pointer;background:transparent}
 .receipt-btn:hover{border-color:var(--brass);color:var(--brass)}

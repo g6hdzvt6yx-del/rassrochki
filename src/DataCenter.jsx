@@ -1,3 +1,4 @@
+import { receiptsOf } from './receipts';
 import React, { useEffect, useMemo, useState } from "react";
 import { ArchiveRestore, Download, FileClock, FolderOpen, HardDriveDownload, History, RotateCcw, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { isDesktopApp, localData } from "./dataClient";
@@ -25,7 +26,7 @@ const FIELD_LABELS = {
   term_months: "Срок", termMonths: "Срок", start_date: "Дата первого платежа", startDate: "Дата первого платежа",
   investor_id: "Источник финансирования", investorId: "Источник финансирования", comment: "Комментарий",
   guarantor_name: "Поручитель", guarantorName: "Поручитель", guarantor_phone: "Телефон поручителя", guarantorPhone: "Телефон поручителя",
-  paidDate: "Дата оплаты", paidAmount: "Сумма оплаты", notifiedAt: "Уведомление WhatsApp", receipt: "Чек",
+  paidDate: "Дата оплаты", paidAmount: "Сумма оплаты", notifiedAt: "Уведомление WhatsApp", receipt: "Чек", receipts: "Чеки",
   deferredUntil: "Отсрочка до", deferralReason: "Причина отсрочки",
   deferralHistory: "История отсрочек", fromDate: "Предыдущая дата", toDate: "Новая дата", reason: "Причина",
   amount: "Сумма", date: "Дата", purpose: "Назначение", name: "Название",
@@ -103,8 +104,9 @@ export const describePaymentChanges = (before, after) => {
     else if (was.deferredUntil !== now.deferredUntil) parts.push(`отсрочка ${day(was.deferredUntil)} → ${day(now.deferredUntil)}`);
     if (!was.notifiedAt && now.notifiedAt) parts.push("клиент уведомлён");
     else if (was.notifiedAt && !now.notifiedAt) parts.push("отменена отметка «Клиент уведомлён»");
-    if (!was.receipt && now.receipt) parts.push("прикреплён чек");
-    else if (was.receipt && !now.receipt) parts.push("удалён чек");
+    const receiptsBefore = receiptsOf(was).length, receiptsAfter = receiptsOf(now).length;
+    if (receiptsAfter > receiptsBefore) parts.push(receiptsAfter - receiptsBefore > 1 ? `прикреплено чеков: ${receiptsAfter - receiptsBefore}` : "прикреплён чек");
+    else if (receiptsAfter < receiptsBefore) parts.push(receiptsBefore - receiptsAfter > 1 ? `удалено чеков: ${receiptsBefore - receiptsAfter}` : "удалён чек");
     lines.push(`Платёж №${Number(key) + 1}: ${parts.length ? parts.join(", ") : "изменены данные"}`);
   }
   return lines.length ? `${lines.join("; ")}.` : "";

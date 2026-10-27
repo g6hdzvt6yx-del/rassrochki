@@ -1,3 +1,4 @@
+import { receiptsOf } from './receipts';
 import { addMonthsClamped, splitScheduleAmount } from "./finance";
 import { formatPhoneForExcel } from "./phone";
 import { actualPaid } from "./contractSafety";
@@ -110,10 +111,10 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
         contract.item || "", index + 1, localDate(event.date), +event.amount || 0, event.comment || "",
         event.earlyPayoff ? "Да" : "Нет", event.createdAt ? localDateTime(event.createdAt) : "", contract.__deletedAt ? "Да" : "Нет",
       ]));
-      if (payment.receipt) receiptRows.push([
+      receiptsOf(payment).forEach((receipt) => receiptRows.push([
         contract.id || contract.__id, contract.client_name || contract.clientName || "", index + 1,
-        payment.receipt.name || "", payment.receipt.path || "", "Активный", "",
-      ]);
+        receipt.name || "", receipt.path || "", "Активный", "",
+      ]));
     });
     (Array.isArray(payments.__contacts) ? payments.__contacts : []).forEach((contact) => contactRows.push([
       contract.id || contract.__id, contract.client_name || contract.clientName || "", formatPhoneForExcel(contract.phone),
