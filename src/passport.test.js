@@ -35,3 +35,17 @@ describe('поиск в списке клиентов', () => {
     expect(matchesPickerQuery(client, '22')).toBe(false);
   });
 });
+
+import { guarantorPassportOf, contractPassportLines } from './passport';
+describe('паспорт поручителя', () => {
+  it('хранится отдельно от паспорта клиента и подписывается в печати', () => {
+    let payments = withPassport({ 0: { paidAmount: 5 } }, { series: '1111', number: '222222' });
+    payments = withPassport(payments, { series: '3333', number: '444444' }, '__guarantorPassport');
+    const contract = { payments };
+    expect(passportOf(contract).series).toBe('1111');
+    expect(guarantorPassportOf(contract).series).toBe('3333');
+    expect(contractPassportLines(contract)).toEqual([['Паспорт', '1111 222222'], ['Поручитель — паспорт', '3333 444444']]);
+    expect(withPassport(payments, {}, '__guarantorPassport').__passport.series).toBe('1111');
+    expect(withPassport(payments, {}, '__guarantorPassport').__guarantorPassport).toBeUndefined();
+  });
+});

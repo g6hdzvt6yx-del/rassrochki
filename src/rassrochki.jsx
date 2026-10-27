@@ -29,7 +29,7 @@ import { clientContacts } from "./contacts";
 import {useCallLogs} from "./useCallLogs";
 import SearchPicker from "./SearchPicker";
 import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
-import {PASSPORT_FIELDS, emptyPassport, normalizePassport, passportOf, withPassport, passportLines, passportSummary} from "./passport";
+import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
 import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
 import DataPanelBoundary from "./DataPanelBoundary";
 
@@ -1244,8 +1244,8 @@ export default function App() {
   const addContract = async (data) => {
     const { newContractId, ...fields } = data;
     const initialDestination = +data.downPayment > 0 ? paymentDestination(data.downPaymentMethod,data.downPaymentCard) : null;
-    const { passport, ...contractFields } = fields;
-    const c = { ...contractFields, id: newContractId || `c${crypto.randomUUID()}`, payments: withPassport(initialDestination ? {__downPaymentDestination:initialDestination} : {}, passport) };
+    const { passport, guarantorPassport, ...contractFields } = fields;
+    const c = { ...contractFields, id: newContractId || `c${crypto.randomUUID()}`, payments: withPassport(withPassport(initialDestination ? {__downPaymentDestination:initialDestination} : {}, passport), guarantorPassport, "__guarantorPassport") };
     const { error } = isDesktopApp ? await localData.saveContract(contractToRow(c), true)
       : await supabase.from("contracts").insert(contractToRow(c));
     if (error) { rollback(error.message); return false; }
@@ -1257,9 +1257,9 @@ export default function App() {
     const original = contracts.find((contract) => contract.id === contractId);
     if (!original) { showAppMessage("Исходный договор не найден. Черновик сохранён."); return false; }
     let updated;
-    const { passport, ...contractData } = data;
+    const { passport, guarantorPassport, ...contractData } = data;
     try { updated = prepareContractEdit(original, contractData);
-      updated.payments = withPassport(updated.payments, passport);
+      updated.payments = withPassport(withPassport(updated.payments, passport), guarantorPassport, "__guarantorPassport");
       if (+data.downPayment > 0 && data.downPaymentMethod) updated.payments.__downPaymentDestination = paymentDestination(data.downPaymentMethod,data.downPaymentCard);
     }
     catch (error) { showAppMessage(error.message); return false; }
@@ -1408,7 +1408,7 @@ export default function App() {
       : "Общий пул";
     const text = [
       contract.clientName, contract.phone, contract.item, contract.comment,
-      contract.guarantorName, contract.guarantorPhone, investorName, passportSummary(passportOf(contract)),
+      contract.guarantorName, contract.guarantorPhone, investorName, passportSummary(passportOf(contract)), passportSummary(guarantorPassportOf(contract)),
       ...contacts.flatMap((contact) => [contact.note, CONTACT_TYPES[contact.type], contact.promisedDate, contact.nextContactDate]),
     ].filter(Boolean).join(" ").toLocaleLowerCase("ru");
     if (text.includes(query)) return true;
@@ -2748,7 +2748,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   <div><span class="lbl">К оплате в рассрочку:</span> ${money(st.financed)}</div>
   <div><span class="lbl">Поручитель:</span> ${esc(contract.guarantorName) || "—"}</div>
   <div><span class="lbl">Телефон поручителя:</span> ${esc(fmtPhone(contract.guarantorPhone)) || "—"}</div>
-  ${passportLines(passportOf(contract)).map(([label, value]) => `<div><span class="lbl">${esc(label)}:</span> ${esc(value)}</div>`).join("")}
+  ${contractPassportLines(contract).map(([label, value]) => `<div><span class="lbl">${esc(label)}:</span> ${esc(value)}</div>`).join("")}
 </div>
 <table>
   <thead><tr><th>№</th><th>Дата платежа</th><th>Сумма</th><th>Отметка об оплате</th></tr></thead>
@@ -2823,7 +2823,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 {contract.guarantorPhone ? ` · ${fmtPhone(contract.guarantorPhone)}` : ""}
               </b>
             </div>
-            {passportLines(passportOf(contract)).map(([label, value]) => <div key={label} className="det-wide"><span>{label}</span><b>{value}</b></div>)}
+            {contractPassportLines(contract).map(([label, value]) => <div key={label} className="det-wide"><span>{label}</span><b>{value}</b></div>)}
           </div>
 
           <div className="det-actions-row">
@@ -3077,9 +3077,11 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     guarantorName: source?.guarantorName || "", guarantorPhone: source?.guarantorPhone || "",
     markupBase: source?.markupBase || (source ? "principal" : "full"), // "principal" (цена−взнос) | "full" (полная цена)
     passport: { ...emptyPassport(), ...(normalizePassport(source?.passport) || passportOf(source) || {}) },
+    guarantorPassport: { ...emptyPassport(), ...(normalizePassport(source?.guarantorPassport) || guarantorPassportOf(source) || {}) },
   });
   const [showPassport, setShowPassport] = useState(!!(normalizePassport(source?.passport) || passportOf(source)));
-  const setPassport = (k) => (e) => { const value = e.target.value; setF((prev) => ({ ...prev, passport: { ...prev.passport, [k]: value } })); };
+  const [showGuarantorPassport, setShowGuarantorPassport] = useState(!!(normalizePassport(source?.guarantorPassport) || guarantorPassportOf(source)));
+  const setPassportField = (which) => (k, value) => setF((prev) => ({ ...prev, [which]: { ...prev[which], [k]: value } }));
   const [showGuarantor, setShowGuarantor] = useState(!!(source?.guarantorName || source?.guarantorPhone));
   const [selectedClient, setSelectedClient] = useState("");
   // что пользователь редактировал последним — процент или сумму наценки:
@@ -3216,7 +3218,8 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     ["Первый платёж", editing.startDate, f.startDate],
     ["Остаток", money(contractStats(editing).remaining), money(financed - contractStats(editing).paidSum)],
     ["Комментарий", editing.comment, f.comment],
-    ["Паспорт", passportSummary(passportOf(editing)), passportSummary(f.passport)],
+    ["Паспорт клиента", passportSummary(passportOf(editing)), passportSummary(f.passport)],
+    ["Паспорт поручителя", passportSummary(guarantorPassportOf(editing)), passportSummary(f.guarantorPassport)],
   ].filter(([, before, after]) => String(before || "") !== String(after || "")) : [];
   const samePhoneClient = clients.find((client) => {
     const phone = normalizePhone(f.phone);
@@ -3264,42 +3267,34 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             <input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" />
             <small className="field-hint">Новый товар появится в списке после сохранения договора.</small>
           </Field>
+          {showPassport ? (
+            <PassportFields title="Паспортные данные клиента" value={f.passport} onChange={setPassportField("passport")} />
+          ) : (
+            <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowPassport(true)}>
+              <Plus size={13} /> Паспорт клиента
+            </button>
+          )}
           {showGuarantor ? (
-            <div className="frow">
-              <Field label="Поручитель, ФИО">
-                <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
-              </Field>
-              <Field label="Поручитель, телефон">
-                <input value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
-              </Field>
+            <div className="guarantor-block">
+              <div className="frow">
+                <Field label="Поручитель, ФИО">
+                  <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
+                </Field>
+                <Field label="Поручитель, телефон">
+                  <input value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
+                </Field>
+              </div>
+              {showGuarantorPassport ? (
+                <PassportFields title="Паспортные данные поручителя" value={f.guarantorPassport} onChange={setPassportField("guarantorPassport")} />
+              ) : (
+                <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowGuarantorPassport(true)}>
+                  <Plus size={13} /> Паспорт поручителя
+                </button>
+              )}
             </div>
           ) : (
             <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowGuarantor(true)}>
               <Plus size={13} /> Добавить поручителя
-            </button>
-          )}
-          {showPassport ? (
-            <div className="passport-block">
-              <div className="passport-hd">Паспортные данные клиента</div>
-              <div className="frow">
-                <Field label="Серия"><input value={f.passport.series} onChange={setPassport("series")} inputMode="numeric" placeholder="90 12" maxLength={10} /></Field>
-                <Field label="Номер"><input value={f.passport.number} onChange={setPassport("number")} inputMode="numeric" placeholder="123456" maxLength={12} /></Field>
-              </div>
-              <Field label="Кем выдан"><input value={f.passport.issuedBy} onChange={setPassport("issuedBy")} placeholder="МВД по Чеченской Республике" /></Field>
-              <div className="frow">
-                <Field label="Дата выдачи"><input type="date" value={f.passport.issueDate} onChange={setPassport("issueDate")} /></Field>
-                <Field label="Код подразделения"><input value={f.passport.divisionCode} onChange={setPassport("divisionCode")} inputMode="numeric" placeholder="200-001" maxLength={8} /></Field>
-              </div>
-              <div className="frow">
-                <Field label="Дата рождения"><input type="date" value={f.passport.birthDate} onChange={setPassport("birthDate")} /></Field>
-                <Field label="Место рождения"><input value={f.passport.birthPlace} onChange={setPassport("birthPlace")} placeholder="г. Грозный" /></Field>
-              </div>
-              <Field label="Адрес регистрации"><input value={f.passport.address} onChange={setPassport("address")} placeholder="Город, улица, дом, квартира" /></Field>
-              <small className="field-hint">Паспорт видит только администратор, операторам он не показывается.</small>
-            </div>
-          ) : (
-            <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowPassport(true)}>
-              <Plus size={13} /> Добавить паспортные данные
             </button>
           )}
           <div className="frow">
@@ -3396,6 +3391,31 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
 const Field = ({ label, children }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
+
+// Поля паспорта — одинаковые для клиента и поручителя.
+function PassportFields({ title, value, onChange }) {
+  const bind = (key) => ({ value: value[key] || "", onChange: (e) => onChange(key, e.target.value) });
+  return (
+    <div className="passport-block">
+      <div className="passport-hd">{title}</div>
+      <div className="frow">
+        <Field label="Серия"><input {...bind("series")} inputMode="numeric" placeholder="90 12" maxLength={10} /></Field>
+        <Field label="Номер"><input {...bind("number")} inputMode="numeric" placeholder="123456" maxLength={12} /></Field>
+      </div>
+      <Field label="Кем выдан"><input {...bind("issuedBy")} placeholder="МВД по Чеченской Республике" /></Field>
+      <div className="frow">
+        <Field label="Дата выдачи"><input type="date" {...bind("issueDate")} /></Field>
+        <Field label="Код подразделения"><input {...bind("divisionCode")} inputMode="numeric" placeholder="200-001" maxLength={8} /></Field>
+      </div>
+      <div className="frow">
+        <Field label="Дата рождения"><input type="date" {...bind("birthDate")} /></Field>
+        <Field label="Место рождения"><input {...bind("birthPlace")} placeholder="г. Грозный" /></Field>
+      </div>
+      <Field label="Адрес регистрации"><input {...bind("address")} placeholder="Город, улица, дом, квартира" /></Field>
+      <small className="field-hint">Паспорт видит только администратор, операторам он не показывается.</small>
+    </div>
+  );
+}
 
 // поле даты из трёх сегментов (ДД/ММ/ГГГГ) с автопереходом — вместо капризного native <input type="date">
 function DateFields({ value, onChange }) {
@@ -4039,6 +4059,11 @@ body:has(.dashboard-wrap){background:#0f172a}
 .search-picker-selected>span{flex:1;min-width:140px;font-weight:600;font-size:14px}
 .passport-block{margin:4px 0 14px;padding:12px 12px 2px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .passport-hd{font-weight:600;font-size:13px;margin-bottom:10px}
+.guarantor-block{margin:4px 0 14px;padding:12px 12px 4px;border:1px dashed var(--line);border-radius:12px}
+.guarantor-block .passport-block{background:var(--surface-2)}
+.passport-block .frow,.guarantor-block .frow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.passport-block input{min-width:0}
+.sheet-body .guarantor-toggle{margin:0 8px 12px 0}
 .det-grid>.det-wide{grid-column:1/-1}
 .det-wide b{font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
 @media (max-width:760px){.field input,.field select,.field textarea,.search-picker input{font-size:16px}}

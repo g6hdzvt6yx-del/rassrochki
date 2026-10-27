@@ -27,12 +27,14 @@ export function normalizePassport(value) {
 }
 
 export const passportOf = (contract) => normalizePassport(contract?.payments?.__passport);
+export const guarantorPassportOf = (contract) => normalizePassport(contract?.payments?.__guarantorPassport);
 
 // Записывает (или убирает) паспорт в payments, не трогая платежи и прочие служебные ключи.
-export function withPassport(payments, passport) {
+// key: '__passport' — клиент, '__guarantorPassport' — поручитель.
+export function withPassport(payments, passport, key = '__passport') {
   const next = { ...(payments || {}) };
   const clean = normalizePassport(passport);
-  if (clean) next.__passport = clean; else delete next.__passport;
+  if (clean) next[key] = clean; else delete next[key];
   return next;
 }
 
@@ -56,6 +58,12 @@ export function passportLines(passport) {
 }
 
 export const passportSummary = (passport) => passportLines(passport).map(([label, value]) => `${label}: ${value}`).join('; ');
+
+// Строки паспорта клиента и поручителя для карточки, печати и PDF.
+export const contractPassportLines = (contract) => [
+  ...passportLines(passportOf(contract)),
+  ...passportLines(guarantorPassportOf(contract)).map(([label, value]) => [`Поручитель — ${label.toLocaleLowerCase('ru')}`, value]),
+];
 
 // Поиск клиента/товара: по словам в названии и по цифрам телефона.
 export function matchesPickerQuery(option, rawQuery) {
