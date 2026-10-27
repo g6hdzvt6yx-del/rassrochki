@@ -27,7 +27,7 @@ import FinancialReport from "./FinancialReport.jsx";
 import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
 import {useCallLogs} from "./useCallLogs";
-import SearchPicker from "./SearchPicker";
+import AutocompleteField from "./AutocompleteField";
 import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
 import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
 import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
@@ -3083,7 +3083,6 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
   const [showGuarantorPassport, setShowGuarantorPassport] = useState(!!(normalizePassport(source?.guarantorPassport) || guarantorPassportOf(source)));
   const setPassportField = (which) => (k, value) => setF((prev) => ({ ...prev, [which]: { ...prev[which], [k]: value } }));
   const [showGuarantor, setShowGuarantor] = useState(!!(source?.guarantorName || source?.guarantorPhone));
-  const [selectedClient, setSelectedClient] = useState("");
   // что пользователь редактировал последним — процент или сумму наценки:
   // при изменении цены/взноса пересчитываем ту величину, которую он НЕ трогал.
   // для существующего договора по умолчанию бережём загруженную сумму (не затираем её процентом).
@@ -3115,13 +3114,11 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     catch (error) { setFormError(`Не удалось сохранить черновик: ${error.message || error}`); }
   };
   const selectClient = (client) => {
-    setSelectedClient(client?.key || "");
     if (!client) return;
     setF((prev) => ({ ...prev, clientName: client.name, phone: client.phone || "",
       passport: normalizePassport(prev.passport) || !client.passport ? prev.passport : { ...emptyPassport(), ...client.passport } }));
     if (client.passport) setShowPassport(true);
   };
-  const pickedClient = clients.find((item) => item.key === selectedClient);
 
   useEffect(() => {
     if (!isDesktopApp) return;
@@ -3235,17 +3232,16 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
         </div>
         <div className="sheet-body">
           <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          {clients.length > 0 && <SearchPicker
-            label="Выбрать клиента из базы"
-            placeholder="Начните вводить имя или телефон"
+          <AutocompleteField
+            label="ФИО клиента"
+            placeholder="Иванов Иван — или выберите из базы"
+            value={f.clientName}
+            onChange={(value) => setF((prev) => ({ ...prev, clientName: value }))}
             options={clients}
-            selectedLabel={pickedClient ? `${pickedClient.name}${pickedClient.phone ? ` · ${fmtPhone(pickedClient.phone)}` : ""}` : ""}
             onPick={selectClient}
-            onClear={() => setSelectedClient("")}
-            emptyText="Клиент не найден — заполните ФИО и телефон ниже как нового"
-            renderOption={(client) => <><b>{client.name}</b><small>{[client.phone && fmtPhone(client.phone), client.contractCount > 1 && `договоров ${client.contractCount}`].filter(Boolean).join(" · ")}</small></>}
-          />}
-          <Field label="ФИО клиента"><input value={f.clientName} onChange={set("clientName")} placeholder="Иванов Иван" /></Field>
+            newHint="Нет в базе — будет новый клиент"
+            renderOption={(client) => <><b>{client.name}</b><small>{[client.phone && fmtPhone(client.phone), client.contractCount > 1 ? `договоров ${client.contractCount}` : "1 договор"].filter(Boolean).join(" · ")}</small></>}
+          />
           <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
           <div className="frow">
             <Field label="Дата договора">
@@ -3256,17 +3252,15 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             </Field>
           </div>
           {samePhoneClient && <div className="duplicate-client-hint"><AlertTriangle size={14}/><span>В базе уже есть клиент «{samePhoneClient.name}» с таким номером, договоров: {samePhoneClient.contractCount}. Проверьте, не создаёте ли вы дубликат.</span></div>}
-          {products.length > 0 && <SearchPicker
-            label="Выбрать товар из базы"
-            placeholder="Начните вводить название товара"
+          <AutocompleteField
+            label="Товар"
+            placeholder="Например, Айфон 16 Про"
+            value={f.item}
+            onChange={(value) => setF((prev) => ({ ...prev, item: value }))}
             options={products}
             onPick={(product) => setF((prev) => ({ ...prev, item: product.name }))}
-            emptyText="Товар не найден — впишите его в поле «Товар» ниже"
-          />}
-          <Field label="Товар">
-            <input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" />
-            <small className="field-hint">Новый товар появится в списке после сохранения договора.</small>
-          </Field>
+            newHint="Нет в базе — товар добавится после сохранения договора"
+          />
           {showPassport ? (
             <PassportFields title="Паспортные данные клиента" value={f.passport} onChange={setPassportField("passport")} />
           ) : (
