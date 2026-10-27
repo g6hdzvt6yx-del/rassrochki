@@ -28,6 +28,7 @@ import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
 import {useCallLogs} from "./useCallLogs";
 import AutocompleteField from "./AutocompleteField";
+import {listCloudDrafts, saveCloudDraft, deleteCloudDraft, draftTitle, draftCompletion, draftHasContent} from "./cloudDrafts";
 import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
 import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
 import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
@@ -595,6 +596,13 @@ export default function App() {
   const [editingContract, setEditingContract] = useState(null);
   const [dataCenterOpen, setDataCenterOpen] = useState(false);
   const [draftToContinue, setDraftToContinue] = useState(null);
+  const [cloudDrafts, setCloudDrafts] = useState([]);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const reloadDrafts = async () => {
+    if (isDesktopApp || !session) return;
+    try { setCloudDrafts(await listCloudDrafts()); } catch { /* список черновиков не критичен для работы */ }
+  };
+  useEffect(() => { reloadDrafts(); }, [session?.user?.id]);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [receivedOpen, setReceivedOpen] = useState(false);
   const [receivedView, setReceivedView] = useState("received");
@@ -1635,6 +1643,9 @@ export default function App() {
           >
             <Download size={16} /> Экспорт
           </button>
+          {!isDesktopApp && cloudDrafts.length > 0 && <button className="btn ghost" onClick={() => setDraftsOpen(true)}>
+            <FileText size={16} /> Черновики · {cloudDrafts.length}
+          </button>}
           <button className="btn primary" onClick={() => setAdding(true)}>
             <Plus size={16} /> Новый договор
           </button>
@@ -2259,7 +2270,15 @@ export default function App() {
           onHistory={(c) => setDataCenterOpen({ contract: { id: c.id, name: c.clientName || c.client_name || c.id } })}
         />
       )}
-      {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} />}
+      {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} onDraftsChanged={reloadDrafts} />}
+      {draftsOpen && <DraftsList drafts={cloudDrafts}
+        onClose={() => setDraftsOpen(false)}
+        onContinue={(item) => { setDraftsOpen(false); setDraftToContinue(item); }}
+        onDelete={async (item) => {
+          if (!await requestConfirm({ title: "Удалить черновик?", message: `Черновик «${item.title}» будет удалён. Сохранённые договоры не изменятся.`, confirmLabel: "Удалить черновик", danger: true })) return;
+          try { await deleteCloudDraft(item.id); await reloadDrafts(); } catch (error) { showAppMessage(`Не удалось удалить черновик: ${error.message}`); }
+        }}
+      />}
       {editingContract && (
         <AddForm cards={cards}
           investors={investors}
@@ -2267,6 +2286,7 @@ export default function App() {
           editing={editingContract}
           onClose={() => setEditingContract(null)}
           onSave={updateContract}
+          onDraftsChanged={reloadDrafts}
         />
       )}
       {draftToContinue && draftToContinue.draft_type !== "Импорт Excel" && (
@@ -2275,6 +2295,7 @@ export default function App() {
           clients={clientOptions} products={productOptions}
           draft={draftToContinue}
           editing={contracts.find((contract) => contract.id === draftContractId(draftToContinue))}
+          onDraftsChanged={reloadDrafts}
           onClose={() => setDraftToContinue(null)}
           onSave={draftToContinue.draft_type === "Редактирование договора"
             ? (data) => updateContract(data, draftContractId(draftToContinue)) : addContract}
@@ -3055,7 +3076,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
 
 /* --------------------------- Новый договор ------------------------- */
 
-function AddForm({ cards = [], investors, clients = [], products = [], onClose, onSave, editing, draft }) {
+function AddForm({ cards = [], investors, clients = [], products = [], onClose, onSave, editing, draft, onDraftsChanged }) {
   const draftData = draft?.data || null;
   const source = draftData || editing;
   const [f, setF] = useState({
@@ -3107,6 +3128,20 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     });
     draftWrite.current = task;
     return task;
+  };
+  const draftType = editing || draft?.draft_type === "Редактирование договора" ? "Редактирование договора" : "Новый договор";
+  const [draftBusy, setDraftBusy] = useState(false);
+  const saveDraftNow = async () => {
+    if (saveInProgress.current || draftBusy) return;
+    setDraftBusy(true); setFormError("");
+    try {
+      await saveCloudDraft({ id: draftId.current, draftType, title: draftTitle(f), completion: draftCompletion(f),
+        data: { ...f, contractId: editing?.id || draftContractId(draft) || undefined, newContractId: newContractId.current } });
+      onDraftsChanged?.();
+      showAppMessage("Черновик сохранён. Открыть его можно кнопкой «Черновики».", "success");
+      onClose();
+    } catch (error) { setFormError(`Не удалось сохранить черновик: ${error.message || error}`); }
+    finally { setDraftBusy(false); }
   };
   const closeForm = async () => {
     if (saveInProgress.current) return;
@@ -3353,6 +3388,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
           {isDesktopApp && <p role="status">{draftStatus}</p>}
           <div className="sheet-actions">
             <button className="btn ghost" onClick={closeForm}>{isDesktopApp ? "Закрыть и сохранить черновик" : "Отмена"}</button>
+            {!isDesktopApp && <button type="button" className="btn ghost" disabled={saving || draftBusy || !draftHasContent(f)} onClick={saveDraftNow} title="Сохранить незаконченный договор и вернуться к нему позже">{draftBusy ? "Сохраняем…" : "Сохранить черновик"}</button>}
             <button className="btn primary" disabled={!valid || saving} onClick={async () => {
               if (saveInProgress.current) return;
               saveInProgress.current = true; setSaving(true); setFormError("");
@@ -3369,6 +3405,9 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
               if (isDesktopApp) {
                 try { await localData.deleteDraft(draftId.current); }
                 catch (error) { showAppMessage(`Договор сохранён, но не удалось убрать черновик: ${error.message || error}`); }
+              } else if (draft) {
+                try { await deleteCloudDraft(draftId.current); onDraftsChanged?.(); }
+                catch (error) { showAppMessage(`Договор сохранён, но не удалось убрать черновик: ${error.message || error}`); }
               }
               showAppMessage("Сохранено", "success"); onClose();
               } catch (error) { setFormError(error.message || String(error)); }
@@ -3376,6 +3415,35 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             }}>{saving ? "Сохраняем…" : editing ? "Сохранить изменения" : "Создать договор"}</button>
           </div>
           </fieldset>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Список сохранённых черновиков договоров (веб-версия).
+function DraftsList({ drafts, onClose, onContinue, onDelete }) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Черновики договоров</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">
+          {!drafts.length && <div className="empty">Черновиков нет.</div>}
+          {drafts.map((item) => (
+            <div className="draft-row" key={item.id}>
+              <div>
+                <b>{item.title || "Без названия"}</b>
+                <small>{item.draft_type === "Редактирование договора" ? "Изменение договора" : "Новый договор"} · заполнено {item.completion}% · {fmtDateTime(item.updated_at)}</small>
+              </div>
+              <div className="draft-row-actions">
+                <button className="btn primary btn-sm" onClick={() => onContinue(item)}>Продолжить</button>
+                <button className="btn ghost btn-sm" onClick={() => onDelete(item)} title="Удалить черновик"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -4053,6 +4121,11 @@ body:has(.dashboard-wrap){background:#0f172a}
 .search-picker-selected>span{flex:1;min-width:140px;font-weight:600;font-size:14px}
 .passport-block{margin:4px 0 14px;padding:12px 12px 2px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 .passport-hd{font-weight:600;font-size:13px;margin-bottom:10px}
+.draft-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.draft-row>div:first-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.draft-row small{color:var(--ink-soft);font-size:11.5px}
+.draft-row-actions{display:flex;gap:6px;flex-shrink:0}
+.sheet-actions{flex-wrap:wrap}
 .guarantor-block{margin:4px 0 14px;padding:12px 12px 4px;border:1px dashed var(--line);border-radius:12px}
 .guarantor-block .passport-block{background:var(--surface-2)}
 .passport-block .frow,.guarantor-block .frow{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
