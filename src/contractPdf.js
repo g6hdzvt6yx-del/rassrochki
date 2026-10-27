@@ -1,3 +1,4 @@
+import { passportLines, passportOf } from './passport';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
 
@@ -37,6 +38,7 @@ export function createContractPdf(contract, stats, fontBase64) {
       ['Остаток к оплате', money(stats.remaining)],
       ...(contract.guarantorName ? [['Поручитель', contract.guarantorName],
         ...(contract.guarantorPhone ? [['Телефон поручителя', contract.guarantorPhone]] : [])] : []),
+      ...passportLines(passportOf(contract)),
     ],
   });
   let y = doc.lastAutoTable.finalY + 10;

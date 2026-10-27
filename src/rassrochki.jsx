@@ -27,6 +27,8 @@ import FinancialReport from "./FinancialReport.jsx";
 import { changeDeferral } from "./deferrals";
 import { clientContacts } from "./contacts";
 import {useCallLogs} from "./useCallLogs";
+import SearchPicker from "./SearchPicker";
+import {PASSPORT_FIELDS, emptyPassport, normalizePassport, passportOf, withPassport, passportLines, passportSummary} from "./passport";
 import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
 import DataPanelBoundary from "./DataPanelBoundary";
 
@@ -1214,7 +1216,8 @@ export default function App() {
   const addContract = async (data) => {
     const { newContractId, ...fields } = data;
     const initialDestination = +data.downPayment > 0 ? paymentDestination(data.downPaymentMethod,data.downPaymentCard) : null;
-    const c = { ...fields, id: newContractId || `c${crypto.randomUUID()}`, payments: initialDestination ? {__downPaymentDestination:initialDestination} : {} };
+    const { passport, ...contractFields } = fields;
+    const c = { ...contractFields, id: newContractId || `c${crypto.randomUUID()}`, payments: withPassport(initialDestination ? {__downPaymentDestination:initialDestination} : {}, passport) };
     const { error } = isDesktopApp ? await localData.saveContract(contractToRow(c), true)
       : await supabase.from("contracts").insert(contractToRow(c));
     if (error) { rollback(error.message); return false; }
@@ -1226,7 +1229,9 @@ export default function App() {
     const original = contracts.find((contract) => contract.id === contractId);
     if (!original) { showAppMessage("Исходный договор не найден. Черновик сохранён."); return false; }
     let updated;
-    try { updated = prepareContractEdit(original, data);
+    const { passport, ...contractData } = data;
+    try { updated = prepareContractEdit(original, contractData);
+      updated.payments = withPassport(updated.payments, passport);
       if (+data.downPayment > 0 && data.downPaymentMethod) updated.payments.__downPaymentDestination = paymentDestination(data.downPaymentMethod,data.downPaymentCard);
     }
     catch (error) { showAppMessage(error.message); return false; }
@@ -1348,8 +1353,9 @@ export default function App() {
       const phoneKey = normalizePhone(contract.phone);
       const key = phoneKey || `name:${contract.clientName.trim().toLocaleLowerCase("ru")}`;
       if (!key) return;
-      if (!unique.has(key)) unique.set(key, { key, name: contract.clientName, phone: contract.phone || "", contractCount: 0, contractIds: [] });
+      if (!unique.has(key)) unique.set(key, { key, name: contract.clientName, phone: contract.phone || "", contractCount: 0, contractIds: [], passport: null });
       unique.get(key).contractCount += 1;
+      if (!unique.get(key).passport) unique.get(key).passport = passportOf(contract);
       unique.get(key).contractIds.push(contract.id);
     });
     return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
@@ -1374,7 +1380,7 @@ export default function App() {
       : "Общий пул";
     const text = [
       contract.clientName, contract.phone, contract.item, contract.comment,
-      contract.guarantorName, contract.guarantorPhone, investorName,
+      contract.guarantorName, contract.guarantorPhone, investorName, passportSummary(passportOf(contract)),
       ...contacts.flatMap((contact) => [contact.note, CONTACT_TYPES[contact.type], contact.promisedDate, contact.nextContactDate]),
     ].filter(Boolean).join(" ").toLocaleLowerCase("ru");
     if (text.includes(query)) return true;
@@ -2710,6 +2716,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   <div><span class="lbl">К оплате в рассрочку:</span> ${money(st.financed)}</div>
   <div><span class="lbl">Поручитель:</span> ${esc(contract.guarantorName) || "—"}</div>
   <div><span class="lbl">Телефон поручителя:</span> ${esc(fmtPhone(contract.guarantorPhone)) || "—"}</div>
+  ${passportLines(passportOf(contract)).map(([label, value]) => `<div><span class="lbl">${esc(label)}:</span> ${esc(value)}</div>`).join("")}
 </div>
 <table>
   <thead><tr><th>№</th><th>Дата платежа</th><th>Сумма</th><th>Отметка об оплате</th></tr></thead>
@@ -2784,6 +2791,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 {contract.guarantorPhone ? ` · ${fmtPhone(contract.guarantorPhone)}` : ""}
               </b>
             </div>
+            {passportLines(passportOf(contract)).map(([label, value]) => <div key={label} className="det-wide"><span>{label}</span><b>{value}</b></div>)}
           </div>
 
           <div className="det-actions-row">
@@ -3029,7 +3037,10 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     investorId: source?.investorId || "",
     guarantorName: source?.guarantorName || "", guarantorPhone: source?.guarantorPhone || "",
     markupBase: source?.markupBase || (source ? "principal" : "full"), // "principal" (цена−взнос) | "full" (полная цена)
+    passport: { ...emptyPassport(), ...(normalizePassport(source?.passport) || passportOf(source) || {}) },
   });
+  const [showPassport, setShowPassport] = useState(!!(normalizePassport(source?.passport) || passportOf(source)));
+  const setPassport = (k) => (e) => { const value = e.target.value; setF((prev) => ({ ...prev, passport: { ...prev.passport, [k]: value } })); };
   const [showGuarantor, setShowGuarantor] = useState(!!(source?.guarantorName || source?.guarantorPhone));
   const [selectedClient, setSelectedClient] = useState("");
   // что пользователь редактировал последним — процент или сумму наценки:
@@ -3062,12 +3073,14 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     try { await persistDraft(f); onClose(); }
     catch (error) { setFormError(`Не удалось сохранить черновик: ${error.message || error}`); }
   };
-  const selectClient = (e) => {
-    const key = e.target.value;
-    setSelectedClient(key);
-    const client = clients.find((item) => item.key === key);
-    if (client) setF((prev) => ({ ...prev, clientName: client.name, phone: client.phone || "" }));
+  const selectClient = (client) => {
+    setSelectedClient(client?.key || "");
+    if (!client) return;
+    setF((prev) => ({ ...prev, clientName: client.name, phone: client.phone || "",
+      passport: normalizePassport(prev.passport) || !client.passport ? prev.passport : { ...emptyPassport(), ...client.passport } }));
+    if (client.passport) setShowPassport(true);
   };
+  const pickedClient = clients.find((item) => item.key === selectedClient);
 
   useEffect(() => {
     if (!isDesktopApp) return;
@@ -3163,6 +3176,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     ["Первый платёж", editing.startDate, f.startDate],
     ["Остаток", money(contractStats(editing).remaining), money(financed - contractStats(editing).paidSum)],
     ["Комментарий", editing.comment, f.comment],
+    ["Паспорт", passportSummary(passportOf(editing)), passportSummary(f.passport)],
   ].filter(([, before, after]) => String(before || "") !== String(after || "")) : [];
   const samePhoneClient = clients.find((client) => {
     const phone = normalizePhone(f.phone);
@@ -3178,12 +3192,16 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
         </div>
         <div className="sheet-body">
           <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-          {clients.length > 0 && <Field label="Выбрать клиента из базы">
-            <select value={selectedClient} onChange={selectClient}>
-              <option value="">Новый клиент / ввести вручную</option>
-              {clients.map((client) => <option key={client.key} value={client.key}>{client.name}{client.phone ? ` · ${fmtPhone(client.phone)}` : ""}{client.contractCount > 1 ? ` · договоров ${client.contractCount}` : ""}</option>)}
-            </select>
-          </Field>}
+          {clients.length > 0 && <SearchPicker
+            label="Выбрать клиента из базы"
+            placeholder="Начните вводить имя или телефон"
+            options={clients}
+            selectedLabel={pickedClient ? `${pickedClient.name}${pickedClient.phone ? ` · ${fmtPhone(pickedClient.phone)}` : ""}` : ""}
+            onPick={selectClient}
+            onClear={() => setSelectedClient("")}
+            emptyText="Клиент не найден — заполните ФИО и телефон ниже как нового"
+            renderOption={(client) => <><b>{client.name}</b><small>{[client.phone && fmtPhone(client.phone), client.contractCount > 1 && `договоров ${client.contractCount}`].filter(Boolean).join(" · ")}</small></>}
+          />}
           <Field label="ФИО клиента"><input value={f.clientName} onChange={set("clientName")} placeholder="Иванов Иван" /></Field>
           <div className="frow">
             <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
@@ -3192,18 +3210,13 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             </Field>
           </div>
           {samePhoneClient && <div className="duplicate-client-hint"><AlertTriangle size={14}/><span>В базе уже есть клиент «{samePhoneClient.name}» с таким номером, договоров: {samePhoneClient.contractCount}. Проверьте, не создаёте ли вы дубликат.</span></div>}
-          <Field label="Выбрать товар из базы">
-            <select
-              value={products.find((product) => product.key === String(f.item || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("ru"))?.key || ""}
-              onChange={(e) => {
-                const product = products.find((product) => product.key === e.target.value);
-                setF((prev) => ({ ...prev, item: product?.name || "" }));
-              }}
-            >
-              <option value="">Новый товар / ввести вручную</option>
-              {products.map((product) => <option key={product.key} value={product.key}>{product.name}</option>)}
-            </select>
-          </Field>
+          {products.length > 0 && <SearchPicker
+            label="Выбрать товар из базы"
+            placeholder="Начните вводить название товара"
+            options={products}
+            onPick={(product) => setF((prev) => ({ ...prev, item: product.name }))}
+            emptyText="Товар не найден — впишите его в поле «Товар» ниже"
+          />}
           <Field label="Товар">
             <input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" />
             <small className="field-hint">Новый товар появится в списке после сохранения договора.</small>
@@ -3220,6 +3233,30 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
           ) : (
             <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowGuarantor(true)}>
               <Plus size={13} /> Добавить поручителя
+            </button>
+          )}
+          {showPassport ? (
+            <div className="passport-block">
+              <div className="passport-hd">Паспортные данные клиента</div>
+              <div className="frow">
+                <Field label="Серия"><input value={f.passport.series} onChange={setPassport("series")} inputMode="numeric" placeholder="90 12" maxLength={10} /></Field>
+                <Field label="Номер"><input value={f.passport.number} onChange={setPassport("number")} inputMode="numeric" placeholder="123456" maxLength={12} /></Field>
+              </div>
+              <Field label="Кем выдан"><input value={f.passport.issuedBy} onChange={setPassport("issuedBy")} placeholder="МВД по Чеченской Республике" /></Field>
+              <div className="frow">
+                <Field label="Дата выдачи"><input type="date" value={f.passport.issueDate} onChange={setPassport("issueDate")} /></Field>
+                <Field label="Код подразделения"><input value={f.passport.divisionCode} onChange={setPassport("divisionCode")} inputMode="numeric" placeholder="200-001" maxLength={8} /></Field>
+              </div>
+              <div className="frow">
+                <Field label="Дата рождения"><input type="date" value={f.passport.birthDate} onChange={setPassport("birthDate")} /></Field>
+                <Field label="Место рождения"><input value={f.passport.birthPlace} onChange={setPassport("birthPlace")} placeholder="г. Грозный" /></Field>
+              </div>
+              <Field label="Адрес регистрации"><input value={f.passport.address} onChange={setPassport("address")} placeholder="Город, улица, дом, квартира" /></Field>
+              <small className="field-hint">Паспорт видит только администратор, операторам он не показывается.</small>
+            </div>
+          ) : (
+            <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowPassport(true)}>
+              <Plus size={13} /> Добавить паспортные данные
             </button>
           )}
           <div className="frow">
@@ -3946,6 +3983,19 @@ body:has(.dashboard-wrap){background:#0f172a}
   background:var(--ink);color:#EFF3EC;border-radius:11px;padding:12px 16px;margin-bottom:14px;font-size:13px}
 .section-total b{font-size:18px;font-weight:600}
 .guarantor-toggle{margin-bottom:12px}
+.search-picker{position:relative}
+.search-picker-list{list-style:none;margin:6px 0 0;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.search-picker-list button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:10px 11px;border:0;border-radius:8px;background:transparent;color:var(--ink);font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.search-picker-list button small{color:var(--ink-soft);font-size:11.5px}
+.search-picker-list button:hover,.search-picker-list button.on{background:var(--surface-2)}
+.search-picker-empty{padding:10px 11px;color:var(--ink-soft);font-size:12px}
+.search-picker-selected{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2)}
+.search-picker-selected>span{flex:1;min-width:140px;font-weight:600;font-size:14px}
+.passport-block{margin:4px 0 14px;padding:12px 12px 2px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.passport-hd{font-weight:600;font-size:13px;margin-bottom:10px}
+.det-grid>.det-wide{grid-column:1/-1}
+.det-wide b{font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
+@media (max-width:760px){.field input,.field select,.field textarea,.search-picker input{font-size:16px}}
 .duplicate-client-hint{display:flex;align-items:flex-start;gap:7px;margin:-2px 0 12px;padding:9px 11px;border:1px solid #E4D2B4;border-radius:9px;background:#FBF7EF;color:var(--brass);font-size:11.5px;line-height:1.4}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
