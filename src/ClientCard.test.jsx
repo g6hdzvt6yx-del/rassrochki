@@ -14,3 +14,8 @@ it('renders malformed contact dates without losing the client card', () => {
  const html=renderToStaticMarkup(<ClientCard contract={contract} contracts={[contract]} contacts={[{note:'Позвонить',occurredAt:'bad',promisedDate:'bad'}]} getStats={()=>({remaining:0,overdueSum:0,rows:[]})} investors={[]} onClose={()=>{}} onOpenContract={()=>{}} onExternal={()=>{}} renderContacts={()=>null}/>);
  expect(html).toContain('дата не указана');expect(html).toContain('Закрыт');
 });
+it('shows the monthly payment in the contract row', () => {
+ const contract={id:'a',clientName:'Иван',item:'Часы',termMonths:12,startDate:'2026-10-30'};
+ const html=renderToStaticMarkup(<ClientCard contract={contract} contracts={[contract]} contacts={[]} getStats={()=>({remaining:117600,overdueSum:0,rows:[{amountDue:9800},{amountDue:9800}]})} investors={[]} onClose={()=>{}} onOpenContract={()=>{}} onExternal={()=>{}} renderContacts={()=>null}/>);
+ expect(html).toMatch(/еж\. платёж 9\s800 ₽/);
+});
