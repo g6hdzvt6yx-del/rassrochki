@@ -4,7 +4,7 @@ import { ArchiveRestore, Download, FileClock, FolderOpen, HardDriveDownload, His
 import { isDesktopApp, localData } from "./dataClient";
 import { formatDataDateTime as formatDateTime, parseDataDate } from "./dataDates";
 
-const TYPE_LABELS = { contracts: "Договор", payments: "Платёж", contacts: "Контакт", investors: "Вкладчик", withdrawals: "Вывод", receipts: "Чек", export: "Экспорт", backup: "Резервная копия", drafts: "Черновик", import: "Импорт" };
+const TYPE_LABELS = { contracts: "Договор", payments: "Платёж", contacts: "Контакт", investors: "Вкладчик", withdrawals: "Вывод", expenses: "Расход", money_accounts: "Касса или счёт", receipts: "Чек", export: "Экспорт", backup: "Резервная копия", drafts: "Черновик", import: "Импорт" };
 const ACTION_LABELS = {
   create: "Создание", update: "Изменение", update_payment: "Изменение платежа",
   create_payment: "Оплата", full_payment: "Полная оплата", partial_payment: "Частичная оплата",
@@ -287,7 +287,7 @@ export default function DataCenter({ onClose, onRestored, onContinueDraft, contr
               {contractFilter && <button className="btn ghost btn-sm" onClick={() => setContractFilter(null)} title="Показать все изменения">Договор: {contractFilter.name || contractFilter.id} <X size={13}/></button>}
               <div className="search-box"><Search size={15}/><input value={actionQuery} onChange={(e) => setActionQuery(e.target.value)} placeholder="Договор или вкладчик…" /></div>
               <select value={type} onChange={(e) => setType(e.target.value)}>
-                <option value="">Все объекты</option><option value="contracts">Договоры</option><option value="payments">Платежи</option><option value="contacts">Контакты</option><option value="investors">Вкладчики</option><option value="withdrawals">Выводы</option><option value="receipts">Чеки</option><option value="backup">Резервные копии</option><option value="export">Экспорт</option>
+                <option value="">Все объекты</option><option value="contracts">Договоры</option><option value="payments">Платежи</option><option value="contacts">Контакты</option><option value="investors">Вкладчики</option><option value="withdrawals">Выводы</option><option value="expenses">Расходы</option><option value="money_accounts">Кассы и счета</option><option value="receipts">Чеки</option><option value="backup">Резервные копии</option><option value="export">Экспорт</option>
               </select>
               <select value={actionType} onChange={(e) => setActionType(e.target.value)}><option value="">Все действия</option>{Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="Начало периода" />

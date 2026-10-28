@@ -4,6 +4,7 @@ import CashDesk, { PaymentDestination } from "./CashDesk";
 import { cashCards, paymentDestination } from "./cash";
 import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import Directories from "./Directories.jsx";
+import Expenses from "./Expenses.jsx";
 import WebSyncStatus from "./WebSyncStatus";
 import { saveDirectoryClient } from "./directories";
 import { listDirectoryItems, accountCardLabel } from "./directoryCatalog";
@@ -14,7 +15,7 @@ import {
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
   Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
-  Database, RotateCcw, History,
+  Database, RotateCcw, History, TrendingDown,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
@@ -1672,7 +1673,7 @@ export default function App() {
       </header>
       {!isDesktopApp && <WebSyncStatus
         rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
-        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || tab === 'directories' || confirmDialog || sectionModal)}
+        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || tab === 'directories' || tab === 'expenses' || confirmDialog || sectionModal)}
         onRefresh={() => setReloadTick(t => t + 1)}
       />}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
@@ -1694,6 +1695,7 @@ export default function App() {
         </button>
         {!isDesktopApp && <button className={tab === "directories" ? "on" : ""} onClick={() => setTab("directories")}><Users size={16}/> Справочники</button>}
         <button className={tab === "cash" ? "on" : ""} onClick={() => setTab("cash")}><Wallet size={16}/> Касса</button>
+        {!isDesktopApp && <button className={tab === "expenses" ? "on" : ""} onClick={() => setTab("expenses")}><TrendingDown size={16}/> Расходы</button>}
         <button onClick={() => setDataCenterOpen(true)}>
           {isDesktopApp ? <Database size={16} /> : <History size={16} />} {isDesktopApp ? "Данные" : "История"}
         </button>
@@ -1714,6 +1716,7 @@ export default function App() {
       {appMessage && <button type="button" className={`app-toast ${appMessage.tone || "error"}`} onClick={() => setAppMessage(null)}>{appMessage.message}<X size={14}/></button>}
 
       {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId}/> }
+      {tab === "expenses" && <Expenses db={supabase} ownerId={userId} requestConfirm={requestConfirm} directoryItems={directoryItems}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient} items={directoryItems} itemsError={directoryError} onItemsChange={setDirectoryItems} db={supabase}/> }
 
       {tab === "dashboard" && (
