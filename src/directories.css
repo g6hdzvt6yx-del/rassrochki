@@ -1,1 +1,18 @@
 .directory-tabs,.directory-actions{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.directories h1{font-size:26px}.directory-search,.directory-editor label{display:grid;gap:8px;margin:16px 0}.directories input{font:inherit;width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--line,#d9e3df);border-radius:8px;background:#fff;color:#193432}.directory-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px;border-bottom:1px solid var(--line,#d9e3df)}.directory-row:last-child{border-bottom:0}.directory-row strong{overflow-wrap:anywhere}.directory-row p{margin:8px 0}.directory-row small{color:#66736c}.directory-editor{padding:20px}.directory-editor h2{font-size:20px}.directories [role=alert]{color:#a32c21}.directory-list>p{padding:20px}.directories button:disabled{opacity:.5;cursor:wait}.tabs{flex-wrap:wrap}@media(max-width:520px){.directory-row{align-items:stretch;flex-direction:column}.directory-row .btn{align-self:flex-start}}
+.directory-sections{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 8px}
+.directory-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0}
+.directory-toolbar h2{font-size:20px;margin:0 auto 0 0}
+.directory-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 16px}
+.directory-form-grid .directory-wide,.directory-passport{grid-column:1/-1}
+.directories select,.directories textarea{font:inherit;width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--line,#d9e3df);border-radius:8px;background:var(--surface,#fff);color:var(--ink,#193432)}
+.directories input{background:var(--surface,#fff);color:var(--ink,#193432)}
+.directory-passport{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0 12px;border:1px solid var(--line,#d9e3df);border-radius:10px;padding:4px 14px 8px;margin:16px 0}
+.directory-passport legend{padding:0 6px;color:var(--ink-soft,#66736c);font-size:13px}
+.directory-passport label{display:grid;gap:6px;margin:10px 0;font-size:13px}
+.directory-facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0;font-size:13px}
+.directory-facts div{display:flex;gap:6px}
+.directory-facts dt{color:var(--ink-soft,#66736c)}
+.directory-facts dd{margin:0;overflow-wrap:anywhere}
+.directory-note{white-space:pre-wrap;font-size:13px;color:var(--ink-soft,#66736c)}
+.directory-row-actions{display:flex;gap:8px;flex-shrink:0}
+.directory-notice{color:var(--emerald,#1E7A54)}

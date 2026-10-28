@@ -6,6 +6,7 @@ import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
 import { saveDirectoryClient } from "./directories";
+import { listDirectoryItems, accountCardLabel } from "./directoryCatalog";
 import { waReminderLink } from "./whatsapp";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -565,6 +566,8 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
 
   const [contracts, setContracts] = useState([]);
+  const [directoryItems, setDirectoryItems] = useState([]);
+  const [directoryError, setDirectoryError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
@@ -696,6 +699,17 @@ export default function App() {
       setStorageError(""); // данные заново синхронизированы с БД — снимаем флаг ошибки
       setLoaded(true);
     })();
+    return () => { cancelled = true; };
+  }, [userId, reloadTick]);
+
+  // справочники (только веб-версия): товары, клиенты, карты, кассы, сотрудники и т. д.
+  useEffect(() => {
+    if (isDesktopApp || !userId) return;
+    let cancelled = false;
+    listDirectoryItems(supabase).then(
+      (items) => { if (!cancelled) { setDirectoryItems(items); setDirectoryError(""); } },
+      (error) => { if (!cancelled) setDirectoryError(error.message || String(error)); },
+    );
     return () => { cancelled = true; };
   }, [userId, reloadTick]);
 
@@ -1050,7 +1064,9 @@ export default function App() {
     return true;
   };
 
-  const cards = cashCards(contracts);
+  // карты из справочника «Карты и счета» — первыми в подсказках «Карта поступления»
+  const directoryCards = directoryItems.filter((i) => i.kind === "accounts").map(accountCardLabel).filter(Boolean);
+  const cards = [...new Set([...directoryCards, ...cashCards(contracts)])];
   const addCashCard = async name => {
     const c = contracts[0];
     if (!c) throw new Error('Сначала создайте договор. Карту также можно указать при первой оплате.');
@@ -1698,7 +1714,7 @@ export default function App() {
       {appMessage && <button type="button" className={`app-toast ${appMessage.tone || "error"}`} onClick={() => setAppMessage(null)}>{appMessage.message}<X size={14}/></button>}
 
       {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId}/> }
-      {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
+      {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient} items={directoryItems} itemsError={directoryError} onItemsChange={setDirectoryItems} db={supabase}/> }
 
       {tab === "dashboard" && (
         <main className="wrap dashboard-wrap">
