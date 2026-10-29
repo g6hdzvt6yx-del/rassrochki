@@ -381,6 +381,17 @@ const STATUS = {
   upcoming: { label: "Ожидает", cls: "b-line" },
   active: { label: "Активный", cls: "b-line" },
   done: { label: "Закрыт", cls: "b-emerald" },
+  draft: { label: "Черновик", cls: "b-brass" },
+};
+
+// Черновик — договор, сохранённый с незаполненными полями (форма требует только ФИО, импорт тоже пропускает пустые)
+const contractMissing = (c) => {
+  const missing = [];
+  if (!(+c.totalPrice > 0)) missing.push("цена товара");
+  if (!String(c.phone || "").trim()) missing.push("телефон");
+  if (!String(c.item || "").trim()) missing.push("товар");
+  if (!String(c.guarantorName || "").trim() || !String(c.guarantorPhone || "").trim()) missing.push("поручитель");
+  return missing;
 };
 
 const Badge = ({ s }) => {
@@ -766,10 +777,14 @@ export default function App() {
       .sort((a, b) => b.amount - a.amount);
   }, [sectionModal, contracts]);
 
+  const draftCount = useMemo(() => contracts.filter((c) => contractMissing(c).length > 0).length, [contracts]);
+
   const filteredContracts = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = contracts.filter((c) => {
-      if (statusFilter !== "all") {
+      if (statusFilter === "draft") {
+        if (contractMissing(c).length === 0) return false;
+      } else if (statusFilter !== "all") {
         const st = contractStats(c);
         const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
         if (badge !== statusFilter) return false;
@@ -1075,10 +1090,11 @@ export default function App() {
             </select>
             <div className="filter-chips">
               {[
-                ["all", "Все"], ["active", "Активные"], ["overdue", "Просрочка"], ["done", "Закрытые"],
+                ["all", "Все"], ["active", "Активные"], ["overdue", "Просрочка"], ["done", "Закрытые"], ["draft", "Черновики"],
               ].map(([key, label]) => (
                 <button key={key} className={statusFilter === key ? "on" : ""} onClick={() => setStatusFilter(key)}>
                   {label}
+                  {key === "draft" && draftCount > 0 && <span className="chip-cnt">{draftCount}</span>}
                 </button>
               ))}
             </div>
@@ -1092,6 +1108,7 @@ export default function App() {
             const renderCard = (c) => {
               const st = contractStats(c);
               const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
+              const missing = contractMissing(c);
               const expanded = expandedId === c.id;
               const overdueRows = st.rows.filter((r) => r.status === "overdue");
               const upcomingRows = st.rows.filter((r) => !r.paid && r.status !== "overdue");
@@ -1112,12 +1129,19 @@ export default function App() {
                       <span className="citem-amount">Остаток <b className="num">{money(st.remaining)}</b></span>
                     </span>
                     <span className="citem-status-right">
+                      {missing.length > 0 && <Badge s="draft" />}
                       <Badge s={badge} />
                       <ChevronDown size={15} className={`chev ${expanded ? "on" : ""}`} />
                     </span>
                   </button>
                   {expanded && (
                     <div className="citem-expand">
+                      {missing.length > 0 && (
+                        <div className="citem-missing">
+                          Не заполнено: {missing.join(", ")}.{" "}
+                          <button type="button" className="link-btn" onClick={() => setEditingContract(c)}>Дозаполнить</button>
+                        </div>
+                      )}
                       <div className="mini-row citem-contract-date">
                         <span>Дата составления договора</span><span className="num">{fmtDate(c.startDate)}</span>
                       </div>
@@ -2193,6 +2217,11 @@ const css = `
 .filter-chips button{border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer;
   font:inherit;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:20px;white-space:nowrap}
 .filter-chips button.on{background:var(--brass);color:#fff;border-color:var(--brass)}
+.chip-cnt{display:inline-block;margin-left:5px;padding:0 6px;border-radius:10px;font-size:11px;
+  background:#F1E7D6;color:var(--brass)}
+.filter-chips button.on .chip-cnt{background:rgba(255,255,255,.25);color:#fff}
+.citem-missing{font-size:12.5px;color:#8A6111;background:#F6ECD6;border-radius:8px;padding:7px 10px;margin-bottom:8px}
+.link-btn{border:none;background:none;padding:0;color:var(--brass);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline}
 
 .clist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}
 .cgroup{grid-column:1/-1;border:1px solid var(--line);border-radius:14px;background:#F3F5EF;padding:12px}
