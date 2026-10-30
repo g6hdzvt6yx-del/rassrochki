@@ -1687,11 +1687,13 @@ export default function App() {
         <div className="storage-warn-wrap">
           <div className="storage-warn">
             <AlertTriangle size={15} />
-            <span>
-              Не удалось сохранить последние изменения в базе данных.
-              Изменения видны сейчас, но пропадут после перезагрузки страницы.
+            <span style={{ flex: 1 }}>
+              Последнее изменение не сохранено в базе данных.
+              Загрузите актуальные данные и повторите действие.
               <span className="storage-warn-detail">Ошибка: {storageError}</span>
             </span>
+            <button className="btn primary btn-sm" onClick={() => setReloadTick((t) => t + 1)}>Обновить данные</button>
+            <button className="icon-btn" title="Скрыть" aria-label="Скрыть" onClick={() => setStorageError("")}><X size={14} /></button>
           </div>
         </div>
       )}
