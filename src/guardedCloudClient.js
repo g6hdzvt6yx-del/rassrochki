@@ -1,5 +1,27 @@
-import { checkedWrite, syncTables } from './syncModel';
+import { checkedWrite, equal, syncTables } from './syncModel';
 let pending = 0;
+const conflictMessage = 'Запись уже изменена на другом устройстве. Обновите данные и повторите действие.';
+
+// Three-way merge of a partial update onto the current database row. Returns
+// null when this tab and the other device changed the same field (or the same
+// key inside payments), otherwise the update to apply on top of `current`.
+export function mergeUpdate(before, value, current) {
+  const merged = {};
+  for (const [key, next] of Object.entries(value)) {
+    const base = before[key], now = current[key];
+    if (equal(now, base) || equal(now, next)) { merged[key] = next; continue; }
+    const isMap = v => v && typeof v === 'object' && !Array.isArray(v);
+    if (key !== 'payments' || !isMap(base) || !isMap(next) || !isMap(now)) return null;
+    const out = { ...now };
+    for (const k of new Set([...Object.keys(base), ...Object.keys(next)])) {
+      if (equal(base[k], next[k])) continue;
+      if (!equal(now[k], base[k]) && !equal(now[k], next[k])) return null;
+      if (next[k] === undefined) delete out[k]; else out[k] = next[k];
+    }
+    merged[key] = out;
+  }
+  return merged;
+}
 export const cloudWritePending = () => pending > 0;
 
 // Each loaded row is the version the user actually saw in this browser tab.
@@ -7,6 +29,37 @@ export const cloudWritePending = () => pending > 0;
 export function guardedCloudClient(client) {
   if (!client) return null;
   const rows = new Map();
+  const queues = new Map();
+  // Writes to one row run one after another, so a double click or two quick
+  // actions are compared against the version the previous write produced.
+  function serial(key, task) {
+    const run = (queues.get(key) || Promise.resolve()).then(task, task);
+    const tail = run.catch(() => {});
+    queues.set(key, tail);
+    tail.then(() => { if (queues.get(key) === tail) queues.delete(key); });
+    return run;
+  }
+  async function write(table, id, value) {
+    const key = `${table}:${id}`;
+    const before = rows.get(key);
+    let row;
+    try { row = await checkedWrite(client, table, id, before, value); }
+    catch (error) {
+      if (error.message !== conflictMessage || !value) throw error;
+      const { data, error: readError } = await client.from(table).select('*').eq('id', id);
+      if (readError || data?.length !== 1) throw error;
+      const current = data[0];
+      const merged = mergeUpdate(before, value, current);
+      if (!merged) throw error;
+      row = Object.entries(merged).every(([k, v]) => equal(current[k], v)) ? current : await checkedWrite(client, table, id, current, merged);
+      // The page still shows the old version of the other device's changes;
+      // keep comparing against what it saw so they are merged, not overwritten.
+      rows.set(key, structuredClone({ ...before, ...value }));
+      return row;
+    }
+    rows.set(key, structuredClone(row));
+    return row;
+  }
   client.auth.onAuthStateChange(event => {
     if (event === 'SIGNED_OUT') rows.clear();
   });
@@ -48,10 +101,13 @@ export function guardedCloudClient(client) {
                 if (invalid || !ids.length) throw new Error('Укажите номера записей для изменения.');
                 for (const id of ids) if (!rows.has(`${table}:${id}`)) throw new Error('Сначала обновите данные страницы.');
                 for (const id of ids) {
-                  const before = rows.get(`${table}:${id}`);
-                  const row = await checkedWrite(client, table, id, before, value);
-                  if (value) rows.set(`${table}:${id}`, structuredClone(row));
-                  else rows.delete(`${table}:${id}`);
+                  const row = await serial(`${table}:${id}`, async () => {
+                    if (!rows.has(`${table}:${id}`)) throw new Error('Сначала обновите данные страницы.');
+                    if (value) return write(table, id, value);
+                    const deleted = await checkedWrite(client, table, id, rows.get(`${table}:${id}`), null);
+                    rows.delete(`${table}:${id}`);
+                    return deleted;
+                  });
                   saved.push(row);
                 }
                 return { data: saved, error: null };

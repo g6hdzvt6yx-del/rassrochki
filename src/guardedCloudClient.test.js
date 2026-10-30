@@ -60,3 +60,36 @@ describe('защита редактирования сайта', () => {
     expect(f.remote()).toHaveLength(1);
   });
 });
+describe('объединение изменений', () => {
+  it('двойное нажатие не даёт ложного конфликта', async () => {
+    const f = fixture();
+    await f.client.from('contracts').select('*');
+    const value = { payments: { 0: { paidAmount: 10 }, 1: { paidDate: '2026-10-30' } } };
+    const [a, b] = await Promise.all([
+      f.client.from('contracts').update(value).eq('id', 'c'),
+      f.client.from('contracts').update(value).eq('id', 'c'),
+    ]);
+    expect(a.error).toBeNull(); expect(b.error).toBeNull();
+    expect(f.remote()[0].payments[1].paidDate).toBe('2026-10-30');
+  });
+  it('сохраняет платёж, если на другом устройстве изменён другой платёж', async () => {
+    const f = fixture();
+    await f.client.from('contracts').select('*');
+    f.remote()[0].payments = { ...f.remote()[0].payments, 2: { paidDate: '2026-10-01' } };
+    const result = await f.client.from('contracts').update({ payments: { 0: { paidAmount: 10 }, 1: { notifiedAt: 'x' } } }).eq('id', 'c');
+    expect(result.error).toBeNull();
+    expect(f.remote()[0].payments).toEqual({ 0: { paidAmount: 10 }, 1: { notifiedAt: 'x' }, 2: { paidDate: '2026-10-01' } });
+    // следующее действие со страницы, где платёж 2 ещё не виден, не стирает его
+    const next = await f.client.from('contracts').update({ payments: { 0: { paidAmount: 10 }, 1: { notifiedAt: 'y' } } }).eq('id', 'c');
+    expect(next.error).toBeNull();
+    expect(f.remote()[0].payments[2]).toEqual({ paidDate: '2026-10-01' });
+    expect(f.remote()[0].payments[1]).toEqual({ notifiedAt: 'y' });
+  });
+  it('сохраняет комментарий, если на другом устройстве изменены платежи', async () => {
+    const f = fixture();
+    await f.client.from('contracts').select('*');
+    f.remote()[0].payments[0].paidAmount = 90;
+    expect((await f.client.from('contracts').update({ comment: 'звонил' }).eq('id', 'c')).error).toBeNull();
+    expect(f.remote()[0]).toMatchObject({ comment: 'звонил', payments: { 0: { paidAmount: 90 } } });
+  });
+});
