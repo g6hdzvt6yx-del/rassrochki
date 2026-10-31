@@ -12,7 +12,7 @@ const dayTime=d=>d?new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-di
 const DAY=86400000;
 const FILTERS={overdue:'Просрочки',upcoming:'Ближайшие платежи',callback:'Перезвонить',promised:'Обещали оплатить',all:'Все назначенные'};
 const DEFAULT_SORT={overdue:['overdue','desc'],upcoming:['next','asc'],callback:['callback','asc'],promised:['promised','asc'],all:['name','asc']};
-const RESULT_TONE={informed:'ok',promised:'ok',reported_paid:'warn',callback:'warn',no_answer:'bad',wrong_number:'bad',help:'bad'};
+const RESULT_TONE={informed:'ok',promised:'ok',reported_paid:'warn',callback:'warn',no_answer:'bad',wrong_number:'bad',help:'bad',refused:'bad'};
 
 function ReminderButton({client,compact}) {
  const href=operatorReminderLink(client);
