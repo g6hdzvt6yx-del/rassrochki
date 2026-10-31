@@ -85,12 +85,7 @@ html body .app .filter-chips button{color:var(--ink-soft);background:var(--surfa
 html body .app .filter-chips button.on{background:#3c315c;color:#e4d6ff;border-color:#a78bfa}
 html body .app .filtered-summary{position:sticky;top:0;z-index:15;background:#1b273b;box-shadow:0 8px 20px #0004;margin-bottom:14px}
 html body .app .filtered-summary-overdue{background:#2e3d51;color:var(--ink)}
-.contracts-table-wrap{overflow:auto}.app .contracts-table{width:100%;min-width:800px;font-size:12px;border-spacing:0 3px}
-html body .app .contracts-table :is(td,th){padding:6px 10px;text-align:left;vertical-align:middle}
-.contracts-table td small{display:block;color:var(--ink-soft);font-size:11px;margin-top:2px}
 .contract-link{border:0;background:transparent;color:#c4b5fd;font:inherit;font-weight:650;text-align:left;cursor:pointer;padding:0}
-.table-overdue{display:flex;flex-direction:column;color:#ffadb4;gap:2px;white-space:nowrap}
-.contracts-table td.num{white-space:nowrap}.contracts-table .btn{font-size:11px;padding:6px 9px;white-space:nowrap}
 .reminder-preview{white-space:pre-wrap;font:inherit;font-size:13px;padding:14px;border:1px solid var(--line);border-radius:10px;max-height:35vh;overflow:auto}
 .sync-indicator{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-soft);padding:6px 0}.sync-indicator .sync-dot{width:6px;height:6px;border-radius:50%;background:#37d5ac}.sync-indicator button{padding:3px 6px}
 @media(max-width:560px){.app .filtered-summary{gap:5px;padding:8px;font-size:10px}.app .filtered-summary strong{font-size:11px}.workbench-controls .seg-toggle{margin:0}.advanced-filters>select{width:100%}}
@@ -160,10 +155,103 @@ html body .app .contract-sheet :is(.btn.primary,.lbtn.pay){background:#37d5ac;co
 .op-mark-more,.op-mark-history{border:0;background:none;padding:0;font:inherit;font-size:11px;font-weight:600;color:var(--brass);cursor:pointer;display:inline-flex;align-items:center;gap:4px;align-self:flex-start}
 .op-mark-more:hover,.op-mark-history:hover{text-decoration:underline}
 .op-mark-extra{color:var(--amber);font-size:11px}
-.contracts-table td.table-mark{vertical-align:top}
 .op-marks-list{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:8px}
 .op-marks-item{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
 .op-marks-item p{margin:0;font-size:13px;line-height:19px;overflow-wrap:anywhere;white-space:pre-wrap}
 .op-marks-foot{font-size:11.5px;margin:0 0 10px}
 .op-marks-error{color:var(--clay);font-size:12px}
 @media(max-width:560px){.mark-filter .toolbar-filter-label{align-self:stretch}.mark-filter .toolbar-filter-label select{max-width:none;flex:1}}
+
+/* Табличный вид договоров: компактные строки, закреплённый заголовок, вся ширина экрана. */
+html body .app main.wrap.wrap-table{max-width:min(1480px,100%)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+html body .app .filtered-summary.compact{position:static;box-shadow:none;flex-wrap:wrap;overflow:visible;gap:4px 6px;padding:6px 10px;margin:0 0 8px;font-size:11px;scrollbar-width:thin}
+html body .app .filtered-summary.compact>*{flex:0 0 auto;white-space:nowrap}
+html body .app .filtered-summary.compact span{padding:2px 7px}
+html body .app .filtered-summary.compact strong{font-size:11.5px}
+/* Широкий экран: таблица целиком помещается — заголовок прилипает к верху окна при прокрутке страницы. */
+.contracts-table-wrap{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+html body .app .contracts-table thead th:first-child{border-top-left-radius:11px}html body .app .contracts-table thead th:last-child{border-top-right-radius:11px}
+/* Средняя ширина: без горизонтальной прокрутки — «След. действие» переезжает под отметку. */
+@media(min-width:761px) and (max-width:1180px){
+ html body .app .contracts-table :is(th,td).c-next{display:none}
+ html body .app .contracts-table .mark-next{display:block;margin-top:3px}.mark-next .next-cell{flex-direction:row;flex-wrap:wrap;gap:2px 10px}
+ html body .app .contracts-table th.c-mark{width:34%}html body .app .contracts-table th.c-overdue{width:118px}html body .app .contracts-table th.c-remaining{width:96px}html body .app .contracts-table th.c-action{width:126px}
+ html body .app .contracts-table :is(td,th){padding-left:8px;padding-right:8px}
+ .od-pill{padding:3px 7px}
+ .contracts-table .client-sub{flex-wrap:wrap;column-gap:8px}
+}
+@media(min-width:761px) and (max-width:960px){
+ html body .app .contracts-table th.c-mark{width:30%}html body .app .contracts-table th.c-overdue{width:104px}html body .app .contracts-table th.c-remaining{width:90px}
+ html body .app .contracts-table th.c-check{width:32px}
+}
+html body .app .contracts-table{width:100%;min-width:0;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:12.5px;line-height:1.35}
+/* Ширины задаются заголовками (table-layout:fixed); «Клиент · товар» забирает остаток. */
+.contracts-table th.c-check{width:36px}.contracts-table th.c-overdue{width:150px}.contracts-table th.c-remaining{width:112px}
+.contracts-table th.c-mark{width:30%}.contracts-table th.c-next{width:150px}.contracts-table th.c-action{width:128px}
+.mark-next{display:none}
+html body .app .contracts-table :is(td,th){padding:6px 10px;text-align:left;vertical-align:middle;border:0;border-bottom:1px solid #2c3a50;border-radius:0;background:none}
+html body .app .contracts-table thead th{position:sticky;top:0;z-index:2;background:#16233a;color:var(--ink-soft);font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;padding-top:8px;padding-bottom:8px;border-bottom-color:var(--line)}
+html body .app .contracts-table :is(td,th).num{text-align:right}
+html body .app .contracts-table tbody tr:hover td{background:#22304580}
+html body .app .contracts-table tbody tr:last-child td{border-bottom:0}
+.contracts-table th.sortable button{display:inline-flex;align-items:center;gap:4px;border:0;background:none;padding:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+.contracts-table th.sortable button:hover,.contracts-table th.sorted button{color:#c4b5fd}
+.contracts-table .sort-mark{font-size:11px;opacity:.55}.contracts-table th.sorted .sort-mark{opacity:1}
+.contracts-table td.c-check,.contracts-table th.c-check{text-align:center;padding-left:8px;padding-right:4px}
+.contracts-table td.c-client{min-width:0}
+.contracts-table .contract-link{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.contracts-table .client-sub{display:flex;gap:4px 10px;min-width:0;margin-top:1px;font-size:11.5px;color:var(--ink-soft)}
+.contracts-table .client-item{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.contracts-table .client-phone{flex:0 0 auto;color:var(--ink-soft);text-decoration:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+.contracts-table .client-phone:hover{color:#c4b5fd}
+.contracts-table td.c-remaining{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.od-pill{display:inline-flex;flex-direction:column;gap:0;padding:3px 9px;border-radius:8px;border:1px solid #80505c;background:#402733;color:#ffadb4;line-height:1.3;white-space:nowrap;max-width:100%}
+.od-pill b{font-size:12px;font-weight:700}.od-pill .num{font-size:11.5px;font-variant-numeric:tabular-nums}
+.od-pill.od-low{background:#3a2f2a;border-color:#6d5442;color:#f5c9a0}
+.od-pill.od-high{background:#4e2230;border-color:#a2475a;color:#ffc2c8}
+.od-none{color:var(--ink-soft);font-size:12px}
+.contracts-table tr.row-overdue td.c-check{box-shadow:inset 3px 0 0 #80505c}
+.contracts-table tr.od-high td.c-check{box-shadow:inset 3px 0 0 #e0566a}
+.contracts-table tr.od-low td.c-check{box-shadow:inset 3px 0 0 #8a6a52}
+.mark-cell{display:flex;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:1px;width:100%;min-width:0;border:0;background:none;padding:2px 4px;margin:-2px -4px;border-radius:6px;color:var(--ink);font:inherit;text-align:left}
+button.mark-cell{cursor:pointer}button.mark-cell:hover{background:#2a3850}
+.mark-cell.is-empty{color:var(--ink-soft);font-size:12px}
+.mark-cell-hd{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}
+.mark-cell-count{min-width:16px;padding:0 4px;border-radius:999px;background:#2e3d51;color:#c3cedd;font-size:10px;font-weight:700;text-align:center;line-height:16px}
+.mark-cell-by{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft);font-size:11px}
+.mark-cell-note{flex-basis:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#d5deea}
+.mark-cell .op-mark-tag{padding:0 7px;font-size:10.5px;line-height:17px}
+.next-cell{display:flex;flex-direction:column;gap:2px}
+.next-cell.is-empty{color:var(--ink-soft)}
+.next-item{display:flex;align-items:baseline;gap:5px;white-space:nowrap;min-width:0}
+.next-item b{font-size:12px;font-variant-numeric:tabular-nums}
+.next-item small{color:var(--ink-soft);font-size:10.5px;overflow:hidden;text-overflow:ellipsis}
+.next-item.today b{color:var(--amber)}.next-item.late b{color:#ff8f99}.next-item.future b{color:#9fdcc8}
+html body .app .btn.btn-xs{padding:5px 9px;font-size:11.5px;border-radius:7px;white-space:nowrap;line-height:1.2}
+.contracts-table td.c-action{text-align:right}
+.sort-dir{white-space:nowrap}
+
+/* Средние экраны: прячем второстепенное, таблица остаётся таблицей. */
+
+/* Узкие экраны: каждая строка — компактный блок, заголовок не нужен. */
+@media(max-width:760px){
+ .contracts-table-wrap{max-height:none;overflow:visible;border:0;background:none}
+ html body .app .contracts-table{min-width:0;table-layout:auto}
+ .contracts-table thead{display:none}
+ .contracts-table,.contracts-table tbody{display:block}
+ html body .app .contracts-table tbody tr{display:grid;grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"check client remaining" "check overdue next" "check mark mark" "check action action";gap:6px 10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+ html body .app .contracts-table tbody td{display:block;padding:0;border:0;min-width:0}
+ .contracts-table td.c-check{grid-area:check;padding-top:2px}.contracts-table td.c-client{grid-area:client}.contracts-table td.c-remaining{grid-area:remaining}
+ .contracts-table td.c-overdue{grid-area:overdue}.contracts-table td.c-next{grid-area:next;justify-self:end;text-align:right}.contracts-table td.c-mark{grid-area:mark}
+ .contracts-table td.c-action{grid-area:action;text-align:left}
+ html body .app .contracts-table td.c-action .btn{width:100%;justify-content:center;padding:8px}
+ .contracts-table tr.row-overdue{border-left:3px solid #80505c}
+ .contracts-table tr td.c-check{box-shadow:none!important}
+ .next-item{justify-content:flex-end}
+ .mark-cell{margin:0;padding:6px 8px;background:var(--surface-2)}
+ .contracts-table .client-sub{flex-wrap:wrap}
+ html body .app .contracts-table tbody tr:hover td{background:none}
+}
+html body .app .clist-toolbar .toolbar-select{max-width:100%}
+html body .app main.wrap-table .search-box{flex:1 1 320px}
