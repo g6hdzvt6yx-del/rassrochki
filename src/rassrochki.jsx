@@ -32,6 +32,7 @@ import {listCloudDrafts, saveCloudDraft, deleteCloudDraft, draftTitle, draftComp
 import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
 import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
 import {callResults} from "./access";
+import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
@@ -623,6 +624,7 @@ export default function App() {
   const [markAuthor, setMarkAuthor] = useState("all"); // фильтр по сотруднику, поставившему отметку
   const [marksHistoryId, setMarksHistoryId] = useState(null);
   const [sortBy, setSortBy] = useState("created");
+  const [sortDir, setSortDir] = useState("desc");
   const [dailyDate, setDailyDate] = useState(() => toIsoDate(new Date()));
   const [dailyRange, setDailyRange] = useState(false);
   const [dailyTo, setDailyTo] = useState(() => toIsoDate(new Date()));
@@ -1487,20 +1489,14 @@ export default function App() {
       return matchesSearch(c, search);
     });
 
-    if (sortBy === "name") {
-      return [...list].sort((a, b) => a.clientName.localeCompare(b.clientName, "ru"));
-    }
-    if (sortBy === "dueDate") {
-      return [...list].sort((a, b) => {
-        const na = contractStats(a).next, nb = contractStats(b).next;
-        return (na ? na.dueDate.getTime() : Infinity) - (nb ? nb.dueDate.getTime() : Infinity);
-      });
-    }
-    if (sortBy === "remaining") {
-      return [...list].sort((a, b) => contractStats(b).remaining - contractStats(a).remaining);
-    }
-    return list; // "created" — уже отсортировано по дате создания (новые сверху)
-  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, sortBy, investors, workView, operatorLogs, contractMarks]);
+    // "created" — без пересортировки: список уже идёт по дате создания (новые сверху)
+    return sortContracts(list, sortBy, sortDir, contractStats, contractMarks);
+  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, sortBy, sortDir, investors, workView, operatorLogs, contractMarks]);
+  // Клик по заголовку столбца: первый — по убыванию, повторный — меняет направление.
+  const sortByColumn = (key) => {
+    if (sortBy === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortBy(key); setSortDir("desc"); }
+  };
 
   const filteredSummary = useMemo(() => filteredContracts.reduce((summary, contract) => {
     const stats = contractStats(contract);
@@ -1855,7 +1851,7 @@ export default function App() {
       )}
 
       {tab === "contracts" && (
-        <main className="wrap">
+        <main className={`wrap ${listMode === "table" ? "wrap-table" : ""}`}>
           {contracts.length === 0 ? (
             <div className="panel"><div className="empty">Договоров пока нет — добавьте первый кнопкой «Новый договор».</div></div>
           ) : (
@@ -1872,12 +1868,10 @@ export default function App() {
                 <button className="search-clear" onClick={() => setSearch("")} title="Очистить"><X size={13} /></button>
               )}
             </div>
-            <select className="toolbar-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="created">Сначала новые</option>
-              <option value="dueDate">По ближайшему платежу</option>
-              <option value="name">По имени (А-Я)</option>
-              <option value="remaining">По остатку долга</option>
+            <select className="toolbar-select" aria-label="Сортировка" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setSortDir("desc"); }}>
+              {SORT_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
             </select>
+            {DIRECTIONAL_SORTS.has(sortBy) && <button type="button" className="btn ghost btn-sm sort-dir" onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))} title="Сменить направление сортировки">{sortDir === "desc" ? "↓ по убыванию" : "↑ по возрастанию"}</button>}
             <button className="btn ghost btn-sm" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>Фильтры{[investorFilter,contactFilter,notificationFilter,deferralFilter,markAuthor].filter(v=>v!=="all").length+(markStatuses.length?1:0) ? ` · ${[investorFilter,contactFilter,notificationFilter,deferralFilter,markAuthor].filter(v=>v!=="all").length+(markStatuses.length?1:0)}` : ""}</button>
             {advancedFilters && <div className="advanced-filters">
             <select className="toolbar-select" value={investorFilter} onChange={(e) => setInvestorFilter(e.target.value)}>
@@ -1937,18 +1931,18 @@ export default function App() {
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
             {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created");
+              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
             }}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
           <div className="workbench-controls">
-            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");}}>{label}</button>)}</div>
+            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");setSortDir("desc");}}>{label}</button>)}</div>
             <div className="seg-toggle" aria-label="Вид списка"><button className={listMode==="cards"?"on":""} onClick={()=>setListMode("cards")}>Карточки</button><button className={listMode==="table"?"on":""} onClick={()=>setListMode("table")}>Таблица</button></div>
             {workView && <small className="workbench-hint">{workView==="large"?"Просрочка от 100 000 ₽, по убыванию остатка долга":workView==="promised"?"Незакрытые договоры с обещанием на сегодня или будущую дату":"Контакты и обещания на сегодня или раньше; просрочки без уведомления за 72 часа"}</small>}
             <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>
             {visibleSelected.length>0 && <><button className="btn primary btn-sm" disabled={!visibleSelected.some(reminderFor)} onClick={beginReminders}>Напомнить выбранным в WhatsApp ({visibleSelected.filter(reminderFor).length})</button><button className="btn ghost btn-sm" onClick={()=>setSelectedIds(new Set())}>Снять выбор ({visibleSelected.length})</button>{visibleSelected.filter(c=>!reminderFor(c)).length>0 && <small>Без номера или открытого платежа: {visibleSelected.filter(c=>!reminderFor(c)).length}</small>}</>}
           </div>
-          <div className="filtered-summary" aria-label="Итоги отфильтрованных договоров">
+          <div className={`filtered-summary ${listMode === "table" ? "compact" : ""}`} aria-label="Итоги отфильтрованных договоров">
             <b>Итого по выборке</b>
             <span>Договоров <strong className="num">{filteredContracts.length}</strong></span>
             <span>Сумма договоров <strong className="num">{money(filteredSummary.financed)}</strong></span>
@@ -1960,7 +1954,7 @@ export default function App() {
 
           {filteredContracts.length === 0 ? (
             <div className="panel"><div className="empty">Ничего не найдено по этому запросу или фильтру.</div></div>
-          ) : listMode === "table" ? <ContractTable contracts={filteredContracts} getStats={contractStats} selected={selectedIds} onSelect={toggleSelected} onPay={openQuickPay} onOpen={setOpenId} money={money} marks={contractMarks} onMarksHistory={setMarksHistoryId}/> : (
+          ) : listMode === "table" ? <ContractTable contracts={filteredContracts} getStats={contractStats} selected={selectedIds} onSelect={toggleSelected} onPay={openQuickPay} onOpen={setOpenId} money={money} marks={contractMarks} onMarksHistory={setMarksHistoryId} sortBy={sortBy} sortDir={sortDir} onSort={sortByColumn} allSelected={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onSelectAll={(on)=>setSelectedIds(on?new Set(filteredContracts.map(c=>c.id)):new Set())}/> : (
           <div className="clist">
             {groupedContracts.map((g) => {
             const renderCard = (c) => {

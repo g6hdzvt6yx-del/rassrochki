@@ -55,6 +55,38 @@ export function OperatorMarkSummary({ marks = [], onHistory, compact = false }) 
   </span>;
 }
 
+// Компактная ячейка таблицы: статус, дата, автор и одна строка комментария. Нажатие — полная история.
+export function OperatorMarkCell({ marks = [], onHistory }) {
+  const latest = marks[0];
+  if (!latest) return <span className="mark-cell is-empty">Нет отметок</span>;
+  const shortDate = (() => { const d = new Date(latest.at); return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(d); })();
+  const title = [markLabel(latest), dateTime(latest.at), latest.authorName, latest.note].filter(Boolean).join('\n');
+  const body = <>
+    <span className="mark-cell-hd"><MarkTag mark={latest} />{marks.length > 1 && <span className="mark-cell-count" aria-label={`Всего отметок: ${marks.length}`}>{marks.length}</span>}</span>
+    <span className="mark-cell-by">{[shortDate, latest.authorName].filter(Boolean).join(' · ')}</span>
+    {latest.note && <span className="mark-cell-note">{latest.note}</span>}
+  </>;
+  return onHistory
+    ? <button type="button" className="mark-cell" title={`${title}\n\nНажмите — история отметок`} aria-label={`История отметок: ${markLabel(latest)}`} onClick={onHistory}>{body}</button>
+    : <span className="mark-cell" title={title}>{body}</span>;
+}
+
+// Дата следующего действия из структурированных полей отметки.
+const shortWhen = (value) => {
+  if (!value) return '';
+  if (String(value).length === 10) return dayOnly(value).slice(0, 5);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  return `${d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}${time === '00:00' ? '' : ' ' + time}`;
+};
+export function NextActionCell({ action }) {
+  if (!action) return <span className="next-cell is-empty">—</span>;
+  return <span className="next-cell">{action.items.map((item) => <span key={item.kind} className={`next-item ${item.state}`} title={`${item.label}: ${item.kind === 'callback' ? dateTime(item.at) || dayOnly(item.at) : dayOnly(item.at)}${item.amount ? ' · ' + rub(item.amount) : ''}${item.state === 'late' ? ' — срок прошёл' : ''}`}>
+    <b>{shortWhen(item.at)}</b><small>{item.kind === 'callback' ? 'перезвонить' : `оплата${item.amount ? ' ' + rub(item.amount) : ''}`}</small>
+  </span>)}</span>;
+}
+
 // Полная история отметок договора: автор, дата и время каждой записи.
 export function OperatorMarksHistory({ contract, marks = [], error, onClose, onOpenContract }) {
   return <div className="overlay" onClick={onClose}>

@@ -122,3 +122,25 @@ export function toggleMarkStatus(statuses = [], status) {
   if (status === 'all') return [];
   return statuses.includes(status) ? statuses.filter((item) => item !== status) : [...statuses, status];
 }
+
+// Следующее действие из структурированных полей отметок: дата «перезвонить» и/или обещанная оплата.
+// Берётся самая свежая отметка, где такие даты указаны; текст комментария не разбирается.
+const dayKey = (value) => {
+  if (!value) return '';
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+export function nextMarkAction(marks = [], now = new Date()) {
+  const mark = marks.find((m) => m.nextContactAt || m.promisedDate);
+  if (!mark) return null;
+  const today = dayKey(now);
+  const state = (value) => { const key = dayKey(value); return !key ? '' : key < today ? 'late' : key === today ? 'today' : 'future'; };
+  const items = [];
+  if (mark.nextContactAt) items.push({ kind: 'callback', label: 'Перезвонить', at: mark.nextContactAt, day: dayKey(mark.nextContactAt), state: state(mark.nextContactAt) });
+  if (mark.promisedDate) items.push({ kind: 'promise', label: 'Обещал оплатить', at: mark.promisedDate, day: dayKey(mark.promisedDate), amount: mark.promisedAmount || 0, state: state(mark.promisedDate) });
+  items.sort((a, b) => a.day.localeCompare(b.day));
+  return { mark, items };
+}
