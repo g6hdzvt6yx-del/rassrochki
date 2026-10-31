@@ -16,7 +16,7 @@ const dayOnly = (iso) => {
 };
 const rub = (n) => `${Math.round(+n || 0).toLocaleString('ru-RU')} ₽`;
 const stop = (e) => e.stopPropagation();
-const byLine = (mark) => [dateTime(mark.at), mark.authorName].filter(Boolean).join(' · ');
+const byLine = (mark, showAuthor = true) => [dateTime(mark.at), showAuthor && mark.authorName].filter(Boolean).join(' · ');
 
 function MarkNote({ note }) {
   const [open, setOpen] = useState(false);
@@ -39,19 +39,25 @@ function MarkMeta({ mark }) {
 export const MarkTag = ({ mark }) => <span className={`op-mark-tag ${MARK_TONE[mark.result] || ''}`}>{markLabel(mark)}</span>;
 
 // Последняя отметка оператора для карточки договора и строки таблицы.
-export function OperatorMarkSummary({ marks = [], onHistory, compact = false }) {
+// showAuthor=false — без имени автора (один администратор); compactHistory — история отметок кнопкой-иконкой.
+export function OperatorMarkSummary({ marks = [], onHistory, compact = false, showAuthor = true, compactHistory = false, showMeta = true }) {
   const latest = marks[0];
   if (!latest) return <span className={`op-mark empty ${compact ? 'compact' : ''}`}><ClipboardList size={13} /> Нет отметок</span>;
+  const historyLabel = `История отметок${marks.length > 1 ? ` (${marks.length})` : ''}`;
+  const historyButton = onHistory && <button type="button" className={`op-mark-history ${compactHistory ? 'icon-only' : ''}`}
+    title={compactHistory ? historyLabel : undefined} aria-label={compactHistory ? historyLabel : undefined}
+    onClick={(e) => { stop(e); onHistory(); }} onKeyDown={stop}>
+    <History size={compactHistory ? 14 : 12} />{compactHistory ? (marks.length > 1 && <span className="op-mark-count">{marks.length}</span>) : ` ${historyLabel}`}
+  </button>;
   return <span className={`op-mark ${compact ? 'compact' : ''}`}>
     <span className="op-mark-hd">
       <MarkTag mark={latest} />
-      <span className="op-mark-by">{byLine(latest)}</span>
+      <span className="op-mark-by">{byLine(latest, showAuthor)}</span>
+      {compactHistory && historyButton}
     </span>
     <MarkNote note={latest.note} key={latest.id} />
-    <MarkMeta mark={latest} />
-    {onHistory && <button type="button" className="op-mark-history" onClick={(e) => { stop(e); onHistory(); }} onKeyDown={stop}>
-      <History size={12} /> История отметок{marks.length > 1 ? ` (${marks.length})` : ''}
-    </button>}
+    {showMeta && <MarkMeta mark={latest} />}
+    {!compactHistory && historyButton}
   </span>;
 }
 

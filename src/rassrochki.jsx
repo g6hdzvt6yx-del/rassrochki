@@ -13,7 +13,7 @@ import {
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
   Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
-  Database, RotateCcw, History, ClipboardList,
+  Database, RotateCcw, History, ClipboardList, NotebookPen, UserRound, CalendarClock,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
@@ -33,7 +33,7 @@ import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from 
 import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
 import {callResults} from "./access";
 import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
-import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
+import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus, nextMarkAction} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
 
@@ -1851,7 +1851,7 @@ export default function App() {
       )}
 
       {tab === "contracts" && (
-        <main className={`wrap ${listMode === "table" ? "wrap-table" : ""}`}>
+        <main className={`wrap ${listMode === "table" ? "wrap-table" : "wrap-cards"}`}>
           {contracts.length === 0 ? (
             <div className="panel"><div className="empty">Договоров пока нет — добавьте первый кнопкой «Новый договор».</div></div>
           ) : (
@@ -1970,70 +1970,102 @@ export default function App() {
               const reminderUrl = st.next
                 ? waReminderLink(c.phone, c.clientName, c.item, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate, st.next.status, st.rows)
                 : null;
+              const nextAction = nextMarkAction(contractMarks[c.id] || []);
               return (
-                <div key={c.id} className={`citem ${overdueRows.length ? "has-overdue" : ""} ${c.comment?.trim() ? "has-comment" : ""}`}>
-                  <label className="card-select"><input type="checkbox" checked={selectedIds.has(c.id)} onChange={()=>toggleSelected(c.id)}/> Выбрать</label>
-                  <div
-                    className="citem-status-row"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setExpandedId(expanded ? null : c.id)}
-                    onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setExpandedId(expanded ? null : c.id); } }}
-                  >
-                    <span className="citem-name-block">
-                      <span className="citem-heading"><span className="citem-name" title={c.clientName}>{c.clientName}</span><ChevronDown size={16} className={`chev ${expanded ? "on" : ""}`} /></span>
-                      {c.phone ? <a
-                        className="citem-phone shown"
-                        href={`tel:${normalizePhone(c.phone) ? `+${normalizePhone(c.phone)}` : c.phone}`}
-                        title={`Позвонить: ${fmtPhone(c.phone)}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isDesktopApp) { e.preventDefault(); openExternalUrl(e.currentTarget.href); }
-                        }}
-                      ><Phone size={12} /> {fmtPhone(c.phone)}</a> : <span className="citem-phone shown"><Phone size={12} /> Номер не указан</span>}
-                      {(c.investorId || !st.overdueSum) && <span className="citem-meta">{c.investorId && <span className="citem-investor muted" title={investorLabel}>{investorLabel}</span>}{!st.overdueSum && <Badge s={badge} />}</span>}
-                      {overdueRows.length > 0 ? <span className="citem-overdue-summary">
-                        <span className="citem-overdue-main"><span className="overdue-days"><AlertTriangle size={16}/> Просрочка {daysLabel(overdueDays(st.rows))}</span><b className="num">{money(st.overdueSum)}</b></span>
-                        <span className="citem-overdue-meta">{overdueRows.length} {paymentWord(overdueRows.length)} · с {fmtDate(overdueRows[0].dueDate)}</span>
-                      </span> : <span className={`citem-next-payment ${st.next || st.done ? "shown" : ""} ${st.done ? "closed" : ""}`}>
-                        {st.done ? <CheckCircle2 size={12} /> : <CalendarDays size={12} />}
-                        {st.done
-                          ? "Договор полностью закрыт"
-                          : st.next && toIsoDate(st.next.dueDate) === toIsoDate(new Date())
-                            ? "Сегодня к оплате"
-                            : st.next ? `Платёж ${fmtDate(st.next.dueDate)}` : "Платежей нет"}
-                        {st.next ? <b className="num">· {money(st.next.remainingDue)}</b> : null}
-                      </span>}
-                      {(reminderUrl || st.next?.notifiedAt) && <span className="citem-notification-row">
-                        <span className={`citem-notified ${st.next?.notifiedAt ? "shown" : "pending"}`}>
-                          {st.next?.notifiedAt ? <Check size={13}/> : <MessageCircle size={13}/>}
-                          <span>WhatsApp · {st.next?.notifiedAt ? `уведомлён ${fmtDate(st.next.notifiedAt)}` : "напомнить об оплате"}</span>
+                <div key={c.id} className={`citem ${overdueRows.length ? "has-overdue" : ""} ${c.comment?.trim() ? "has-comment" : ""} ${selectedIds.has(c.id) ? "is-selected" : ""}`}>
+                  <div className="citem-body">
+                    {/* 1. ФИО, товар, телефон */}
+                    <div className="citem-head">
+                      <input type="checkbox" className="citem-check" aria-label={`Выбрать ${c.clientName}`} checked={selectedIds.has(c.id)} onChange={()=>toggleSelected(c.id)}/>
+                      <div className="citem-title">
+                        <span className="citem-name" title={c.clientName}>{c.clientName}</span>
+                        <span className="citem-sub">
+                          {c.item && <span className="citem-item" title={c.item}>{c.item}</span>}
+                          {c.phone ? <a
+                            className="citem-phone shown"
+                            href={`tel:${normalizePhone(c.phone) ? `+${normalizePhone(c.phone)}` : c.phone}`}
+                            title={`Позвонить: ${fmtPhone(c.phone)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isDesktopApp) { e.preventDefault(); openExternalUrl(e.currentTarget.href); }
+                            }}
+                          ><Phone size={12} /> {fmtPhone(c.phone)}</a> : <span className="citem-phone shown muted"><Phone size={12} /> Номер не указан</span>}
                         </span>
-                        {reminderUrl && <button type="button"
-                          className={`citem-card-wa ${st.next?.notifiedAt ? "notified" : ""}`}
-                          aria-label={st.next?.notifiedAt ? "Повторно уведомить клиента в WhatsApp" : "Уведомить клиента в WhatsApp"}
-                          title={st.next?.notifiedAt ? `Уведомлён ${fmtDateTime(st.next.notifiedAt)}. Отправить повторно` : "Уведомить клиента в WhatsApp"}
-                          onClick={(e) => { e.stopPropagation(); notifyPayment(c.id, st.next.index, reminderUrl); }}
-                        >{st.next?.notifiedAt ? <Check size={15}/> : <MessageCircle size={15}/>}</button>}
-                      </span>}
-                      <OperatorMarkSummary marks={contractMarks[c.id]} onHistory={() => setMarksHistoryId(c.id)} />
-                      <span className={`citem-deferral ${st.deferrals.length ? "shown" : ""}`}>
-                        <CalendarDays size={12} /> Отсрочка до {st.deferrals[0] ? fmtDate(st.deferrals[0].dueDate) : ""}
-                        {st.deferrals[0]?.deferralReason ? ` · ${st.deferrals[0].deferralReason}` : ""}
-                        {st.deferrals[0]?.deferralHistory?.length > 1 ? ` · переносов ${st.deferrals[0].deferralHistory.length}` : ""}
-                        {st.deferrals.length > 1 ? ` · платежей ${st.deferrals.length}` : ""}
-                      </span>
-                      {c.comment?.trim() && <span className="citem-comment" title={c.comment.trim()}>
-                        <ScrollText size={12}/><span>{c.comment.trim()}</span>
-                      </span>}
-                      <span className="citem-amount">Остаток <b className="num">{money(st.remaining)}</b></span>
-                    </span>
+                        {c.investorId && <span className="citem-investor muted" title={investorLabel}>{investorLabel}</span>}
+                      </div>
+                      <Badge s={badge} />
+                    </div>
+
+                    {/* 2. Статус и просрочка */}
+                    {overdueRows.length > 0 ? <div className="citem-overdue-summary">
+                      <span className="overdue-days"><AlertTriangle size={14}/> Просрочка {daysLabel(overdueDays(st.rows))}</span>
+                      <b className="num">{money(st.overdueSum)}</b>
+                      <span className="citem-overdue-meta">{overdueRows.length} {paymentWord(overdueRows.length)} · с {fmtDate(overdueRows[0].dueDate)}</span>
+                    </div> : <div className={`citem-next-payment ${st.next || st.done ? "shown" : ""} ${st.done ? "closed" : ""}`}>
+                      {st.done ? <CheckCircle2 size={13} /> : <CalendarDays size={13} />}
+                      <span>{st.done
+                        ? "Договор полностью закрыт"
+                        : st.next && toIsoDate(st.next.dueDate) === toIsoDate(new Date())
+                          ? "Сегодня к оплате"
+                          : st.next ? `Платёж ${fmtDate(st.next.dueDate)}` : "Платежей нет"}</span>
+                      {st.next ? <b className="num">{money(st.next.remainingDue)}</b> : null}
+                    </div>}
+                    {st.deferrals.length > 0 && <span className="citem-deferral shown">
+                      <CalendarDays size={12} /> Отсрочка до {fmtDate(st.deferrals[0].dueDate)}
+                      {st.deferrals[0]?.deferralReason ? ` · ${st.deferrals[0].deferralReason}` : ""}
+                      {st.deferrals[0]?.deferralHistory?.length > 1 ? ` · переносов ${st.deferrals[0].deferralHistory.length}` : ""}
+                      {st.deferrals.length > 1 ? ` · платежей ${st.deferrals.length}` : ""}
+                    </span>}
+
+                    {/* 3. Остаток задолженности */}
+                    <div className="citem-amount"><span>Остаток долга</span><b className="num">{money(st.remaining)}</b></div>
+
+                    {/* 4. Последняя отметка */}
+                    <OperatorMarkSummary marks={contractMarks[c.id]} onHistory={() => setMarksHistoryId(c.id)} showAuthor={false} compactHistory showMeta={false} />
+
+                    {/* 5. Следующий контакт и обещание оплаты */}
+                    {nextAction && <div className="citem-next-contact">
+                      {nextAction.items.map((item) => <span key={item.kind} className={`citem-next-item ${item.state}`}>
+                        {item.kind === "callback" ? <CalendarClock size={13}/> : <Wallet size={13}/>}
+                        <span>{item.kind === "callback" ? "Следующий контакт" : "Обещал оплатить"}</span>
+                        <b className="num">{fmtDate(item.at)}{item.amount ? ` · ${money(item.amount)}` : ""}</b>
+                        {item.state === "late" && <small>срок прошёл</small>}
+                        {item.state === "today" && <small>сегодня</small>}
+                      </span>)}
+                    </div>}
+
+                    {c.comment?.trim() && <span className="citem-comment" title={c.comment.trim()}>
+                      <ScrollText size={12}/><span>{c.comment.trim()}</span>
+                    </span>}
+                    {st.next?.notifiedAt && <span className="citem-notified shown"><Check size={12}/><span>WhatsApp · уведомлён {fmtDate(st.next.notifiedAt)}</span></span>}
                   </div>
-                  <div className="citem-open-row">
-                    {!st.done && st.next && <button type="button" className="btn primary citem-open" onClick={()=>openQuickPay(c.id)}>Принять платёж</button>}
-                    <button type="button" className="btn ghost btn-sm citem-open" onClick={() => setOpenId(c.id)}>
-                      Карточка клиента
-                    </button>
+
+                  {/* 6. Действия */}
+                  <div className="citem-actions">
+                    {!st.done && st.next && <button type="button" className="btn primary citem-pay" onClick={()=>openQuickPay(c.id)}>
+                      <Wallet size={15}/> Принять платёж
+                    </button>}
+                    <div className="citem-actions-row">
+                      <button type="button"
+                        className={`btn ghost citem-act citem-wa ${st.next?.notifiedAt ? "notified" : ""}`}
+                        disabled={!reminderUrl}
+                        title={!reminderUrl
+                          ? (c.phone ? "Нет открытого платежа или номер не подходит для WhatsApp" : "Номер не указан")
+                          : st.next?.notifiedAt ? `Уведомлён ${fmtDateTime(st.next.notifiedAt)}. Отправить повторно в WhatsApp` : "Напомнить об оплате в WhatsApp"}
+                        onClick={() => reminderUrl && notifyPayment(c.id, st.next.index, reminderUrl)}
+                      >{st.next?.notifiedAt ? <Check size={15}/> : <MessageCircle size={15}/>} Связаться</button>
+                      <button type="button" className="btn ghost citem-act" title="Добавить отметку" onClick={() => openAddMark(c.id)}>
+                        <NotebookPen size={15}/> Отметка
+                      </button>
+                    </div>
+                    <div className="citem-actions-row secondary">
+                      <button type="button" className="btn ghost citem-act" onClick={() => setOpenId(c.id)}>
+                        <UserRound size={15}/> Карточка клиента
+                      </button>
+                      <button type="button" className="btn ghost citem-act citem-more" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : c.id)}>
+                        <ChevronDown size={15} className={`chev ${expanded ? "on" : ""}`}/> {expanded ? "Свернуть" : "Подробнее"}
+                      </button>
+                    </div>
                   </div>
                   {expanded && (
                     <div className="citem-expand">

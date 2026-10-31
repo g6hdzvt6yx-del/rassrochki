@@ -255,3 +255,87 @@ html body .app .btn.btn-xs{padding:5px 9px;font-size:11.5px;border-radius:7px;wh
 }
 html body .app .clist-toolbar .toolbar-select{max-width:100%}
 html body .app main.wrap-table .search-box{flex:1 1 320px}
+
+/* Карточки договоров: компактная структура (клиент → статус → остаток → отметка → следующий контакт → действия). */
+html body .app main.wrap.wrap-cards{max-width:min(1480px,100%)}
+html body .app :is(.clist,.cgroup-items){grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:10px}
+html body .app .cgroup{background:#18233a;border-color:var(--line);padding:10px}
+html body .app .cgroup-hd{padding:2px 4px 10px}
+html body .app .citem{display:flex;flex-direction:column;min-width:0;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+html body .app .citem:hover{border-color:#5a4b8a}
+html body .app .citem.is-selected{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset}
+html body .app .citem.has-overdue{border-left:3px solid var(--clay)}
+html body .app .citem-body{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px 14px 10px}
+
+/* 1. Клиент */
+html body .app .citem-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px}
+html body .app .citem-check{margin-top:2px;cursor:pointer}
+html body .app .citem-title{display:flex;flex-direction:column;gap:2px;min-width:0}
+html body .app .citem-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:650;line-height:20px;color:var(--ink)}
+html body .app .citem-sub{display:flex;flex-wrap:wrap;align-items:center;gap:1px 10px;min-width:0;font-size:12px;line-height:18px;color:var(--ink-soft)}
+html body .app .citem-item{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html body .app .citem-phone{display:inline-flex;align-items:center;gap:5px;font-size:12px;line-height:18px;color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
+html body .app .citem-phone[href]:hover{color:var(--emerald)}
+html body .app .citem-investor{flex:none;font-size:11px;line-height:16px}
+html body .app .citem-head>.badge{margin-top:1px}
+
+/* 2. Статус и просрочка */
+html body .app .citem-overdue-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 10px;padding:8px 10px;border-radius:10px}
+html body .app .citem-overdue-summary .overdue-days{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650;white-space:nowrap}
+html body .app .citem-overdue-summary>b{font-size:16px;font-weight:700;white-space:nowrap;color:#ffc2c7}
+html body .app .citem-overdue-meta{grid-column:1/-1;font-size:11px;line-height:16px}
+html body .app .citem-next-payment.shown{display:flex;align-items:center;gap:6px;padding:0 2px;font-size:12.5px;line-height:18px;color:var(--ink-soft)}
+html body .app .citem-next-payment>b{margin-left:auto;color:var(--ink);font-size:12.5px;white-space:nowrap}
+html body .app .citem-next-payment.closed{color:var(--emerald)}
+html body .app .citem-deferral.shown{padding:0 2px}
+
+/* 3. Остаток долга */
+html body .app .citem-amount{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#16233a;font-size:12px;line-height:18px;color:var(--ink-soft)}
+html body .app .citem-amount b{font-size:18px;font-weight:700;line-height:22px;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* 4. Последняя отметка */
+html body .app .citem-body>.op-mark{padding:7px 10px;border-left:3px solid var(--brass);border-radius:8px;background:#202e43}
+html body .app .citem-body>.op-mark.empty{border-left:0;background:transparent;padding:2px;font-size:11.5px}
+html body .app .citem-body>.op-mark .op-mark-note{font-size:12px;line-height:17px;color:#e2e9f4}
+html body .app .op-mark-history.icon-only{position:relative;margin-left:auto;display:inline-grid;place-items:center;width:26px;height:26px;border:1px solid var(--line);border-radius:7px;background:#26354b;color:var(--brass);align-self:center}
+html body .app .op-mark-history.icon-only:hover{text-decoration:none;background:#344563;border-color:var(--brass)}
+html body .app .op-mark-count{position:absolute;top:-6px;right:-6px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#7750d5;color:#fff;font-size:9.5px;font-weight:700;line-height:15px;text-align:center}
+
+/* 5. Следующий контакт */
+html body .app .citem-next-contact{display:flex;flex-direction:column;gap:3px;padding:0 2px}
+html body .app .citem-next-item{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;font-size:12px;line-height:18px;color:var(--ink-soft)}
+html body .app .citem-next-item>svg{flex:none;color:var(--brass)}
+html body .app .citem-next-item>b{color:var(--ink);font-weight:600}
+html body .app .citem-next-item>small{padding:0 6px;border-radius:6px;font-size:10.5px;font-weight:600;background:#2e3d51}
+html body .app .citem-next-item.today>svg,html body .app .citem-next-item.today>small{color:var(--amber)}
+html body .app .citem-next-item.late>svg,html body .app .citem-next-item.late>small{color:var(--clay)}
+html body .app .citem-comment{padding:6px 9px}
+html body .app .citem-notified.shown{display:flex;padding:0 2px;font-size:11px;color:var(--emerald)}
+
+/* 6. Действия */
+html body .app .citem-actions{display:flex;flex-direction:column;gap:6px;margin-top:auto;padding:0 14px 12px}
+html body .app .citem-actions-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+html body .app :is(.citem-pay,.citem-act){justify-content:center;gap:6px;min-width:0;border-radius:9px;white-space:nowrap;line-height:1.2}
+html body .app :is(.citem-pay,.citem-act) svg{flex:none}
+html body .app .citem-pay{width:100%;height:38px;padding:0 14px;font-size:13.5px}
+html body .app .citem-act{height:34px;padding:0 10px;font-size:12.5px;font-weight:600;color:#dce5f3;overflow:hidden;text-overflow:ellipsis}
+html body .app .citem-act:disabled{opacity:.45;cursor:not-allowed;background:#26354b}
+html body .app .citem-wa:not(:disabled){color:#69e1be;border-color:#32685b;background:#173d39}
+html body .app .citem-wa:not(:disabled):hover{background:#1d4b45}
+html body .app .citem-wa.notified:not(:disabled){background:#1f5a4d;border-color:#37d5ac}
+html body .app .citem-actions-row.secondary .citem-act{height:30px;background:transparent;border-color:transparent;color:var(--ink-soft);font-weight:500}
+html body .app .citem-actions-row.secondary .citem-act:hover{background:#26354b;color:var(--ink)}
+html body .app .citem-more .chev{color:inherit}
+html body .app .citem-expand{padding:0 14px 12px}
+
+@media(max-width:560px){
+ html body .app main.wrap.wrap-cards{padding-left:12px;padding-right:12px}
+ html body .app :is(.clist,.cgroup-items){grid-template-columns:minmax(0,1fr)}
+ html body .app .cgroup{padding:8px}
+}
+@media(pointer:coarse){
+ html body .app .citem-pay{height:44px}
+ html body .app .citem-act,html body .app .citem-actions-row.secondary .citem-act{height:42px}
+ html body .app .op-mark-history.icon-only{width:36px;height:36px}
+ html body .app .citem-check{width:22px;height:22px}
+}
