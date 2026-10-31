@@ -13,7 +13,7 @@ import {
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
   Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
-  Database, RotateCcw, History,
+  Database, RotateCcw, History, ClipboardList,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
@@ -31,7 +31,9 @@ import AutocompleteField from "./AutocompleteField";
 import {listCloudDrafts, saveCloudDraft, deleteCloudDraft, draftTitle, draftCompletion, draftHasContent} from "./cloudDrafts";
 import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
 import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
-import {callResults, latestCallResults, matchesCallResultFilter} from "./access";
+import {callResults} from "./access";
+import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
+import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
 
 const APP_VERSION = __APP_VERSION__;
@@ -80,9 +82,7 @@ const fmtDateTime = (iso) => iso ? new Intl.DateTimeFormat("ru-RU", {
 const localDateTimeInput = (date = new Date()) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-const CONTACT_TYPES = {
-  call: "Звонок", whatsapp: "WhatsApp", meeting: "Встреча", other: "Другое",
-};
+const CONTACT_TYPES = CONTACT_TYPE_LABELS;
 
 const toIsoDate = (date) => {
   const d = new Date(date);
@@ -560,7 +560,7 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
-  const {logs:operatorLogs,error:operatorLogsError}=useCallLogs(!isDesktopApp ? session?.user?.id : null);
+  const {logs:operatorLogs,people:operatorPeople,error:operatorLogsError}=useCallLogs(!isDesktopApp ? session?.user?.id : null);
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -570,7 +570,7 @@ export default function App() {
   const [reloadTick, setReloadTick] = useState(0);
   const [tab, setTab] = useState("dashboard");
   const [openId, setOpenId] = useState(null);
-  const [quickPayId, setQuickPayId] = useState(null);
+  const [openAction, setOpenAction] = useState(null); // { id, mode: "pay" | "note" } — сразу открыть нужное действие
   const [advancedFilters, setAdvancedFilters] = useState(false);
   const [workView, setWorkView] = useState("");
   const [listMode, setListMode] = useState("cards");
@@ -578,8 +578,9 @@ export default function App() {
   const [reminderQueue, setReminderQueue] = useState(null);
   const [queueBusy, setQueueBusy] = useState(false);
   const toggleSelected = id => setSelectedIds(prev => { const next=new Set(prev); next.has(id)?next.delete(id):next.add(id); return next; });
-  const openQuickPay = id => { setQuickPayId(id); setOpenId(id); };
-  useEffect(() => { if (!openId) setQuickPayId(null); }, [openId]);
+  const openQuickPay = id => { setOpenAction({ id, mode: "pay" }); setOpenId(id); };
+  const openAddMark = id => { setOpenAction({ id, mode: "note" }); setOpenId(id); };
+  useEffect(() => { if (!openId) setOpenAction(null); }, [openId]);
   const [adding, setAdding] = useState(false);
 
   const [investors, setInvestors] = useState([]);
@@ -618,7 +619,9 @@ export default function App() {
   const [contactFilter, setContactFilter] = useState("all");
   const [notificationFilter, setNotificationFilter] = useState("all");
   const [deferralFilter, setDeferralFilter] = useState("all");
-  const [callResultFilter, setCallResultFilter] = useState("all");
+  const [markStatuses, setMarkStatuses] = useState([]); // фильтр «Отметки оператора», пусто = все
+  const [markAuthor, setMarkAuthor] = useState("all"); // фильтр по сотруднику, поставившему отметку
+  const [marksHistoryId, setMarksHistoryId] = useState(null);
   const [sortBy, setSortBy] = useState("created");
   const [dailyDate, setDailyDate] = useState(() => toIsoDate(new Date()));
   const [dailyRange, setDailyRange] = useState(false);
@@ -1297,6 +1300,10 @@ export default function App() {
     if (!c) return false;
     const payments = { ...(c.payments || {}) };
     const contacts = Array.isArray(payments.__contacts) ? payments.__contacts : [];
+    // Новая запись добавляется в начало истории; предыдущие отметки не меняются.
+    const authorId = session?.user?.id || "";
+    contact = { ...contact, authorId, authorName: operatorPeople[authorId] || "Администратор" };
+    if (!contact.result) delete contact.result;
     payments.__contacts = [contact, ...contacts];
     const prevContracts = contracts;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
@@ -1348,8 +1355,8 @@ export default function App() {
   };
 
   const open = contracts.find((c) => c.id === openId) || null;
-  const openClientContacts = useMemo(() => clientContacts(contracts, open, operatorLogs), [contracts, open, operatorLogs]);
-  const expandedClientContacts = useMemo(() => clientContacts(contracts, contracts.find((c) => c.id === expandedId), operatorLogs), [contracts, expandedId, operatorLogs]);
+  const openClientContacts = useMemo(() => clientContacts(contracts, open, operatorLogs, operatorPeople), [contracts, open, operatorLogs, operatorPeople]);
+  const expandedClientContacts = useMemo(() => clientContacts(contracts, contracts.find((c) => c.id === expandedId), operatorLogs, operatorPeople), [contracts, expandedId, operatorLogs, operatorPeople]);
 
   const sectionTitles = {
     remaining: "Остаток к получению — по договорам",
@@ -1425,10 +1432,13 @@ export default function App() {
     return `${contract.phone || ""} ${contract.guarantorPhone || ""}`.replace(/\D/g, "").includes(queryDigits);
   };
 
-  const latestOperatorResults = useMemo(() => latestCallResults(operatorLogs), [operatorLogs]);
+  // Все отметки по каждому договору (журнал операторов + история контактов), новые сверху.
+  const contractMarks = useMemo(() => marksByContract(contracts, operatorLogs, operatorPeople), [contracts, operatorLogs, operatorPeople]);
+  const markAuthorOptions = useMemo(() => markAuthors(contractMarks), [contractMarks]);
+  const markFilterActive = markStatuses.length > 0 || markAuthor !== "all";
 
   const matchesContactFilters = (contract) => {
-    if (!matchesCallResultFilter(callResultFilter, latestOperatorResults[contract.id])) return false;
+    if (!matchesMarkFilter(contractMarks[contract.id], { statuses: markStatuses, author: markAuthor })) return false;
     const contacts = clientContacts(contracts, contract, operatorLogs);
     if (!matchesWorkView(workView, contractStats(contract), contacts, contract.payments)) return false;
     if (contactFilter === "has" && contacts.length === 0) return false;
@@ -1463,7 +1473,7 @@ export default function App() {
       result[status] += 1;
     });
     return result;
-  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, callResultFilter, investors, workView, operatorLogs, latestOperatorResults]);
+  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, investors, workView, operatorLogs, contractMarks]);
 
   const filteredContracts = useMemo(() => {
     const list = contracts.filter((c) => {
@@ -1490,7 +1500,7 @@ export default function App() {
       return [...list].sort((a, b) => contractStats(b).remaining - contractStats(a).remaining);
     }
     return list; // "created" — уже отсортировано по дате создания (новые сверху)
-  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, callResultFilter, sortBy, investors, workView, operatorLogs, latestOperatorResults]);
+  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, sortBy, investors, workView, operatorLogs, contractMarks]);
 
   const filteredSummary = useMemo(() => filteredContracts.reduce((summary, contract) => {
     const stats = contractStats(contract);
@@ -1515,7 +1525,7 @@ export default function App() {
     XLSX.writeFile(buildFilteredContractsWorkbook(XLSX, filteredContracts, investors), fileName);
     await localData.log({
       actionType: "export_excel", entityType: "export", entityName: fileName,
-      after: { statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, callResultFilter, search, contracts: filteredContracts.length },
+      after: { statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, search, contracts: filteredContracts.length },
     });
   };
 
@@ -1868,7 +1878,7 @@ export default function App() {
               <option value="name">По имени (А-Я)</option>
               <option value="remaining">По остатку долга</option>
             </select>
-            <button className="btn ghost btn-sm" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>Фильтры{[investorFilter,contactFilter,notificationFilter,deferralFilter,callResultFilter].filter(v=>v!=="all").length ? ` · ${[investorFilter,contactFilter,notificationFilter,deferralFilter,callResultFilter].filter(v=>v!=="all").length}` : ""}</button>
+            <button className="btn ghost btn-sm" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>Фильтры{[investorFilter,contactFilter,notificationFilter,deferralFilter,markAuthor].filter(v=>v!=="all").length+(markStatuses.length?1:0) ? ` · ${[investorFilter,contactFilter,notificationFilter,deferralFilter,markAuthor].filter(v=>v!=="all").length+(markStatuses.length?1:0)}` : ""}</button>
             {advancedFilters && <div className="advanced-filters">
             <select className="toolbar-select" value={investorFilter} onChange={(e) => setInvestorFilter(e.target.value)}>
               <option value="all">Все источники</option>
@@ -1897,14 +1907,22 @@ export default function App() {
                 <option value="none">Без отсрочки</option>
               </select>
             </label>
-            {!isDesktopApp && <label className={`toolbar-filter-label ${callResultFilter !== "all" ? "active" : ""}`}>
-              <Phone size={14}/><span>Отметка оператора</span>
-              <select aria-label="Последняя отметка оператора" value={callResultFilter} onChange={(e) => setCallResultFilter(e.target.value)}>
-                <option value="all">Все</option>
-                {Object.entries(callResults).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                <option value="none">Без отметок оператора</option>
-              </select>
-            </label>}
+            <fieldset className={`mark-filter ${markFilterActive ? "active" : ""}`}>
+              <legend><ClipboardList size={14}/> Отметки оператора</legend>
+              <div className="mark-filter-chips" role="group" aria-label="Отметки оператора: можно выбрать несколько">
+                <button type="button" className={!markStatuses.length ? "on" : ""} aria-pressed={!markStatuses.length} onClick={() => setMarkStatuses([])}>Все</button>
+                {MARK_FILTER_OPTIONS.map(([key, label]) => <button type="button" key={key} className={markStatuses.includes(key) ? "on" : ""} aria-pressed={markStatuses.includes(key)} onClick={() => setMarkStatuses((prev) => toggleMarkStatus(prev, key))}>{label}</button>)}
+              </div>
+              <label className={`toolbar-filter-label ${markAuthor !== "all" ? "active" : ""}`}>
+                <Users size={14}/><span>Сотрудник</span>
+                <select aria-label="Отметки сотрудника" value={markAuthor} onChange={(e) => setMarkAuthor(e.target.value)}>
+                  <option value="all">Все сотрудники</option>
+                  {markAuthorOptions.map((author) => <option key={author.key} value={author.key}>{author.name} ({author.count})</option>)}
+                  {markAuthor !== "all" && !markAuthorOptions.some((author) => author.key === markAuthor) && <option value={markAuthor}>Сотрудник без отметок</option>}
+                </select>
+              </label>
+              {markStatuses.length > 1 && <small>Показаны договоры, где последняя отметка подходит под любой из выбранных вариантов.</small>}
+            </fieldset>
             </div>}
             <div className="filter-chips">
               {[
@@ -1918,13 +1936,13 @@ export default function App() {
             <button className="btn ghost btn-sm export-filtered" disabled={!filteredContracts.length} onClick={exportFilteredContracts}>
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
-            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || callResultFilter !== "all" || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setCallResultFilter("all"); setSortBy("created");
+            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
+              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created");
             }}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
           <div className="workbench-controls">
-            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setCallResultFilter("all");setSortBy(key==="large"?"remaining":"dueDate");}}>{label}</button>)}</div>
+            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");}}>{label}</button>)}</div>
             <div className="seg-toggle" aria-label="Вид списка"><button className={listMode==="cards"?"on":""} onClick={()=>setListMode("cards")}>Карточки</button><button className={listMode==="table"?"on":""} onClick={()=>setListMode("table")}>Таблица</button></div>
             {workView && <small className="workbench-hint">{workView==="large"?"Просрочка от 100 000 ₽, по убыванию остатка долга":workView==="promised"?"Незакрытые договоры с обещанием на сегодня или будущую дату":"Контакты и обещания на сегодня или раньше; просрочки без уведомления за 72 часа"}</small>}
             <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>
@@ -1942,7 +1960,7 @@ export default function App() {
 
           {filteredContracts.length === 0 ? (
             <div className="panel"><div className="empty">Ничего не найдено по этому запросу или фильтру.</div></div>
-          ) : listMode === "table" ? <ContractTable contracts={filteredContracts} getStats={contractStats} selected={selectedIds} onSelect={toggleSelected} onPay={openQuickPay} onOpen={setOpenId} money={money}/> : (
+          ) : listMode === "table" ? <ContractTable contracts={filteredContracts} getStats={contractStats} selected={selectedIds} onSelect={toggleSelected} onPay={openQuickPay} onOpen={setOpenId} money={money} marks={contractMarks} onMarksHistory={setMarksHistoryId}/> : (
           <div className="clist">
             {groupedContracts.map((g) => {
             const renderCard = (c) => {
@@ -2004,6 +2022,7 @@ export default function App() {
                           onClick={(e) => { e.stopPropagation(); notifyPayment(c.id, st.next.index, reminderUrl); }}
                         >{st.next?.notifiedAt ? <Check size={15}/> : <MessageCircle size={15}/>}</button>}
                       </span>}
+                      <OperatorMarkSummary marks={contractMarks[c.id]} onHistory={() => setMarksHistoryId(c.id)} />
                       <span className={`citem-deferral ${st.deferrals.length ? "shown" : ""}`}>
                         <CalendarDays size={12} /> Отсрочка до {st.deferrals[0] ? fmtDate(st.deferrals[0].dueDate) : ""}
                         {st.deferrals[0]?.deferralReason ? ` · ${st.deferrals[0].deferralReason}` : ""}
@@ -2245,13 +2264,13 @@ export default function App() {
       </div></div></div>}
       {open && (
         <Detail
-          key={`${open.id}:${quickPayId===open.id ? "pay":"view"}`}
-          initialAction={quickPayId===open.id ? "pay":undefined}
+          key={`${open.id}:${openAction?.id===open.id ? openAction.mode:"view"}`}
+          initialAction={openAction?.id===open.id ? openAction.mode:undefined}
           contracts={contracts}
           contract={open}
           clientContacts={openClientContacts}
           investors={investors}
-          onClose={() => { setOpenId(null); setQuickPayId(null); }}
+          onClose={() => { setOpenId(null); setOpenAction(null); }}
           onToggle={togglePay}
           onNotify={notifyPayment}
           onUndoNotify={undoPaymentNotification}
@@ -2272,6 +2291,13 @@ export default function App() {
           onHistory={(c) => setDataCenterOpen({ contract: { id: c.id, name: c.clientName || c.client_name || c.id } })}
         />
       )}
+      {marksHistoryId && contracts.some((c) => c.id === marksHistoryId) && <OperatorMarksHistory
+        contract={contracts.find((c) => c.id === marksHistoryId)}
+        marks={contractMarks[marksHistoryId] || []}
+        error={operatorLogsError}
+        onClose={() => setMarksHistoryId(null)}
+        onOpenContract={() => { setMarksHistoryId(null); openAddMark(marksHistoryId); }}
+      />}
       {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} onDraftsChanged={reloadDrafts} />}
       {draftsOpen && <DraftsList drafts={cloudDrafts}
         onClose={() => setDraftsOpen(false)}
@@ -2550,8 +2576,8 @@ function ContactEntries({ contacts, contractId, onDelete }) {
   return <div className="contact-list">
     {contacts.map((contact) => <article className="contact-entry" key={`${contact._contractId || contractId}:${contact.id}`}>
       <div className="contact-entry-hd">
-        <b>{contact.resultLabel || CONTACT_TYPES[contact.type] || "Контакт"}{contact.readOnly ? " · Оператор" : ""}</b>
-        <time>{fmtDateTime(contact.occurredAt)}</time>
+        <b>{contact.resultLabel || [CONTACT_TYPES[contact.type] || "Контакт", callResults[contact.result]].filter(Boolean).join(" · ")}{contact.readOnly ? " · Оператор" : ""}</b>
+        <time>{[fmtDateTime(contact.occurredAt), contact.authorName || (contact.readOnly ? "Оператор" : "Администратор")].filter(Boolean).join(" · ")}</time>
         {onDelete && !contact.readOnly && <button type="button" className="icon-btn-ghost" title="Удалить запись" onClick={() => onDelete(contact._contractId || contractId, contact.id)}><Trash2 size={13} /></button>}
       </div>
       {contact._contractId !== contractId && contact._item && <small className="contact-contract-label">Договор: {contact._item}</small>}
@@ -2606,7 +2632,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   const deferralPending = useRef(false);
   const [addingContact, setAddingContact] = useState(initialAction === "note");
   const [contactForm, setContactForm] = useState({
-    type: "call", occurredAt: localDateTimeInput(), note: "",
+    type: "call", result: "", occurredAt: localDateTimeInput(), note: "",
     promisedDate: "", promisedAmount: "", nextContactDate: "",
   });
   const contacts = clientContacts || (Array.isArray(contract.payments?.__contacts) ? contract.payments.__contacts : []);
@@ -2614,13 +2640,13 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   const saveContact = async () => {
     if (!contactForm.note.trim() || !contactForm.occurredAt) return;
     const saved = await onAddContact(contract.id, {
-      id: `contact-${Date.now()}`, type: contactForm.type,
+      id: `contact-${Date.now()}`, type: contactForm.type, result: contactForm.result,
       occurredAt: new Date(contactForm.occurredAt).toISOString(), note: contactForm.note.trim(),
       promisedDate: contactForm.promisedDate || "", promisedAmount: +contactForm.promisedAmount || 0,
       nextContactDate: contactForm.nextContactDate || "",
     });
     if (!saved) return;
-    setContactForm({ type: "call", occurredAt: localDateTimeInput(), note: "", promisedDate: "", promisedAmount: "", nextContactDate: "" });
+    setContactForm({ type: "call", result: "", occurredAt: localDateTimeInput(), note: "", promisedDate: "", promisedAmount: "", nextContactDate: "" });
     setAddingContact(false);
   };
 
@@ -2894,6 +2920,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
             {addingContact && (
               <div className="contact-form" ref={initialAction === "note" ? actionArea : null}>
                 <label><span>Способ связи</span><select value={contactForm.type} onChange={(e) => setContactForm((f) => ({ ...f, type: e.target.value }))}>{Object.entries(CONTACT_TYPES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                <label><span>Отметка</span><select value={contactForm.result} onChange={(e) => setContactForm((f) => ({ ...f, result: e.target.value }))}><option value="">Без статуса</option>{Object.entries(callResults).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
                 <label><span>Дата и время</span><input type="datetime-local" value={contactForm.occurredAt} onChange={(e) => setContactForm((f) => ({ ...f, occurredAt: e.target.value }))} /></label>
                 <label className="contact-note"><span>Результат разговора</span><textarea rows={2} value={contactForm.note} onChange={(e) => setContactForm((f) => ({ ...f, note: e.target.value }))} placeholder="Например: обещал оплатить до пятницы" /></label>
                 <label><span>Обещанная дата оплаты</span><input type="date" value={contactForm.promisedDate} onChange={(e) => setContactForm((f) => ({ ...f, promisedDate: e.target.value }))} /></label>

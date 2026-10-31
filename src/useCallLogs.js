@@ -1,13 +1,24 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {supabase} from './supabaseClient';
+// Отметки операторов (call_log) и имена сотрудников для подписи «кто отметил».
+// Обновляется каждые 15 секунд, при возврате в окно и сразу при новой отметке (Realtime, если включён).
 export function useCallLogs(userId){
- const [logs,setLogs]=useState([]),[error,setError]=useState('');
+ const [logs,setLogs]=useState([]),[people,setPeople]=useState({}),[error,setError]=useState('');
+ const refreshRef=useRef(()=>{});
  useEffect(()=>{
-  let active=true,busy=false;
-  setLogs([]);setError('');
-  if(!userId)return;
+  let active=true,busy=false,again=false;
+  setLogs([]);setPeople({});setError('');
+  if(!userId){refreshRef.current=()=>{};return;}
+  async function loadPeople(){
+   try{
+    if(typeof supabase.rpc!=='function')return;
+    const {data,error}=await supabase.rpc('action_log_people');
+    if(error||!Array.isArray(data)||!active)return;
+    setPeople(Object.fromEntries(data.filter(p=>p?.user_id).map(p=>[p.user_id,p.display_name||'Сотрудник'])));
+   }catch{/* без имён отметки всё равно показываются */}
+  }
   async function refresh(){
-   if(busy)return;
+   if(busy){again=true;return;}
    busy=true;
    try{
     const rows=[];
@@ -19,10 +30,23 @@ export function useCallLogs(userId){
     }
     if(active){setLogs(rows);setError('');}
    }catch{if(active)setError('Не удалось обновить результаты звонков операторов. Повторная попытка — через 15 секунд.');}
-   finally{busy=false;}
+   finally{busy=false;if(again&&active){again=false;refresh();}}
   }
-  refresh();const timer=setInterval(refresh,15000);window.addEventListener('focus',refresh);
-  return()=>{active=false;clearInterval(timer);window.removeEventListener('focus',refresh);};
+  refreshRef.current=refresh;
+  loadPeople();refresh();
+  const timer=setInterval(refresh,15000),peopleTimer=setInterval(loadPeople,300000);
+  const onFocus=()=>{refresh();loadPeople();};
+  window.addEventListener('focus',onFocus);
+  let channel=null;
+  try{
+   if(typeof supabase.channel==='function'){
+    channel=supabase.channel('call_log_marks').on('postgres_changes',{event:'*',schema:'public',table:'call_log'},()=>refresh()).subscribe();
+   }
+  }catch{channel=null;}
+  return()=>{
+   active=false;clearInterval(timer);clearInterval(peopleTimer);window.removeEventListener('focus',onFocus);
+   if(channel)try{supabase.removeChannel(channel);}catch{/* канал уже закрыт */}
+  };
  },[userId]);
- return {logs,error};
+ return {logs,people,error,refresh:()=>refreshRef.current()};
 }

@@ -135,3 +135,35 @@ html body .app .contract-sheet :is(.btn.primary,.lbtn.pay){background:#37d5ac;co
  html body .app .contract-sheet .partial-note strong{font-size:21px}
  html body .app .contract-sheet .lbtn-group{grid-column:2/-1;justify-content:flex-start;max-width:none}
 }
+/* Отметки оператора: фильтр, последняя отметка в карточке и таблице, история. */
+.mark-filter{display:flex;flex-direction:column;gap:8px;flex-basis:100%;margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;min-width:0}
+.mark-filter.active{border-color:#a78bfa}
+.mark-filter legend{display:flex;align-items:center;gap:6px;padding:0 4px;color:var(--ink-soft);font-size:11.5px;font-weight:600}
+.mark-filter small{color:var(--ink-soft);font-size:11px}
+.mark-filter .toolbar-filter-label{align-self:flex-start;max-width:100%}
+.mark-filter .toolbar-filter-label select{max-width:240px}
+.mark-filter-chips{display:flex;flex-wrap:wrap;gap:6px}
+.mark-filter-chips button{border:1px solid var(--line);background:var(--surface-2);color:var(--ink-soft);border-radius:999px;padding:5px 11px;font:inherit;font-size:11.5px;font-weight:600;cursor:pointer}
+.mark-filter-chips button.on{background:#3c315c;color:#e4d6ff;border-color:#a78bfa}
+.op-mark{display:flex;flex-direction:column;gap:5px;width:100%;min-width:0;padding:8px 10px;border-radius:8px;background:var(--surface-2);font-size:11.5px;line-height:17px;color:var(--ink);cursor:default;text-align:left}
+.op-mark.empty{flex-direction:row;align-items:center;gap:6px;color:var(--ink-soft)}
+.op-mark.compact{padding:0;background:none;min-width:170px;max-width:240px}
+.op-mark-hd{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}
+.op-mark-by{color:var(--ink-soft);font-size:11px}
+.op-mark-tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#2e3d51;color:#c3cedd;border:1px solid #43536b}
+.op-mark-tag.ok{background:#173d39;color:#69e1be;border-color:#32685b}
+.op-mark-tag.warn{background:#413827;color:#f5d590;border-color:#766343}
+.op-mark-tag.bad{background:#402733;color:#ffadb4;border-color:#80505c}
+.op-mark-note{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.op-mark-note>span{overflow-wrap:anywhere;white-space:pre-wrap}
+.op-mark-note>span.clamped{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.op-mark-more,.op-mark-history{border:0;background:none;padding:0;font:inherit;font-size:11px;font-weight:600;color:var(--brass);cursor:pointer;display:inline-flex;align-items:center;gap:4px;align-self:flex-start}
+.op-mark-more:hover,.op-mark-history:hover{text-decoration:underline}
+.op-mark-extra{color:var(--amber);font-size:11px}
+.contracts-table td.table-mark{vertical-align:top}
+.op-marks-list{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:8px}
+.op-marks-item{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.op-marks-item p{margin:0;font-size:13px;line-height:19px;overflow-wrap:anywhere;white-space:pre-wrap}
+.op-marks-foot{font-size:11.5px;margin:0 0 10px}
+.op-marks-error{color:var(--clay);font-size:12px}
+@media(max-width:560px){.mark-filter .toolbar-filter-label{align-self:stretch}.mark-filter .toolbar-filter-label select{max-width:none;flex:1}}
