@@ -94,6 +94,7 @@ export function useThemeColorMeta(theme) {
 /*  шторки другой за один кадр не трогает историю.                       */
 
 const sheetStack = [];
+let layerSeq = 0;      // порядок появления слоёв: внешний рисуется раньше вложенного
 let ownedEntries = 0;  // сколько записей истории добавили мы
 let pendingGo = 0;     // сколько записей сейчас убираем сами через history.go
 let syncTimer = null;
@@ -142,10 +143,16 @@ const ensurePopListener = () => {
 export function useBackClose(onClose) {
   const ref = useRef(onClose);
   ref.current = onClose;
+  // номер выдаётся при первой отрисовке (сверху вниз), поэтому вложенная шторка,
+  // открытая вместе с внешней, всё равно окажется «сверху» и закроется первой
+  const order = useRef(0);
+  if (!order.current) order.current = ++layerSeq;
   useEffect(() => {
     ensurePopListener();
-    const entry = { close: () => (ref.current ? ref.current() : undefined) };
-    sheetStack.push(entry);
+    const entry = { order: order.current, close: () => (ref.current ? ref.current() : undefined) };
+    let at = sheetStack.length;
+    while (at > 0 && sheetStack[at - 1].order > entry.order) at -= 1;
+    sheetStack.splice(at, 0, entry);
     scheduleSync();
     return () => {
       const i = sheetStack.indexOf(entry);
@@ -216,6 +223,12 @@ export function Sheet({ title, subtitle, onClose, children, footer, full, left, 
     </div>,
     document.body,
   );
+}
+
+// на компьютере — как есть (внутри строки), на телефоне — в шторке снизу
+export function InlineOrSheet({ mobile, title, subtitle, onClose, footer, children }) {
+  if (!mobile) return children;
+  return <Sheet title={title} subtitle={subtitle} onClose={onClose} footer={footer}>{children}</Sheet>;
 }
 
 // кнопка «Назад» для шапки экрана или шторки на весь экран

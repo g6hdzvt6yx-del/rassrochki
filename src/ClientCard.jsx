@@ -3,6 +3,7 @@ import { X, ChevronLeft, Wallet, Phone, MessageCircle, Plus } from 'lucide-react
 import { contractsForClient, summarizeClient } from './clientSummary';
 import { formatPhone, normalizePhone } from './phone';
 import './clientCard.css';
+import { Sheet, BackBtn } from './mobile/kit';
 
 const money = n => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n || 0) + ' ₽';
 const date = value => {
@@ -14,7 +15,7 @@ const monthlyPayment = (c, stats) => stats.rows?.[0]?.amountDue
   ?? Math.round(Math.max(0, (+c.totalPrice || 0) - (+c.downPayment || 0) + (+c.markup || 0)) / Math.max(1, +c.termMonths || 1));
 const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
-export default function ClientCard({ contract, contracts, contacts, getStats, investors, onClose, onOpenContract, onExternal, renderContacts }) {
+export default function ClientCard({ contract, contracts, contacts, getStats, investors, onClose, onOpenContract, onExternal, renderContacts, mobile }) {
   const [action, setAction] = useState('');
   useEffect(() => {
     const handleKey = e => { if (e.key === 'Escape') onClose(); };
@@ -32,10 +33,7 @@ export default function ClientCard({ contract, contracts, contacts, getStats, in
     if (choices.length === 1) onOpenContract(choices[0].contract.id, mode);
     else setAction(action === mode ? '' : mode);
   };
-  return <div className="overlay" onClick={onClose}>
-    <div className="sheet client-sheet" role="dialog" aria-modal="true" aria-label="Карточка клиента" onClick={e => e.stopPropagation()}>
-      <header className="sheet-hd"><button className="icon-btn" onClick={onClose} aria-label="Закрыть карточку"><ChevronLeft size={18}/></button><div><div className="sheet-name">{contract.clientName || 'Клиент без имени'}</div><div className="client-muted">Действующих договоров: {summary.active} · всего: {related.length}</div>{contract.phone && <div className="client-muted">{formatPhone(contract.phone)}</div>}</div><button className="icon-btn client-close" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></header>
-      <div className="sheet-body">
+  const body = <>
         <section className="client-total"><span>Остаток по всем договорам</span><strong className="num">{money(summary.remaining)}</strong><small>На {date(today)}</small>
           {summary.overdue > 0 ? <div className="client-overdue"><span>Из него просрочено <b>{money(summary.overdue)}</b></span><span>{summary.overdueDays} дн. с первого неоплаченного срока</span></div> : <div className="client-clear">Просрочки нет</div>}
         </section>
@@ -49,6 +47,17 @@ export default function ClientCard({ contract, contracts, contacts, getStats, in
         {summary.items.map(({contract:c,stats}) => <details className="client-contract" key={c.id}><summary><div><b>{c.item || 'Без названия'}</b><small>{c.termMonths} мес. · еж. платёж {money(monthlyPayment(c, stats))} · с {date(c.startDate)}</small></div><div className="client-contract-right"><b className="num">{money(Math.max(0,stats.remaining))}</b><small className={stats.overdueSum > 0 ? 'client-danger' : ''}>{stats.overdueSum > 0 ? `Просрочено ${money(stats.overdueSum)}` : stats.remaining <= 0 ? 'Закрыт' : 'Без просрочки'}</small></div></summary><div className="client-contract-body"><div className="client-facts"><div><span>Цена / первоначальный взнос</span><b>{money(c.totalPrice)} / {money(c.downPayment)}</b></div><div><span>Наценка</span><b>{money(c.markup)}</b></div><div><span>Источник</span><b>{c.investorId ? investors.find(i => i.id === c.investorId)?.name || 'Не найден' : 'Общий пул'}</b></div><div><span>Поручитель</span><b>{c.guarantorName || 'Не указан'}</b></div></div>{c.comment && <p className="client-comment">{c.comment}</p>}<div className="client-actions"><button className="btn ghost" onClick={() => onOpenContract(c.id)}>Открыть договор и график</button>{stats.remaining > 0 && <button className="btn primary" onClick={() => onOpenContract(c.id,'pay')}>Принять платёж</button>}</div></div></details>)}
         <details className="client-history"><summary>История платежей <span>{summary.payments.length}</span></summary>{summary.undated > 0 && <p className="client-danger">Платежи без корректной даты: {money(summary.undated)}. Они учтены в остатках, но не показаны в истории по датам.</p>}{summary.payments.length ? summary.payments.map(p => <button className="client-history-row" key={p.key} onClick={() => onOpenContract(p.contract.id)}><div><b>{date(p.date)}</b><small>{p.contract.item || 'Без названия'} · платёж № {p.paymentNo}</small></div><strong className="num">{money(p.amount)}</strong></button>) : <p className="client-muted">Платежей с указанной датой пока нет.</p>}</details>
         <details className="client-history"><summary>История общения <span>{contacts.length}</span></summary>{contacts.length ? renderContacts(contacts) : <p className="client-muted">Контактов пока нет.</p>}</details>
+      </>;
+  // телефон: та же карточка на весь экран со своей шапкой
+  if (mobile) return <Sheet full title={contract.clientName || 'Клиент без имени'}
+    subtitle={`Действующих договоров: ${summary.active} · всего: ${related.length}${contract.phone ? ` · ${formatPhone(contract.phone)}` : ''}`}
+    left={<BackBtn onClick={onClose} />}
+    right={phone ? <a className="m-ib call" href={`tel:+${phone}`} onClick={e => { e.preventDefault(); onExternal(`tel:+${phone}`); }} aria-label="Позвонить"><Phone size={19}/></a> : null}
+    onClose={onClose} className="m-client">{body}</Sheet>;
+  return <div className="overlay" onClick={onClose}>
+    <div className="sheet client-sheet" role="dialog" aria-modal="true" aria-label="Карточка клиента" onClick={e => e.stopPropagation()}>
+      <header className="sheet-hd"><button className="icon-btn" onClick={onClose} aria-label="Закрыть карточку"><ChevronLeft size={18}/></button><div><div className="sheet-name">{contract.clientName || 'Клиент без имени'}</div><div className="client-muted">Действующих договоров: {summary.active} · всего: {related.length}</div>{contract.phone && <div className="client-muted">{formatPhone(contract.phone)}</div>}</div><button className="icon-btn client-close" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></header>
+      <div className="sheet-body">{body}
       </div>
     </div>
   </div>;

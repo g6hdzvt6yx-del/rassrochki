@@ -36,7 +36,7 @@ import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
-import { useIsMobile, useTheme, MobileStatus, MobileLogin, ConfirmSheet, LegacyLayer, Sheet } from "./mobile/kit";
+import { useIsMobile, useTheme, MobileStatus, MobileLogin, ConfirmSheet, LegacyLayer, Sheet, BackBtn, InlineOrSheet } from "./mobile/kit";
 import AdminMobile from "./mobile/AdminMobile";
 
 const APP_VERSION = __APP_VERSION__;
@@ -1616,6 +1616,7 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
         </div></div></div>)}
         {open && (
           <Detail
+            mobile={isMobile}
             key={`${open.id}:${openAction?.id===open.id ? openAction.mode:"view"}`}
             initialAction={openAction?.id===open.id ? openAction.mode:undefined}
             contracts={contracts}
@@ -2732,10 +2733,10 @@ function Detail(props) {
   return <ClientCard contract={props.contract} contracts={props.contracts} contacts={props.clientContacts}
     getStats={contractStats} investors={props.investors} onClose={props.onClose}
     onOpenContract={(id, mode) => setSelected({ id, mode })} onExternal={openExternalUrl}
-    renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} />;
+    renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} mobile={props.mobile} />;
 }
 
-function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, onHistory, initialAction }) {
+function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, onHistory, initialAction, mobile }) {
   const actionArea = useRef(null);
   useEffect(() => {
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
@@ -2963,33 +2964,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
     }
   };
 
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet contract-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <button className="icon-btn" onClick={onClose}><ChevronLeft size={18} /></button>
-          <div>
-            <div className="sheet-name">{contract.clientName}</div>
-            {contract.phone && (
-              <a className="sheet-phone" href={`tel:${contract.phone}`} onClick={(e) => { if (isDesktopApp) { e.preventDefault(); openExternalUrl(e.currentTarget.href); } }}><Phone size={12} /> {fmtPhone(contract.phone)}</a>
-            )}
-          </div>
-          {contract.phone && st.next && waReminderLink(contract.phone, contract.clientName, contract.item, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate, st.next.status, st.rows) && (
-            <a
-              className={`icon-btn wa-green ${st.next.notifiedAt ? "notified" : ""}`}
-              href={waReminderLink(contract.phone, contract.clientName, contract.item, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate, st.next.status, st.rows)}
-              target="_blank" rel="noreferrer"
-              title={st.next.notifiedAt ? `Уведомлён ${fmtDateTime(st.next.notifiedAt)}. Отправить повторно` : "Напомнить в WhatsApp"}
-              onClick={(e) => { e.preventDefault(); onNotify(contract.id, st.next.index, e.currentTarget.href); }}
-            >
-              {st.next.notifiedAt ? <Check size={18} /> : <MessageCircle size={18} />}
-            </a>
-          )}
-          <button className="icon-btn" onClick={() => onDelete(contract.id)} title="Удалить договор"><Trash2 size={18} /></button>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-
-        <div className="sheet-body">
+  const body = (<>
           <button className="btn ghost client-return" onClick={onClose}><ChevronLeft size={14}/> К общей карточке клиента</button>
           <div className="det-item">{contract.item}</div>
           <div className="det-grid">
@@ -3052,7 +3027,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 <Plus size={13} /> {addingContact ? "Закрыть" : "Добавить контакт"}
               </button>
             </div>
-            {addingContact && (
+            {addingContact && (<InlineOrSheet mobile={mobile} title="Новый контакт" subtitle={contract.clientName} onClose={() => setAddingContact(false)}>
               <div className="contact-form" ref={initialAction === "note" ? actionArea : null}>
                 <label><span>Способ связи</span><select value={contactForm.type} onChange={(e) => setContactForm((f) => ({ ...f, type: e.target.value }))}>{Object.entries(CONTACT_TYPES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
                 <label><span>Отметка</span><select value={contactForm.result} onChange={(e) => setContactForm((f) => ({ ...f, result: e.target.value }))}><option value="">Без статуса</option>{Object.entries(callResults).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
@@ -3062,7 +3037,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 <label><span>Обещанная сумма</span><input type="number" min="0" value={contactForm.promisedAmount} onChange={(e) => setContactForm((f) => ({ ...f, promisedAmount: e.target.value }))} placeholder="0" /></label>
                 <label><span>Следующий контакт</span><input type="date" value={contactForm.nextContactDate} onChange={(e) => setContactForm((f) => ({ ...f, nextContactDate: e.target.value }))} /></label>
                 <button type="button" className="btn primary btn-sm contact-submit" disabled={!contactForm.note.trim() || !contactForm.occurredAt} onClick={saveContact}>Сохранить контакт</button>
-              </div>
+              </div></InlineOrSheet>
             )}
             <ContactEntries contacts={contacts} contractId={contract.id} onDelete={onDeleteContact} />
           </section>
@@ -3155,7 +3130,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                     </div>}
                   </div>
                 )}
-                {deferringIdx === r.index && (
+                {deferringIdx === r.index && (<InlineOrSheet mobile={mobile} title={deferMode === 'edit' ? "Изменить отсрочку" : "Отсрочка платежа"} subtitle={`Платёж №${r.n} от ${fmtDate(r.dueDate)}`} onClose={() => (deferBusy ? false : setDeferringIdx(null))}>
                   <div className="defer-inline">
                     <fieldset disabled={deferBusy} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, border: 0, padding: 0, margin: 0, minWidth: 0, width: '100%' }}>
                       <label><span>{deferMode === 'edit' ? 'Исправить дату отсрочки' : 'Новая дата платежа'}</span><DateFields value={deferDate} onChange={setDeferDate} /></label>
@@ -3164,9 +3139,9 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                       <button type="button" className="btn ghost btn-sm" onClick={() => setDeferringIdx(null)}>Закрыть</button>
                     </fieldset>
                     {deferError && <p role="alert">{deferError}</p>}
-                  </div>
+                  </div></InlineOrSheet>
                 )}
-                {payingIdx === r.index && (
+                {payingIdx === r.index && (<InlineOrSheet mobile={mobile} title={payMode === "edit" ? "Изменить платёж" : r.paidAmount > 0 ? "Доплата" : "Оплата"} subtitle={`${contract.clientName} · платёж №${r.n} от ${fmtDate(r.dueDate)}`} onClose={() => (payBusy ? false : setPayingIdx(null))}>
                   <div className="pay-inline" ref={initialAction === "pay" ? actionArea : null}>
                     {payMode === 'edit' && <label>Поступление <select aria-label="Редактируемое поступление" disabled={payBusy} value={editEventIndex} onChange={e=>startEditDate(r.index,r.paidDate,+e.target.value)}>{r.paymentEvents.map((event,i)=><option key={i} value={i}>{fmtDate(event.date)} · {money(event.amount)} · {event.method === 'cash' ? 'Наличные' : event.card || 'Способ не указан'}</option>)}</select></label>}
                     <div className="pay-date-field"><span>Дата оплаты</span><DateFields value={payDate} onChange={setPayDate} /></div>
@@ -3203,7 +3178,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                       const excess = Math.round(((+payAmount || 0) - (r.amountDue - others)) * 100) / 100;
                       return excess > 0 ? <small className="payment-allocation-note">Платёж №{r.n} будет закрыт полностью, а переплата {money(excess)} уменьшит следующий платёж.</small> : null;
                     })()}
-                  </div>
+                  </div></InlineOrSheet>
                 )}
                 <details className="payment-details"><summary>Чеки{r.receipts.length ? ` · ${r.receipts.length}` : " · прикрепить"}</summary><div className="receipt-row">
                   {r.receipts.map((receipt, receiptIndex) => (
@@ -3232,6 +3207,48 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
               </div>
             ))}
           </div>
+        </>);
+  // телефон: договор на весь экран — «Назад» к карточке клиента, WhatsApp и удаление в шапке
+  if (mobile) {
+    const waUrl = contract.phone && st.next && waReminderLink(contract.phone, contract.clientName, contract.item, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate, st.next.status, st.rows);
+    return (
+      <Sheet full className="m-contract" title={contract.clientName} subtitle={[contract.phone && fmtPhone(contract.phone), contract.item].filter(Boolean).join(" · ") || null}
+        left={<BackBtn onClick={onClose} label="К карточке клиента" />} onClose={onClose}
+        right={<>
+          {waUrl && <a className={`m-ib wa ${st.next.notifiedAt ? "done" : ""}`} href={waUrl} target="_blank" rel="noreferrer"
+            aria-label={st.next.notifiedAt ? "Уведомлён. Отправить повторно" : "Напомнить в WhatsApp"}
+            onClick={(e) => { e.preventDefault(); onNotify(contract.id, st.next.index, e.currentTarget.href); }}>{st.next.notifiedAt ? <Check size={19} /> : <MessageCircle size={19} />}</a>}
+          <button type="button" className="m-ib m-ib-plain" onClick={() => onDelete(contract.id)} aria-label="Удалить договор"><Trash2 size={19} /></button>
+        </>}>{body}</Sheet>
+    );
+  }
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet contract-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <button className="icon-btn" onClick={onClose}><ChevronLeft size={18} /></button>
+          <div>
+            <div className="sheet-name">{contract.clientName}</div>
+            {contract.phone && (
+              <a className="sheet-phone" href={`tel:${contract.phone}`} onClick={(e) => { if (isDesktopApp) { e.preventDefault(); openExternalUrl(e.currentTarget.href); } }}><Phone size={12} /> {fmtPhone(contract.phone)}</a>
+            )}
+          </div>
+          {contract.phone && st.next && waReminderLink(contract.phone, contract.clientName, contract.item, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate, st.next.status, st.rows) && (
+            <a
+              className={`icon-btn wa-green ${st.next.notifiedAt ? "notified" : ""}`}
+              href={waReminderLink(contract.phone, contract.clientName, contract.item, st.next.remainingDue ?? st.next.amountDue, st.next.dueDate, st.next.status, st.rows)}
+              target="_blank" rel="noreferrer"
+              title={st.next.notifiedAt ? `Уведомлён ${fmtDateTime(st.next.notifiedAt)}. Отправить повторно` : "Напомнить в WhatsApp"}
+              onClick={(e) => { e.preventDefault(); onNotify(contract.id, st.next.index, e.currentTarget.href); }}
+            >
+              {st.next.notifiedAt ? <Check size={18} /> : <MessageCircle size={18} />}
+            </a>
+          )}
+          <button className="icon-btn" onClick={() => onDelete(contract.id)} title="Удалить договор"><Trash2 size={18} /></button>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
