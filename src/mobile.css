@@ -1,0 +1,292 @@
+/*
+ * Телефонный вид сайта (ширина экрана до 760px), по образцу приложения finuchet-mobile.
+ * На широком экране ничего из этого не действует: все правила внутри медиазапроса,
+ * а элементы с классами m-* выводятся только в телефонной раскладке (.app.is-phone).
+ */
+
+/* Шрифт Onest (SIL OFL 1.1, см. assets/fonts/Onest-OFL-LICENSE.txt). Файлы скачиваются браузером,
+   только когда шрифт реально используется, то есть на телефоне. */
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-cyrillic-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-cyrillic-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+@media (max-width: 760px) {
+  html, body { background: #0d1524; }
+  body.m-no-scroll { overflow: hidden; }
+
+  /* ---------- основа ---------- */
+  html body .app.is-phone {
+    --m-bg: #0d1524;
+    --m-tile: rgba(255, 255, 255, .055);
+    --m-tile-2: rgba(255, 255, 255, .09);
+    --m-tile-press: rgba(255, 255, 255, .13);
+    --m-line: rgba(255, 255, 255, .09);
+    --m-line-2: rgba(255, 255, 255, .14);
+    --m-text: #ffffff;
+    --m-muted: #9aa8bd;
+    --m-accent: #8a6cf1;
+    --m-accent-text: #c9b8ff;
+    --m-accent-soft: rgba(138, 108, 241, .2);
+    --m-ok: #3ccf9f;
+    --m-ok-soft: rgba(60, 207, 159, .14);
+    --m-bad: #ff7a86;
+    --m-bad-soft: rgba(255, 122, 134, .12);
+    --m-warn: #f2bf5e;
+    --m-rail: rgba(255, 255, 255, .12);
+    --m-safe-b: env(safe-area-inset-bottom, 0px);
+    --m-safe-t: env(safe-area-inset-top, 0px);
+    min-height: 100dvh;
+    padding-bottom: calc(86px + var(--m-safe-b));
+    color: var(--m-text);
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(138, 108, 241, .2), transparent 60%),
+      radial-gradient(90% 50% at 100% 12%, rgba(60, 207, 159, .08), transparent 60%),
+      var(--m-bg);
+    background-attachment: fixed;
+    font-family: "Onest Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+  /* Суммы — обычным шрифтом, цифры одинаковой ширины. */
+  html body .app.is-phone .num { font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  /* Кнопки во всех разделах — не меньше 44px по высоте. */
+  html body .app.is-phone :is(.btn, .icon-btn) { min-height: 44px; min-width: 44px; }
+  /* Сообщения не прячутся под нижней панелью. */
+  html body .app.is-phone .app-toast { left: 12px; right: 12px; bottom: calc(96px + var(--m-safe-b)); max-width: none; min-height: 44px; }
+
+  .app.is-phone :where(.m-topbar, .m-screen, .m-tabbar, .m-sheet) :where(h1, h2, h3, p) { margin: 0; }
+  .app.is-phone :where(.m-screen, .m-tabbar, .m-sheet, .m-topbar) button { font: inherit; color: inherit; cursor: pointer; }
+  .app.is-phone :is(.m-screen, .m-tabbar, .m-sheet, .m-topbar) :focus-visible { outline: 2px solid var(--m-accent-text); outline-offset: 2px; }
+
+  /* ---------- шапка ---------- */
+  .app.is-phone .m-topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    padding: calc(8px + var(--m-safe-t)) 12px 8px 16px;
+    background: rgba(13, 21, 36, .82);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-brand {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(145deg, #a185ff, #5432c4); color: #fff; font-weight: 800; font-size: 17px;
+    box-shadow: 0 6px 16px rgba(110, 76, 230, .35);
+  }
+  .app.is-phone .m-topbar-title { flex: 1; min-width: 0; }
+  .app.is-phone .m-topbar h1 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
+  .app.is-phone .m-topbar p { font-size: 12.5px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-topbar-side { flex-shrink: 0; }
+  /* Индикатор обновления данных встроен в шапку. */
+  .app.is-phone .m-topbar .sync-indicator { padding: 0; gap: 6px; font-size: 12px; color: var(--m-muted); }
+  .app.is-phone .m-topbar .sync-indicator > span:not(.sync-dot) { max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body .app.is-phone .m-topbar .sync-indicator .btn {
+    width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 12px;
+    background: var(--m-tile); border: 1px solid var(--m-line); color: var(--m-text); font-size: 18px;
+  }
+
+  /* ---------- экран ---------- */
+  .app.is-phone .m-screen { padding: 12px 16px 24px; max-width: 640px; margin: 0 auto; }
+  .app.is-phone .m-section-h { font-size: 17px; font-weight: 700; margin: 22px 2px 10px; display: flex; justify-content: space-between; align-items: baseline; }
+  .app.is-phone .m-section-h small { font-size: 13px; font-weight: 500; color: var(--m-muted); }
+  .app.is-phone .m-foot-note { text-align: center; color: var(--m-muted); font-size: 12.5px; margin: 18px 0 4px; }
+  .app.is-phone .m-empty { text-align: center; color: var(--m-muted); padding: 24px 12px; }
+  .app.is-phone .m-bad { color: var(--m-bad); }
+  .app.is-phone .m-warn { color: var(--m-warn); }
+  .app.is-phone .m-ok { color: var(--m-ok); }
+
+  /* переключатель */
+  .app.is-phone .m-segmented {
+    display: flex; gap: 3px; padding: 3px; border-radius: 14px;
+    background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-segmented button {
+    flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent;
+    color: var(--m-muted); font-weight: 600; font-size: 14.5px; padding: 0 6px;
+  }
+  .app.is-phone .m-segmented button.on { background: rgba(255, 255, 255, .14); color: var(--m-text); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
+
+  /* ---------- «Ждём сегодня» ---------- */
+  .app.is-phone .m-today {
+    border-radius: 22px; padding: 14px 16px 6px; margin-bottom: 12px;
+    background: linear-gradient(160deg, rgba(138, 108, 241, .32) 0%, rgba(138, 108, 241, .08) 55%, rgba(255, 255, 255, .04) 100%);
+    border: 1px solid rgba(160, 135, 255, .3);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-today-label { margin-top: 16px; font-size: 14px; color: var(--m-accent-text); font-weight: 600; }
+  .app.is-phone .m-today-sum { font-size: 38px; font-weight: 750; letter-spacing: -.025em; line-height: 1.08; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .app.is-phone .m-today-caption { color: var(--m-muted); font-size: 14.5px; margin: 4px 0 12px; }
+  .app.is-phone .m-today .m-ribbon { margin-bottom: 8px; }
+  .app.is-phone .m-today-more { width: 100%; min-height: 44px; border: 0; background: none; color: var(--m-accent-text); font-weight: 600; }
+
+  .app.is-phone .m-ribbon { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--m-rail); }
+  .app.is-phone .m-ribbon.thin { height: 6px; margin: 10px 0 8px; }
+  .app.is-phone .m-ribbon span { height: 100%; }
+  .app.is-phone .m-ribbon .paid, .app.is-phone .m-legend i.paid { background: var(--m-ok); }
+  .app.is-phone .m-ribbon .over { background: var(--m-bad); }
+  .app.is-phone .m-ribbon .rest, .app.is-phone .m-legend i.rest { background: var(--m-rail); }
+  .app.is-phone .m-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; color: var(--m-muted); }
+  .app.is-phone .m-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+
+  /* клиенты к оплате */
+  .app.is-phone .m-due-list { margin: 0 -16px; border-top: 1px solid rgba(160, 135, 255, .22); }
+  .app.is-phone .m-due-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-due-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-due-main {
+    grid-row: 1 / 3; min-width: 0; align-self: stretch; min-height: 44px; padding: 0; border: 0; background: none;
+    text-align: left; display: flex; flex-direction: column; justify-content: center;
+  }
+  .app.is-phone .m-due-main b { display: block; font-weight: 650; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-due-main small { display: block; font-size: 13px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .app.is-phone .m-due-main .m-due-flag { font-size: 12.5px; margin-top: 3px; }
+  .app.is-phone .m-due-amount { text-align: right; font-weight: 700; font-size: 16.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .app.is-phone .m-due-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  html body .app.is-phone .m-act {
+    width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0;
+    border: 1px solid var(--m-line-2); background: var(--m-tile-2); color: var(--m-text); text-decoration: none; padding: 0;
+  }
+  html body .app.is-phone .m-act:active { background: var(--m-tile-press); }
+  html body .app.is-phone .m-act[data-off] { opacity: .3; }
+  html body .app.is-phone .m-act.wa { color: var(--m-ok); }
+  html body .app.is-phone .m-act.wa.done { background: var(--m-ok-soft); border-color: rgba(60, 207, 159, .4); }
+  html body .app.is-phone .m-act.pay { background: var(--m-accent); border-color: var(--m-accent); color: #fff; box-shadow: 0 6px 16px rgba(138, 108, 241, .35); }
+
+  /* просрочка */
+  .app.is-phone .m-alert {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; text-align: left;
+    padding: 14px 16px; border-radius: 18px; margin-bottom: 4px;
+    border: 1px solid rgba(255, 122, 134, .35); background: var(--m-bad-soft); color: var(--m-text);
+  }
+  .app.is-phone .m-alert > svg:first-child { color: var(--m-bad); flex-shrink: 0; }
+  .app.is-phone .m-alert > svg:last-child { color: var(--m-muted); flex-shrink: 0; }
+  .app.is-phone .m-alert-text { flex: 1; min-width: 0; }
+  .app.is-phone .m-alert-text small { display: block; color: var(--m-muted); font-size: 13.5px; }
+  .app.is-phone .m-alert-text b { display: block; font-size: 21px; font-weight: 750; color: var(--m-bad); font-variant-numeric: tabular-nums; }
+
+  /* списки */
+  .app.is-phone .m-list {
+    background: var(--m-tile); border: 1px solid var(--m-line); border-radius: 18px; overflow: hidden;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-list-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px;
+    padding: 12px 14px; border: 0; border-bottom: 1px solid var(--m-line); background: transparent; text-align: left;
+  }
+  .app.is-phone .m-list-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-list-row:active { background: var(--m-tile-press); }
+  .app.is-phone .m-list-main { flex: 1; min-width: 0; }
+  .app.is-phone .m-list-main b, .app.is-phone .m-list-end b { display: block; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-list-main small, .app.is-phone .m-list-end small { display: block; color: var(--m-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-list-end { text-align: right; flex-shrink: 0; max-width: 45%; font-variant-numeric: tabular-nums; }
+
+  /* плитки показателей */
+  .app.is-phone .m-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .app.is-phone .m-metric {
+    display: block; width: 100%; min-height: 76px; text-align: left; padding: 12px 13px;
+    background: var(--m-tile); border: 1px solid var(--m-line); border-radius: 16px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-metric:active { background: var(--m-tile-press); }
+  .app.is-phone .m-metric span { display: block; font-size: 13px; color: var(--m-muted); }
+  .app.is-phone .m-metric b { display: block; font-size: 19px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-metric small { display: block; font-size: 12.5px; color: var(--m-muted); }
+  .app.is-phone .m-metric.wide { grid-column: 1 / -1; }
+  .app.is-phone .m-metric.wide b { font-size: 26px; }
+  .app.is-phone .m-metric.ok b { color: var(--m-ok); }
+  .app.is-phone .m-metric.bad b { color: var(--m-bad); }
+
+  /* по месяцам */
+  .app.is-phone .m-panel {
+    margin-top: 12px; padding: 16px; border-radius: 18px;
+    background: var(--m-tile); border: 1px solid var(--m-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-panel h2 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+  .app.is-phone .m-bars { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: end; height: 140px; margin-top: 10px; }
+  .app.is-phone .m-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 6px; min-width: 0; }
+  .app.is-phone .m-bar { width: 100%; max-width: 30px; border-radius: 6px 6px 3px 3px; background: var(--m-accent); min-height: 3px; }
+  .app.is-phone .m-bar.future { background: rgba(138, 108, 241, .45); }
+  .app.is-phone .m-bar-col small { font-size: 11.5px; color: var(--m-muted); }
+  .app.is-phone .m-bar-val { font-size: 10.5px; color: var(--m-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* ---------- нижняя панель ---------- */
+  .app.is-phone .m-tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+    padding: 6px 6px calc(6px + var(--m-safe-b));
+    background: rgba(17, 26, 43, .86);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-tabbar button {
+    min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px;
+    border: 0; background: none; color: var(--m-muted); font-size: 11px; font-weight: 600; padding: 4px 0; border-radius: 12px;
+  }
+  .app.is-phone .m-tabbar button.on { color: var(--m-accent-text); }
+  .app.is-phone .m-tabbar .m-tab-add { color: var(--m-text); }
+  .app.is-phone .m-plus {
+    width: 52px; height: 52px; margin-top: -24px; border-radius: 17px; display: grid; place-items: center;
+    background: linear-gradient(145deg, #9d7cff, #6a47d9); color: #fff; box-shadow: 0 10px 26px rgba(138, 108, 241, .5);
+  }
+
+  /* ---------- шторка «Ещё» ---------- */
+  .app.is-phone .m-sheet-backdrop {
+    position: fixed; inset: 0; z-index: 60; background: rgba(4, 8, 18, .62);
+    display: flex; align-items: flex-end; justify-content: center; animation: m-fade .18s ease;
+  }
+  .app.is-phone .m-sheet {
+    width: 100%; max-width: 640px; max-height: calc(100dvh - 40px - var(--m-safe-t)); display: flex; flex-direction: column;
+    background: #162133; border-radius: 22px 22px 0 0; box-shadow: 0 -18px 50px rgba(0, 0, 0, .45);
+    animation: m-rise .24s cubic-bezier(.2, .8, .2, 1);
+  }
+  .app.is-phone .m-sheet-grip { width: 38px; height: 5px; border-radius: 3px; background: var(--m-rail); margin: 8px auto 0; }
+  .app.is-phone .m-sheet-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 18px; }
+  .app.is-phone .m-sheet-head h2 { flex: 1; font-size: 20px; font-weight: 700; }
+  .app.is-phone .m-icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 12px; background: var(--m-tile-2); }
+  .app.is-phone .m-sheet-body { overflow-y: auto; padding: 4px 16px calc(18px + var(--m-safe-b)); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .app.is-phone .m-menu-group h3 { font-size: 12.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--m-muted); margin: 14px 4px 8px; }
+  .app.is-phone .m-sheet .m-list { background: rgba(255, 255, 255, .045); }
+  .app.is-phone .m-menu-row {
+    display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 8px 12px 8px 14px;
+    border: 0; border-bottom: 1px solid var(--m-line); background: none; text-align: left;
+  }
+  .app.is-phone .m-menu-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-menu-row:active { background: var(--m-tile-press); }
+  .app.is-phone .m-menu-row:disabled { opacity: .45; }
+  .app.is-phone .m-menu-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--m-accent-soft); color: var(--m-accent-text); flex-shrink: 0; }
+  .app.is-phone .m-menu-row.bad .m-menu-icon { background: var(--m-bad-soft); color: var(--m-bad); }
+  .app.is-phone .m-menu-row.bad b { color: var(--m-bad); }
+  .app.is-phone .m-menu-text { flex: 1; min-width: 0; }
+  .app.is-phone .m-menu-text b { display: block; font-weight: 600; font-size: 16px; }
+  .app.is-phone .m-menu-text small { display: block; color: var(--m-muted); font-size: 13px; }
+  .app.is-phone .m-chevron { color: var(--m-muted); flex-shrink: 0; }
+
+  @keyframes m-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes m-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---------- полоса администратора: на телефоне видна только внутри «Операторов» и «Переноса с Mac» ---------- */
+  .web-admin-bar:not(.is-open) { display: none; }
+  .web-admin-bar.is-open {
+    position: sticky; top: 0; z-index: 20; padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px; gap: 8px;
+    background: #111b2e; color: #fff; font-family: "Onest Variable", system-ui, sans-serif;
+  }
+  .web-admin-bar.is-open > span { display: none; }
+  .web-admin-bar.is-open button { min-height: 44px; flex: 1; background: #26334b; border-radius: 12px; font-family: inherit; }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .app.is-phone .m-sheet, .app.is-phone .m-sheet-backdrop { animation: none; }
+}

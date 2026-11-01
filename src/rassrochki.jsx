@@ -36,6 +36,8 @@ import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
+import usePhoneLayout from "./usePhoneLayout";
+import { MobileTopBar, MobileTabBar, MobileMoreSheet, MobileHome, moreIcons, weekdayLabel } from "./MobileShell";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -559,7 +561,9 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 /*  Приложение                                                         */
 /* ------------------------------------------------------------------ */
 
-export default function App() {
+export default function App({ onOpenTeam, onOpenMacImport } = {}) {
+  const isPhone = usePhoneLayout(); // ширина до 760px — телефонная раскладка
+  const [moreOpen, setMoreOpen] = useState(false);
   const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
   const {logs:operatorLogs,people:operatorPeople,error:operatorLogsError}=useCallLogs(!isDesktopApp ? session?.user?.id : null);
   const [authError, setAuthError] = useState("");
@@ -1622,11 +1626,24 @@ export default function App() {
       </div>
     );
 
+  const exportExcel = async () => {
+    const XLSX = await import("xlsx");
+    XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
+  };
+  const syncStatus = !isDesktopApp && <WebSyncStatus
+        rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
+        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
+        onRefresh={() => setReloadTick(t => t + 1)}
+      />;
+  const goTab = (next) => { setMoreOpen(false); setTab(next); window.scrollTo?.(0, 0); };
+
   return (
-    <div className="app">
+    <div className={isPhone ? "app is-phone" : "app"}>
       <style>{css}</style>
 
-      <header className="hd">
+      {isPhone && <MobileTopBar subtitle={weekdayLabel(toIsoDate(new Date()))}>{syncStatus}</MobileTopBar>}
+      {!isPhone && <header className="hd">
         <div className="brand">
           <span className="mark"><Wallet size={18} /></span>
           <div>
@@ -1640,11 +1657,7 @@ export default function App() {
           </button>
           <button
             className="btn on-dark"
-            onClick={async () => {
-              const XLSX = await import("xlsx");
-              XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
-              await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
-            }}
+            onClick={exportExcel}
           >
             <Download size={16} /> Экспорт
           </button>
@@ -1658,12 +1671,8 @@ export default function App() {
             <LogOut size={16} />
           </button>
         </div>
-      </header>
-      {!isDesktopApp && <WebSyncStatus
-        rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
-        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
-        onRefresh={() => setReloadTick(t => t + 1)}
-      />}
+      </header>}
+      {!isPhone && syncStatus}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
         <span>{saveState.pending ? "Сохраняем…" : saveState.error ? `Ошибка сохранения: ${saveState.error}` : saveState.lastSavedAt ? `Сохранено · ${fmtDateTime(saveState.lastSavedAt)}` : "Данные загружены с Mac"}</span>
         <button className="btn ghost btn-sm" onClick={() => setDataCenterOpen(true)}>Последняя успешная копия: {lastBackupAt ? fmtDateTime(lastBackupAt) : "ещё не создана"}</button>
@@ -1671,7 +1680,7 @@ export default function App() {
       </div>}
 
       {operatorLogsError && <p role="alert">{operatorLogsError}</p>}
-      <nav className="tabs">
+      {!isPhone && <nav className="tabs">
         <button className={tab === "dashboard" ? "on" : ""} onClick={() => setTab("dashboard")}>
           <LayoutGrid size={16} /> Сводка
         </button>
@@ -1686,7 +1695,7 @@ export default function App() {
         <button onClick={() => setDataCenterOpen(true)}>
           {isDesktopApp ? <Database size={16} /> : <History size={16} />} {isDesktopApp ? "Данные" : "История"}
         </button>
-      </nav>
+      </nav>}
 
       {storageError && (
         <div className="storage-warn-wrap">
@@ -1707,7 +1716,14 @@ export default function App() {
       {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
 
-      {tab === "dashboard" && (
+      {tab === "dashboard" && isPhone && (
+        <MobileHome
+          contracts={contracts} getStats={contractStats} totals={totals} capital={capital} received={received} monthlyStats={monthlyStats}
+          onOpenContract={setOpenId} onPay={openQuickPay} onRemind={notifyPayment} onSection={setSectionModal}
+          onReceived={(view) => { setReceivedView(view); setReceivedOpen(true); }}
+        />
+      )}
+      {tab === "dashboard" && !isPhone && (
         <main className="wrap dashboard-wrap">
           <button type="button" className="hero hero-btn" onClick={() => setSectionModal("remaining")}>
             <div className="hero-label">Остаток к получению</div>
@@ -2361,7 +2377,31 @@ export default function App() {
       {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
       {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
       {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
-      <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>
+      {!isPhone && <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>}
+      {isPhone && <MobileTabBar tab={tab} onTab={goTab} onAdd={() => setAdding(true)} onMore={() => setMoreOpen(true)} moreActive={moreOpen || ["capital", "directories"].includes(tab)} />}
+      {isPhone && moreOpen && <MobileMoreSheet
+        onClose={() => setMoreOpen(false)}
+        footer={`Версия ${APP_VERSION} · сборка ${fmtDate(`${BUILD_DATE}T00:00:00`)}`}
+        groups={[
+          { title: "Разделы", items: [
+            { key: "capital", icon: <moreIcons.Landmark size={19} />, label: "Капитал", hint: "Вкладчики, выплаты, прибыль", onClick: () => goTab("capital") },
+            !isDesktopApp && { key: "directories", icon: <moreIcons.Users size={19} />, label: "Справочники", hint: "Клиенты и товары", onClick: () => goTab("directories") },
+            { key: "history", icon: <moreIcons.History size={19} />, label: isDesktopApp ? "Данные" : "История", hint: "Журнал действий", onClick: () => setDataCenterOpen(true) },
+          ] },
+          { title: "Данные", items: [
+            { key: "import", icon: <moreIcons.Upload size={19} />, label: "Импорт из Excel", onClick: () => setImporting(true) },
+            { key: "export", icon: <moreIcons.Download size={19} />, label: "Экспорт в Excel", hint: "Скачать все договоры", onClick: exportExcel },
+            !isDesktopApp && cloudDrafts.length > 0 && { key: "drafts", icon: <moreIcons.FileText size={19} />, label: `Черновики · ${cloudDrafts.length}`, onClick: () => setDraftsOpen(true) },
+          ] },
+          { title: "Администрирование", items: [
+            onOpenTeam && { key: "team", icon: <moreIcons.UserCog size={19} />, label: "Операторы и назначения", onClick: onOpenTeam },
+            onOpenMacImport && { key: "mac", icon: <moreIcons.Laptop size={19} />, label: "Перенести копию с Mac", onClick: onOpenMacImport },
+          ] },
+          { title: "Аккаунт", items: [
+            { key: "logout", icon: <moreIcons.LogOut size={19} />, label: "Выйти", tone: "bad", onClick: logout },
+          ] },
+        ]}
+      />}
     </div>
   );
 }
