@@ -257,3 +257,7 @@ html body .app .btn.btn-xs{padding:5px 9px;font-size:11.5px;border-radius:7px;wh
 }
 html body .app .clist-toolbar .toolbar-select{max-width:100%}
 html body .app main.wrap-table .search-box{flex:1 1 320px}
+/* Итог расчёта в форме договора: в тёмной теме фон брал цвет текста (--ink) и плитки были белыми с бледным текстом. */
+html body .app .calc>div{background:linear-gradient(135deg,#2b2a52,#1c2839);color:#f1f5fb;box-shadow:inset 0 0 0 1px #4a4380}
+html body .app .calc span{color:#aab8cb}
+html body .app .calc b{color:#f1f5fb}
