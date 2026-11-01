@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
-import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail } from "./mobile.jsx";
+import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail, MAddForm } from "./mobile.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -1749,7 +1749,7 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onPa
 
 /* --------------------------- Новый договор ------------------------- */
 
-function AddForm({ investors, onClose, onSave, editing }) {
+function AddForm({ investors, onClose, onSave, editing, mobile }) {
   const [f, setF] = useState({
     clientName: editing?.clientName || "", phone: editing?.phone || "", item: editing?.item || "",
     comment: editing?.comment || "",
@@ -1813,6 +1813,25 @@ function AddForm({ investors, onClose, onSave, editing }) {
   const markup = +f.markupAmount || 0;
   const financed = principal + markup;
   const valid = f.clientName.trim().length > 0;
+
+  const submit = () => {
+    const { markupAmount: _markupAmount, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
+    onSave({
+      ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
+      markup, markupPercent: +f.markupPercent || 0, termMonths: Math.max(1, +f.termMonths || 1),
+    });
+  };
+
+  if (mobile)
+    return (
+      <MAddForm
+        f={f} setF={setF} set={set} editing={editing} investors={investors} onClose={onClose} submit={submit}
+        showGuarantor={showGuarantor} setShowGuarantor={setShowGuarantor}
+        onMarkupPercent={onMarkupPercent} onMarkupAmount={onMarkupAmount}
+        onMonthlyPayment={onMonthlyPayment} onTermMonths={onTermMonths}
+        markup={markup} financed={financed} valid={valid}
+      />
+    );
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -1893,13 +1912,7 @@ function AddForm({ investors, onClose, onSave, editing }) {
 
           <div className="sheet-actions">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
-            <button className="btn primary" disabled={!valid} onClick={() => {
-              const { markupAmount: _markupAmount, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
-              onSave({
-                ...rest, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
-                markup, markupPercent: +f.markupPercent || 0, termMonths: Math.max(1, +f.termMonths || 1),
-              });
-            }}>{editing ? "Сохранить изменения" : "Создать договор"}</button>
+            <button className="btn primary" disabled={!valid} onClick={submit}>{editing ? "Сохранить изменения" : "Создать договор"}</button>
           </div>
         </div>
       </div>

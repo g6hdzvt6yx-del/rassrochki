@@ -974,6 +974,100 @@ export function MDetail(p) {
   );
 }
 
+/* --------------------------- Новый / изменить договор -------------- */
+
+// обёртка обработчика: чистим ввод до цифр и передаём дальше как событие
+const numEvt = (handler, decimal) => (e) => handler({ target: { value: cleanNum(e.target.value, decimal) } });
+
+const NumInput = ({ value, onChange, decimal, placeholder = "0" }) => (
+  <input type="text" inputMode={decimal ? "decimal" : "numeric"} pattern={decimal ? undefined : "[0-9]*"}
+    value={value} onChange={numEvt(onChange, decimal)} placeholder={placeholder} />
+);
+
+export function MAddForm({
+  f, setF, set, editing, investors, onClose, submit, showGuarantor, setShowGuarantor,
+  onMarkupPercent, onMarkupAmount, onMonthlyPayment, onTermMonths, markup, financed, valid,
+}) {
+  return (
+    <Sheet
+      title={editing ? "Изменить договор" : "Новый договор"}
+      subtitle={editing ? editing.clientName : null}
+      onClose={onClose}
+      className="m-tall"
+      footer={
+        <>
+          <div className="m-calc">
+            <div><span>Наценка</span><b className="num">{money(markup)}</b></div>
+            <div><span>К оплате в рассрочку</span><b className="num">{money(financed)}</b></div>
+          </div>
+          <button type="button" className="m-btn primary block" disabled={!valid} onClick={submit}>
+            {editing ? "Сохранить изменения" : "Создать договор"}
+          </button>
+        </>
+      }
+    >
+      <div className="m-mini-hd">Клиент</div>
+      <Field label="ФИО клиента">
+        <input value={f.clientName} onChange={set("clientName")} placeholder="Иванов Иван" autoCapitalize="words" autoComplete="off" />
+      </Field>
+      <Field label="Телефон">
+        <input type="tel" inputMode="tel" autoComplete="off" value={f.phone} onChange={set("phone")} placeholder="+7 …" />
+      </Field>
+      {showGuarantor ? (
+        <>
+          <Field label="Поручитель, ФИО">
+            <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" autoCapitalize="words" autoComplete="off" />
+          </Field>
+          <Field label="Поручитель, телефон">
+            <input type="tel" inputMode="tel" autoComplete="off" value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
+          </Field>
+        </>
+      ) : (
+        <button type="button" className="m-btn ghost block m-add-guarantor" onClick={() => setShowGuarantor(true)}>
+          <Plus size={18} /> Добавить поручителя
+        </button>
+      )}
+
+      <div className="m-mini-hd m-mini-gap">Товар и расчёт</div>
+      <Field label="Товар"><input value={f.item} onChange={set("item")} placeholder="Телефон, техника…" /></Field>
+      <div className="m-frow">
+        <Field label="Цена товара, ₽"><NumInput value={f.totalPrice} onChange={set("totalPrice")} /></Field>
+        <Field label="Первонач. взнос, ₽"><NumInput value={f.downPayment} onChange={set("downPayment")} /></Field>
+      </div>
+      <Field label="Считать процент наценки от">
+        <div className="m-seg" role="group">
+          <button type="button" className={f.markupBase === "principal" ? "on" : ""}
+            onClick={() => setF((prev) => ({ ...prev, markupBase: "principal" }))}>Цена − взнос</button>
+          <button type="button" className={f.markupBase === "full" ? "on" : ""}
+            onClick={() => setF((prev) => ({ ...prev, markupBase: "full" }))}>Полная цена</button>
+        </div>
+      </Field>
+      <div className="m-frow">
+        <Field label="Наценка, %"><NumInput decimal value={f.markupPercent} onChange={onMarkupPercent} placeholder="20" /></Field>
+        <Field label="Наценка, ₽"><NumInput value={f.markupAmount} onChange={onMarkupAmount} /></Field>
+      </div>
+      <div className="m-frow">
+        <Field label="Срок, мес"><NumInput value={f.termMonths} onChange={onTermMonths} placeholder="6" /></Field>
+        <Field label="Платёж в месяц, ₽"><NumInput value={f.monthlyPayment} onChange={onMonthlyPayment} /></Field>
+      </div>
+      <Field label="Дата 1-го платежа">
+        <DateFields value={f.startDate} onChange={(v) => setF((prev) => ({ ...prev, startDate: v }))} />
+      </Field>
+
+      <div className="m-mini-hd m-mini-gap">Дополнительно</div>
+      <Field label="Источник финансирования">
+        <select value={f.investorId} onChange={set("investorId")}>
+          <option value="">Общий пул (без привязки)</option>
+          {investors.map((inv) => <option key={inv.id} value={inv.id}>{inv.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Комментарий (необязательно)">
+        <textarea value={f.comment} onChange={set("comment")} placeholder="Заметки по договору…" rows={2} />
+      </Field>
+    </Sheet>
+  );
+}
+
 /* --------------------------- Детали раздела сводки ------------------ */
 
 export function MSectionDetail({ title, rows, onClose, onOpenContract }) {
@@ -1309,6 +1403,19 @@ body:has(.m-root[data-theme="dark"]){background:#0E1714}
 .m-ft-row{display:grid;grid-template-columns:auto 1fr;gap:10px}
 .m-option>span{display:inline-flex;align-items:center;gap:12px}
 .m-option.danger{color:var(--clay)}
+
+/* формы */
+.m-sheet.m-tall{height:calc(100vh - env(safe-area-inset-top) - 24px);height:calc(100dvh - env(safe-area-inset-top) - 24px)}
+.m-frow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.m-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:13px}
+.m-seg.three{grid-template-columns:repeat(3,1fr)}
+.m-seg button{min-height:42px;border:none;border-radius:10px;background:transparent;color:var(--ink-2);font-size:14.5px;font-weight:600;cursor:pointer}
+.m-seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.m-add-guarantor{margin-bottom:14px;color:var(--ink-2)}
+.m-calc{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.m-calc>div{background:var(--hero);color:var(--hero-ink);border-radius:12px;padding:9px 12px;min-width:0}
+.m-calc span{display:block;font-size:11.5px;color:var(--hero-soft)}
+.m-calc b{display:block;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* карточка договора */
 .m-hero-static{cursor:default;margin-top:4px}
