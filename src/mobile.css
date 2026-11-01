@@ -619,3 +619,112 @@
   html body .app.is-phone .confirm-card .btn.danger { background: var(--m-bad); border-color: var(--m-bad); color: #2a0a10; font-weight: 700; }
   html body .app.is-phone .confirm-card .btn.primary { background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
 }
+
+/* ======================= «Касса» на телефоне ======================= */
+@media (max-width: 760px) {
+  html body .app.is-phone .cash-desk { margin: 0; padding: 12px 16px 24px; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 15px; }
+  html body .app.is-phone .cash-desk > h2 { display: none; } /* заголовок уже в шапке */
+  html body .app.is-phone .cash-desk > p { font-size: 13px; color: var(--m-muted); margin: 0 2px 12px; }
+  html body .app.is-phone .cash-quick { margin-top: 0; margin-bottom: 10px; }
+  html body .app.is-phone .cash-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  html body .app.is-phone .cash-filters label { min-width: 0; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .cash-filters > select { grid-column: 1 / -1; }
+  html body .app.is-phone .cash-desk :is(input, select) {
+    width: 100%; height: auto; min-height: 48px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .cash-desk h3 {
+    margin: 14px 0 10px; padding: 16px; border-radius: 20px; font-size: 32px; font-weight: 750; letter-spacing: -.02em; line-height: 1.15;
+    background: linear-gradient(160deg, rgba(138, 108, 241, .3), rgba(138, 108, 241, .06) 60%, rgba(255, 255, 255, .04));
+    border: 1px solid rgba(160, 135, 255, .3);
+  }
+  html body .app.is-phone .cash-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  html body .app.is-phone .cash-summary > p { margin: 0; padding: 12px 13px; border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); font-size: 13px; color: var(--m-muted); overflow-wrap: anywhere; }
+  html body .app.is-phone .cash-summary b { font-size: 18px; color: var(--m-text); }
+  html body .app.is-phone .cash-desk details { border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); padding: 0 14px; margin: 0 0 12px; }
+  html body .app.is-phone .cash-desk details > summary { min-height: 48px; display: flex; align-items: center; font-size: 15px; }
+  html body .app.is-phone .cash-desk details form { display: grid; gap: 8px; margin: 4px 0 14px; }
+  html body .app.is-phone .cash-desk details .btn { min-height: 48px; }
+
+  /* таблица поступлений — карточками */
+  html body .app.is-phone .cash-table-wrap { overflow: visible; margin-top: 4px; }
+  html body .app.is-phone .cash-desk table { min-width: 0; table-layout: auto; border-spacing: 0; display: block; }
+  html body .app.is-phone .cash-desk thead { display: none; }
+  html body .app.is-phone .cash-desk tbody { display: block; }
+  html body .app.is-phone .cash-desk tr {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; margin-bottom: 8px; padding: 12px 14px;
+    border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .cash-desk td { display: block; padding: 0; border: 0; background: none; width: auto; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .cash-desk td:nth-child(2) { order: 1; flex: 0 1 62%; min-width: 0; }
+  html body .app.is-phone .cash-desk td:nth-child(5) { order: 2; flex: 1 0 auto; text-align: right; font-size: 17px; font-weight: 700; color: var(--m-text); }
+  html body .app.is-phone .cash-desk td:nth-child(1) { order: 3; }
+  html body .app.is-phone .cash-desk td:nth-child(3) { order: 4; }
+  html body .app.is-phone .cash-desk td:nth-child(4) { order: 5; }
+  html body .app.is-phone .cash-desk :is(td:nth-child(1), td:nth-child(3), td:nth-child(4)) { padding: 2px 8px; border-radius: 7px; background: var(--m-tile-2); font-size: 12.5px; white-space: nowrap; }
+  html body .app.is-phone .cash-desk td:nth-child(6) { order: 6; flex: 1 1 100%; font-size: 13px; }
+  html body .app.is-phone .cash-desk td:nth-child(6)[data-empty] { display: none; }
+  html body .app.is-phone .cash-client { min-height: 44px; margin: -10px 0 -8px; font-size: 16px; color: var(--m-text); text-align: left; }
+  html body .app.is-phone .cash-item { font-size: 13px; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ======================= «Капитал» на телефоне ======================= */
+@media (max-width: 760px) {
+  .app.is-phone .m-cap-hero { padding-top: 16px; padding-bottom: 14px; }
+  .app.is-phone .m-cap-hero .m-today-label { margin-top: 0; }
+  .app.is-phone .m-cap-hero .m-ribbon { margin: 12px 0 10px; }
+  .app.is-phone .m-cap-legend { margin-bottom: 0; }
+  .app.is-phone .m-ribbon .over, .app.is-phone .m-legend i.over { background: var(--m-bad); }
+  .app.is-phone .m-cap-hero .m-today-caption { margin: 10px 0 0; }
+  .app.is-phone .m-section-h > span { display: inline-flex; align-items: center; gap: 8px; }
+  .app.is-phone .m-section-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 2px 10px; }
+  .app.is-phone .m-section-row .m-section-h { margin: 0; }
+  .app.is-phone .m-strong { color: var(--m-text) !important; font-weight: 700; }
+  .app.is-phone .m-note { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; background: var(--m-tile-2); }
+  .app.is-phone .m-note.bad { background: var(--m-bad-soft); color: var(--m-bad); }
+
+  .app.is-phone .m-cap-card {
+    display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 14px;
+    border-radius: 18px; background: var(--m-tile); border: 1px solid var(--m-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-cap-btn:active { background: var(--m-tile-press); }
+  .app.is-phone .m-cap-card-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-width: 0; }
+  .app.is-phone .m-cap-card-hd b { font-size: 16.5px; font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
+  .app.is-phone .m-cap-card-hd small { flex: 1; color: var(--m-muted); font-size: 13px; white-space: nowrap; }
+  .app.is-phone .m-cap-card-hd > svg { color: var(--m-muted); flex-shrink: 0; }
+  .app.is-phone .m-kv { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 0; font-size: 14.5px; }
+  .app.is-phone .m-kv dt { color: var(--m-muted); }
+  .app.is-phone .m-kv dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  html body .app.is-phone .m-act.danger { color: var(--m-bad); }
+
+  .app.is-phone .m-accrual { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--m-line); display: grid; gap: 10px; }
+  .app.is-phone .m-accrual-hd b { display: block; font-size: 15px; }
+  .app.is-phone .m-accrual-hd small { display: block; font-size: 13px; color: var(--m-muted); }
+
+  .app.is-phone .m-wd-row { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--m-line); min-height: 60px; }
+  .app.is-phone .m-wd-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-wd-sum { font-weight: 700; font-size: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* финансовый отчёт за период */
+  .app.is-phone .m-report { margin-top: 18px; border-radius: 18px; background: var(--m-tile); border: 1px solid var(--m-line); overflow: hidden; }
+  .app.is-phone .m-report > summary { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-weight: 650; font-size: 16px; cursor: pointer; list-style: none; }
+  .app.is-phone .m-report > summary::-webkit-details-marker { display: none; }
+  .app.is-phone .m-report > summary span { flex: 1; }
+  .app.is-phone .m-report-chev { color: var(--m-muted); transition: transform .15s; }
+  .app.is-phone .m-report[open] .m-report-chev { transform: rotate(90deg); }
+  html body .app.is-phone .m-report .investor-profit-panel { margin: 0; padding: 0 14px 14px !important; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 14px; }
+  html body .app.is-phone .m-report .investor-profit-panel > .panel-hd { display: none !important; }
+  html body .app.is-phone .m-report .investor-profit-panel > div:first-of-type { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px !important; }
+  html body .app.is-phone .m-report label { min-width: 0; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .m-report label:first-child, html body .app.is-phone .m-report .btn { grid-column: 1 / -1; }
+  html body .app.is-phone .m-report :is(input, select) {
+    width: 100%; min-height: 48px; margin-top: 4px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-report .btn { min-height: 48px; width: 100%; justify-content: center; }
+  html body .app.is-phone .m-report .profit-table-wrap { overflow: visible; }
+  html body .app.is-phone .m-report .profit-table { width: 100%; min-width: 0; font-size: 14px; }
+  html body .app.is-phone .m-report .profit-table td { padding: 9px 0; background: none; border-color: var(--m-line); }
+  html body .app.is-phone .m-report .profit-table td.num { text-align: right; white-space: nowrap; padding-left: 10px; font-weight: 600; }
+}

@@ -39,6 +39,7 @@ import DataPanelBoundary from "./DataPanelBoundary";
 import usePhoneLayout from "./usePhoneLayout";
 import { MobileTopBar, MobileTabBar, MobileMoreSheet, MobileHome, moreIcons, weekdayLabel } from "./MobileShell";
 import MobileContracts from "./MobileContracts";
+import MobileCapital from "./MobileCapital";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -1732,7 +1733,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       )}
       {appMessage && <button type="button" className={`app-toast ${appMessage.tone || "error"}`} onClick={() => setAppMessage(null)}>{appMessage.message}<X size={14}/></button>}
 
-      {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId}/> }
+      {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId} phone={isPhone}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
 
       {tab === "dashboard" && isPhone && (
@@ -2168,7 +2169,17 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
         </main>
       )}
 
-      {tab === "capital" && (
+      {tab === "capital" && isPhone && (
+        <MobileCapital
+          capital={capital} investors={investors} withdrawals={withdrawals} investorProfits={investorProfits}
+          getAccrual={investorAccrual} purposes={WITHDRAWAL_PURPOSES}
+          report={<FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} getStats={contractStats} />}
+          onProfitGroup={setProfitGroupOpen} onAddInvestor={() => setAddingInvestor(true)} onEditInvestor={setEditingInvestor}
+          onRemoveInvestor={removeInvestor} onPayAccrual={payInvestorAccrual}
+          onAddWithdrawal={() => setAddingWithdrawal(true)} onRemoveWithdrawal={removeWithdrawal}
+        />
+      )}
+      {tab === "capital" && !isPhone && (
         <main className="wrap">
           <FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} getStats={contractStats} />
           <section className="hero">
