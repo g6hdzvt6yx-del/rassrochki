@@ -3427,7 +3427,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
 
   return (
     <div className="overlay" onClick={closeForm}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-form-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">{editing ? "Изменить договор" : "Новый договор рассрочки"}</div>
           <button className="icon-btn" disabled={saving} onClick={closeForm}><X size={18} /></button>
@@ -3723,7 +3723,7 @@ function AddInvestorForm({ onClose, onSave, editing }) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-form-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">{editing ? "Изменить вкладчика" : "Новый вкладчик"}</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -3767,7 +3767,7 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-form-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">Новый вывод средств</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>

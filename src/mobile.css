@@ -728,3 +728,114 @@
   html body .app.is-phone .m-report .profit-table td { padding: 9px 0; background: none; border-color: var(--m-line); }
   html body .app.is-phone .m-report .profit-table td.num { text-align: right; white-space: nowrap; padding-left: 10px; font-weight: 600; }
 }
+
+/* ============ Формы «Новый / Изменить договор», «Вкладчик», «Вывод» на телефоне ============ */
+@media (max-width: 760px) {
+  html body .app.is-phone .overlay:has(> .m-form-sheet) {
+    padding: 0; align-items: stretch; background: var(--m-bg); backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain;
+  }
+  html body .app.is-phone .m-form-sheet {
+    max-width: none; width: 100%; min-height: 100dvh; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible;
+    display: flex; flex-direction: column; color: var(--m-text); font-size: 15px;
+    background: radial-gradient(120% 50% at 0% 0%, rgba(138, 108, 241, .18), transparent 60%), var(--m-bg);
+    animation: m-rise .22s cubic-bezier(.2, .8, .2, 1);
+  }
+  html body .app.is-phone .m-form-sheet > .sheet-hd {
+    position: sticky; top: 0; z-index: 6; min-height: calc(61px + var(--m-safe-t)); gap: 10px;
+    padding: calc(8px + var(--m-safe-t)) 10px 8px 16px;
+    background: rgba(13, 21, 36, .88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .m-form-sheet > .sheet-hd .sheet-name { flex: 1; font-size: 19px; font-weight: 700; }
+  html body .app.is-phone .m-form-sheet > .sheet-hd .icon-btn {
+    width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 13px;
+    background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-form-sheet > .sheet-body { flex: 1; padding: 14px 16px 0; display: flex; flex-direction: column; }
+  html body .app.is-phone .m-form-sheet > .sheet-body > .sheet-actions { margin-top: auto; }
+
+  /* поля */
+  html body .app.is-phone .m-form-sheet .field { display: block; margin-bottom: 14px; }
+  html body .app.is-phone .m-form-sheet .field > span:first-child,
+  html body .app.is-phone .m-form-sheet .field > label { font-size: 13.5px; font-weight: 600; color: var(--m-muted); }
+  html body .app.is-phone .m-form-sheet :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.date-segment), select, textarea) {
+    width: 100%; min-height: 48px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-form-sheet textarea { min-height: 84px; }
+  html body .app.is-phone .m-form-sheet :is(input, select, textarea):focus { border-color: var(--m-accent); box-shadow: 0 0 0 3px rgba(138, 108, 241, .25); outline: none; }
+  html body .app.is-phone .m-form-sheet .frow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  html body .app.is-phone .m-form-sheet .frow > :not(.field) { grid-column: 1 / -1; }
+  html body .app.is-phone .m-form-sheet .field-hint { display: block; margin-top: 6px; font-size: 12.5px; color: var(--m-muted); }
+  html body .app.is-phone .m-form-sheet .date-fields { min-height: 48px; padding: 0 4px 0 10px; border-radius: 12px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); }
+  html body .app.is-phone .m-form-sheet .date-fields .date-segment { min-height: 44px; padding: 0; border: 0; background: transparent; font-size: 16px; color: var(--m-text); }
+  html body .app.is-phone .m-form-sheet .date-picker-button { min-width: 40px; min-height: 44px; }
+
+  /* подсказки из базы (клиент, товар) */
+  html body .app.is-phone .m-form-sheet .search-picker-list { border-radius: 14px; background: #1b2740; border: 1px solid var(--m-line-2); box-shadow: 0 14px 34px rgba(0, 0, 0, .45); }
+  html body .app.is-phone .m-form-sheet .search-picker-list button { min-height: 52px; padding: 8px 12px; font-size: 15px; }
+  html body .app.is-phone .m-form-sheet .search-picker-empty { font-size: 12.5px; color: var(--m-muted); }
+
+  /* переключатели и кнопки внутри формы */
+  html body .app.is-phone .m-form-sheet .seg-toggle { display: flex; padding: 3px; gap: 3px; border-radius: 14px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line); }
+  html body .app.is-phone .m-form-sheet .seg-toggle button { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: var(--m-muted); font-weight: 600; font-size: 14.5px; }
+  html body .app.is-phone .m-form-sheet .seg-toggle button.on { background: var(--m-accent); color: #fff; }
+  html body .app.is-phone .m-form-sheet .btn { min-height: 44px; border-radius: 12px; font-size: 15px; justify-content: center; }
+  html body .app.is-phone .m-form-sheet .guarantor-toggle { width: 100%; margin-bottom: 12px; justify-content: flex-start; color: var(--m-accent-text); background: var(--m-tile); border: 1px dashed var(--m-line-2); }
+  html body .app.is-phone .m-form-sheet :is(.guarantor-block, .passport-block) { margin-bottom: 14px; padding: 12px; border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); }
+
+  /* итог расчёта: тёмные плитки (раньше были белыми с бледным текстом) */
+  html body .app.is-phone .m-form-sheet .calc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 14px; }
+  html body .app.is-phone .m-form-sheet .calc > div {
+    padding: 12px 13px; border-radius: 16px; color: var(--m-text);
+    background: linear-gradient(160deg, rgba(138, 108, 241, .28), rgba(138, 108, 241, .06)); border: 1px solid rgba(160, 135, 255, .3);
+  }
+  html body .app.is-phone .m-form-sheet .calc span { color: var(--m-muted); font-size: 12.5px; }
+  html body .app.is-phone .m-form-sheet .calc b { font-size: 20px; font-weight: 750; color: var(--m-text); }
+
+  /* кнопки сохранения — закреплены внизу экрана */
+  html body .app.is-phone .m-form-sheet .sheet-actions {
+    position: sticky; bottom: 0; z-index: 5; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin: 8px -16px 0; padding: 10px 16px calc(12px + var(--m-safe-b));
+    background: rgba(13, 21, 36, .92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .m-form-sheet .sheet-actions .btn { width: 100%; min-height: 48px; white-space: normal; line-height: 1.15; }
+  html body .app.is-phone .m-form-sheet .sheet-actions .btn.primary { grid-column: 1 / -1; order: -1; min-height: 52px; font-size: 16px; font-weight: 700; background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
+  html body .app.is-phone .m-form-sheet .sheet-actions .btn.primary:disabled { opacity: .5; }
+  html body .app.is-phone .m-form-sheet .sheet-actions:not(:has(> .btn:nth-of-type(3))) > .btn { grid-column: 1 / -1; }
+  html body .app.is-phone .m-form-sheet :is(.mini-block, [role="alert"]) { overflow-wrap: anywhere; }
+}
+
+/* ======================= «Справочники» на телефоне ======================= */
+@media (max-width: 760px) {
+  html body .app.is-phone .directories { padding: 12px 16px 24px; max-width: none; }
+  html body .app.is-phone .directories > h1 { display: none; } /* заголовок уже в шапке */
+  html body .app.is-phone .directories > p.muted:first-of-type { margin: 0 2px 12px; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .directory-tabs { display: flex; gap: 3px; padding: 3px; margin: 0 0 12px; border-radius: 14px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line); }
+  html body .app.is-phone .directory-tabs .btn { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: var(--m-muted); font-weight: 600; font-size: 14.5px; justify-content: center; }
+  html body .app.is-phone .directory-tabs .btn.primary { background: rgba(255, 255, 255, .14); color: var(--m-text); }
+  html body .app.is-phone .directory-search { margin: 0 0 10px; gap: 6px; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .directories input {
+    min-height: 48px; padding: 0 13px; font-size: 16px; font-family: inherit; border-radius: 13px;
+    background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .directories > p.muted { font-size: 13px; color: var(--m-muted); margin: 0 2px 8px; }
+  html body .app.is-phone .directory-list { border-radius: 18px; overflow: hidden; background: var(--m-tile); border: 1px solid var(--m-line); }
+  html body .app.is-phone .directory-row {
+    flex-direction: row; align-items: center; gap: 12px; margin: 0; padding: 12px 10px 12px 14px;
+    border-radius: 0; border: 0; border-bottom: 1px solid var(--m-line); background: transparent;
+  }
+  html body .app.is-phone .directory-row:last-child { border-bottom: 0; }
+  html body .app.is-phone .directory-row > div { flex: 1; min-width: 0; }
+  html body .app.is-phone .directory-row strong { display: block; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+  html body .app.is-phone .directory-row p { margin: 2px 0 0; font-size: 14px; color: var(--m-text); }
+  html body .app.is-phone .directory-row small { font-size: 12.5px; color: var(--m-muted); }
+  html body .app.is-phone .directory-row .btn { align-self: center; flex-shrink: 0; min-height: 44px; padding: 0 14px; border-radius: 12px; font-size: 14px; }
+  html body .app.is-phone .directory-editor { margin-bottom: 12px; padding: 16px; border-radius: 18px; background: var(--m-tile); border: 1px solid rgba(160, 135, 255, .35); }
+  html body .app.is-phone .directory-editor h2 { font-size: 18px; margin: 0 0 6px; }
+  html body .app.is-phone .directory-editor p { font-size: 13.5px; color: var(--m-muted); margin: 0 0 6px; }
+  html body .app.is-phone .directory-editor label { margin: 12px 0 0; font-size: 13.5px; color: var(--m-muted); }
+  html body .app.is-phone .directory-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 0; }
+  html body .app.is-phone .directory-actions .btn { min-height: 48px; justify-content: center; }
+}
