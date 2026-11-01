@@ -36,7 +36,7 @@ import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
-import { useIsMobile, useTheme, MobileStatus, MobileLogin, ConfirmSheet, LegacyLayer } from "./mobile/kit";
+import { useIsMobile, useTheme, MobileStatus, MobileLogin, ConfirmSheet, LegacyLayer, Sheet } from "./mobile/kit";
 import AdminMobile from "./mobile/AdminMobile";
 
 const APP_VERSION = __APP_VERSION__;
@@ -48,10 +48,10 @@ const showAppMessage = (message, tone = "error") => window.dispatchEvent(new Cus
 /*  Утилиты                                                            */
 /* ------------------------------------------------------------------ */
 
-const money = (n) =>
+export const money = (n) =>
   new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(Math.round(n || 0)) + " ₽";
 
-const paymentWord = (count) => {
+export const paymentWord = (count) => {
   const value = Math.abs(count) % 100;
   const last = value % 10;
   if (value > 10 && value < 20) return "платежей";
@@ -60,7 +60,7 @@ const paymentWord = (count) => {
   return "платежей";
 };
 
-const fmtDate = (d) =>
+export const fmtDate = (d) =>
   new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
 
 const openExternalUrl = async (url) => {
@@ -78,16 +78,16 @@ const openExternalUrl = async (url) => {
   }
 };
 
-const fmtDateTime = (iso) => iso ? new Intl.DateTimeFormat("ru-RU", {
+export const fmtDateTime = (iso) => iso ? new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
 }).format(new Date(iso)) : "";
 
 const localDateTimeInput = (date = new Date()) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-const CONTACT_TYPES = CONTACT_TYPE_LABELS;
+export const CONTACT_TYPES = CONTACT_TYPE_LABELS;
 
-const toIsoDate = (date) => {
+export const toIsoDate = (date) => {
   const d = new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
@@ -133,7 +133,7 @@ const buildSchedule = (c) => {
   });
 };
 
-const contractStats = (c) => {
+export const contractStats = (c) => {
   const rows = buildSchedule(c);
   const financed = rows.reduce((s, r) => s + r.amountDue, 0);
   const paidSum = rows.reduce((s, r) => s + r.paidAmount, 0);
@@ -148,14 +148,14 @@ const contractStats = (c) => {
 /*  Вкладчики / капитал                                                */
 /* ------------------------------------------------------------------ */
 
-const WITHDRAWAL_PURPOSES = {
+export const WITHDRAWAL_PURPOSES = {
   owner: "Прибыль собственнику",
   investor_payout: "Выплата вкладчику",
   restock: "Закупка товара",
   other: "Прочее",
 };
 
-const investorAccrual = (investor, withdrawals, today = startOfToday()) => {
+export const investorAccrual = (investor, withdrawals, today = startOfToday()) => {
   const monthly = Math.max(0, +investor.monthlyPayment || 0);
   const start = investor.accrualStartDate ? new Date(`${investor.accrualStartDate}T00:00:00`) : null;
   let monthsAccrued = 0;
@@ -527,7 +527,7 @@ const buildFilteredContractsWorkbook = (XLSX, contracts, investors) => {
 /*  Мелкие компоненты                                                  */
 /* ------------------------------------------------------------------ */
 
-const STATUS = {
+export const STATUS = {
   paid: { label: "Оплачен", cls: "b-emerald" },
   partial: { label: "Частично", cls: "b-amber" },
   overdue: { label: "Просрочен", cls: "b-clay" },
@@ -537,13 +537,13 @@ const STATUS = {
   done: { label: "Закрыт", cls: "b-emerald" },
 };
 
-const Badge = ({ s }) => {
+export const Badge = ({ s }) => {
   const st = STATUS[s] || STATUS.upcoming;
   return <span className={`badge ${st.cls}`}>{st.label}</span>;
 };
 
 // «Лента долга» — фирменный элемент: полоса, поделённая на оплачено / просрочено / остаток
-const Ribbon = ({ paid, overdue, remaining }) => {
+export const Ribbon = ({ paid, overdue, remaining }) => {
   const total = Math.max(1, paid + remaining);
   const p = (paid / total) * 100;
   const o = (overdue / total) * 100;
@@ -1696,6 +1696,7 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
         )}
         {sectionModal && (
           <SectionDetail
+            mobile={isMobile}
             title={sectionTitles[sectionModal]}
             rows={sectionRows}
             onClose={() => setSectionModal(null)}
@@ -1713,9 +1714,9 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           </React.Suspense></DataPanelBoundary>
         )}
         {confirmDialog && <ConfirmDialog mobile={isMobile} options={confirmDialog} onCancel={() => finishConfirm(false)} onConfirm={() => finishConfirm(true)} />}
-        {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
-        {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
-        {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
+        {receivedOpen && <ReceivedDetail mobile={isMobile} contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
+        {profitTotalOpen && <ProfitTotalDetail mobile={isMobile} contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
+        {profitGroupOpen && <ProfitGroupDetail mobile={isMobile} group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
     </>
   );
 
@@ -1781,6 +1782,9 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           setDataCenterOpen, exportAll, requestConfirm, onOpenTeam, onOpenImport, syncStatus,
           storageError, setStorageError, reload: () => setReloadTick((t) => t + 1), operatorLogsError, appMessage, setAppMessage,
           appVersion: APP_VERSION, buildDate: fmtDate(`${BUILD_DATE}T00:00:00`),
+          setSectionModal, setReceivedView, setReceivedOpen, setProfitTotalOpen, notifyPayment,
+          dailyPayments, dailyError, dailyContacts, visibleUpcoming, showAllUpcoming, setShowAllUpcoming,
+          daily: { date: dailyDate, setDate: setDailyDate, range: dailyRange, setRange: setDailyRange, to: dailyTo, setTo: setDailyTo },
           }}
         />
       ) : <>
@@ -2525,7 +2529,7 @@ const contractBadge = (contract) => {
   return st.done ? "done" : st.overdueSum ? "overdue" : "active";
 };
 
-function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
+function ProfitTotalDetail({ contracts, onClose, onOpenContract, mobile }) {
   const period = useReportPeriod();
   const monthly = useMemo(() => scheduledProfitByMonth(contracts, contractStats), [contracts]);
   const months = useMemo(() => monthly.map((row) => row.month), [monthly]);
@@ -2534,11 +2538,7 @@ function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
     [contracts, period.selectedMonth, period.range]
   );
   const badges = useMemo(() => new Map(contracts.map((c) => [c.id, contractBadge(c)])), [contracts]);
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd"><div className="sheet-name">Общая прибыль</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
-        <div className="sheet-body">
+  const body = (<>
           <ReportPeriodPicker id="profit-total-month" period={period} months={months} />
           {period.error ? <p role="alert" className="storage-warn">{period.error}</p> : <>
           <div className="received-totals received-plan-totals">
@@ -2562,21 +2562,21 @@ function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
             {!summary.rows.length && <div className="empty">За выбранный период платежей по графику нет.</div>}
           </div>
           </>}
+        </>);
+  if (mobile) return <Sheet title={"Общая прибыль"} subtitle={null} onClose={onClose} className="tall">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd"><div className="sheet-name">Общая прибыль</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
   );
 }
 
-function SectionDetail({ title, rows, onClose, onOpenContract }) {
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <div className="sheet-name">{title}</div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="sheet-body">
+function SectionDetail({ title, rows, onClose, onOpenContract, mobile }) {
+  const body = (<>
           {rows.length === 0 ? (
             <div className="empty">Пусто.</div>
           ) : (
@@ -2597,13 +2597,23 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
               </div>
             </>
           )}
+        </>);
+  if (mobile) return <Sheet title={String(title || "").split(" — ")[0]} subtitle={String(title || "").split(" — ")[1] || null} onClose={onClose} className="tall">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">{title}</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
   );
 }
 
-function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received", onClose, onOpenContract }) {
+function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received", onClose, onOpenContract, mobile }) {
   const period = useReportPeriod();
   const { month, setMonth, custom, range, error: periodError } = period;
   const [profitMode, setProfitMode] = useState("actual");
@@ -2615,11 +2625,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
     () => month ? receivedSummary(contracts, contractStats, custom ? "" : month, range) : allTimeSummary,
     [contracts, allTimeSummary, month, custom, range]
   );
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd"><div className="sheet-name">{view === "profit" ? "Плановая и фактическая прибыль" : "Получено всего"}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
-        <div className="sheet-body">
+  const body = (<>
           <ReportPeriodPicker id="received-month" period={period} months={months} />
           {periodError ? <p role="alert" className="storage-warn">{periodError}</p> : <>
           {view === "profit" ? <>
@@ -2658,20 +2664,30 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
             {!(showPlanned ? planned.rows : summary.rows).length && <div className="empty">За выбранный период платежей нет.</div>}
           </div>
           </>}
+        </>);
+  if (mobile) return <Sheet title={view === "profit" ? "Плановая и фактическая прибыль" : "Получено всего"} subtitle={null} onClose={onClose} className="tall">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd"><div className="sheet-name">{view === "profit" ? "Плановая и фактическая прибыль" : "Получено всего"}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
   );
 }
 
-function ProfitGroupDetail({ group, onClose, onOpenContract }) {
+function ProfitGroupDetail({ group, onClose, onOpenContract, mobile }) {
+  const body = (<>
+          <div className="received-totals"><div><span>Прибыль получена</span><b>{money(group.profitReceived)}</b></div><div><span>Прибыль ожидается</span><b>{money(group.profitExpected)}</b></div><div><span>К выплате</span><b>{money(group.profitToPay)}</b></div></div>
+          <div className="data-list">{group.contracts.map((contract) => <button className="data-row data-row-button" key={contract.id} onClick={() => onOpenContract(contract.id)}><div><b>{contract.clientName}</b><span>{contract.item || "Без товара"}</span></div><div><b className="num">{money(contract.profitReceived)}</b><small>ожидается {money(contract.profitExpected)}</small></div></button>)}</div>
+        </>);
+  if (mobile) return <Sheet title={group.name} subtitle={null} onClose={onClose} className="tall">{body}</Sheet>;
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">{group.name}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
-        <div className="sheet-body">
-          <div className="received-totals"><div><span>Прибыль получена</span><b>{money(group.profitReceived)}</b></div><div><span>Прибыль ожидается</span><b>{money(group.profitExpected)}</b></div><div><span>К выплате</span><b>{money(group.profitToPay)}</b></div></div>
-          <div className="data-list">{group.contracts.map((contract) => <button className="data-row data-row-button" key={contract.id} onClick={() => onOpenContract(contract.id)}><div><b>{contract.clientName}</b><span>{contract.item || "Без товара"}</span></div><div><b className="num">{money(contract.profitReceived)}</b><small>ожидается {money(contract.profitExpected)}</small></div></button>)}</div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
@@ -3588,7 +3604,7 @@ function DraftsList({ drafts, onClose, onContinue, onDelete }) {
   );
 }
 
-const Field = ({ label, children }) => (
+export const Field = ({ label, children }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
 
@@ -3619,6 +3635,7 @@ function PassportFields({ title, value, onChange }) {
 
 // поле даты из трёх сегментов (ДД/ММ/ГГГГ) с автопереходом — вместо капризного native <input type="date">
 function DateFields({ value, onChange }) {
+  const mobile = useIsMobile();
   const [vy, vm, vd] = value ? value.split("-") : ["", "", ""];
   const [day, setDay] = useState(vd || "");
   const [month, setMonth] = useState(vm || "");
@@ -3667,6 +3684,8 @@ function DateFields({ value, onChange }) {
     if (e.key === "Backspace" && current === "") ref.current?.focus();
   };
 
+  // на телефоне — системный выбор даты
+  if (mobile) return <input type="date" className="m-date" value={value || ""} onChange={(e) => e.target.value && onChange(e.target.value)} />;
   return (
     <div className="date-fields">
       <input className="date-segment" ref={dayRef} value={day} onChange={onDay} onFocus={(e) => e.target.select()} placeholder="ДД" inputMode="numeric" />

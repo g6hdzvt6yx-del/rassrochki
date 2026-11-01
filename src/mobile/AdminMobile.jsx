@@ -9,6 +9,7 @@ import {
   LayoutGrid, ScrollText, Plus, Wallet, Menu, X, Landmark, Users, History, FileText, Upload, Download,
   UserCog, HardDriveDownload, LogOut, Moon, Sun, Smartphone, ChevronRight, AlertTriangle,
 } from "lucide-react";
+import Dashboard from "./Dashboard";
 import { ScreenHeader, TabBar, SecHd, useBackClose, useThemePref, useTheme, setThemePref, useThemeColorMeta } from "./kit";
 
 const TABS = (debtors) => [
@@ -60,7 +61,7 @@ export default function AdminMobile({ app }) {
     screen = {
       title: "Сводка",
       sub: new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date()),
-      body: <Placeholder />,
+      body: <Dashboard app={app} />,
     };
   }
 

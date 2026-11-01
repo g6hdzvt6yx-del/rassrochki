@@ -30,7 +30,7 @@ body:has(.m-root[data-theme="light"]){background:#f4f5fb}
 .m-root{background:var(--bg);min-height:100vh;min-height:100dvh}
 .m-portal{position:relative;z-index:100}
 :where(.m-app) :where(button,a,input,select,textarea){font:inherit;color:inherit}
-.m-app .num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+html body .m-app .num{font-family:inherit;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .m-app .strong{font-weight:700}
 .m-app h1,.m-app h2,.m-app h3,.m-app p{margin:0}
 
@@ -287,6 +287,78 @@ button.m-stat{cursor:pointer}
 .m-stat-chev{color:var(--ink-3);flex-shrink:0}
 .m-stat.clay{border-color:transparent;background:var(--clay-soft)}
 .m-stat.clay .m-stat-val,.m-stat.clay .m-stat-ic{color:var(--clay)}
+
+/* сводка */
+.m-trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.m-trio>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0}
+.m-trio span{display:block;font-size:12px;color:var(--ink-3)}
+.m-trio b{display:block;font-size:16px;font-weight:700;overflow-wrap:anywhere}
+.m-kv{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--ink-2);margin-top:4px}
+.m-kv b{color:var(--ink);white-space:nowrap}
+.m-kv .clay,.m-kv .clay b{color:var(--clay)}
+.m-amt-sm{font-size:16px}
+.m-quote{font-size:14px;line-height:1.45;margin-top:8px;padding:8px 10px;border-left:3px solid var(--brand);background:var(--surface-2);border-radius:0 10px 10px 0;overflow-wrap:anywhere}
+.m-chips-tight{margin-top:8px;gap:6px}
+.m-gap-b{margin-bottom:14px}
+.m-month{cursor:default}
+.m-mrow{display:grid;grid-template-columns:62px minmax(0,1fr) auto;align-items:center;gap:10px;padding:6px 0}
+.m-mlabel{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.m-mbar{display:block;height:8px;border-radius:6px;background:var(--surface-2);overflow:hidden;box-shadow:inset 0 0 0 1px var(--line)}
+.m-mbar>span{display:block;height:100%;border-radius:6px}
+.m-mbar .fill-received{background:var(--emerald)}
+.m-mbar .fill-expected{background:var(--brand)}
+.m-mval{text-align:right;min-width:96px}
+.m-mval b{display:block;font-size:14px;font-weight:700;white-space:nowrap}
+.m-mval small{display:block;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.m-app input.m-date{width:100%;min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;
+  font-size:16px;color:var(--ink);-webkit-appearance:none;appearance:none;display:block}
+
+/* содержимое окон-разбивок (та же разметка, что на компьютере, в мобильном оформлении) */
+html body .m-app .section-total{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--hero);color:var(--hero-ink);
+  border-radius:16px;padding:14px 16px;margin-bottom:12px;font-size:13.5px}
+html body .m-app .section-total span{color:var(--hero-soft)}
+html body .m-app .section-total b{font-size:20px;font-weight:700;white-space:nowrap}
+html body .m-app .rows,html body .m-app .data-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+html body .m-app :is(.prow,.data-row){display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;width:100%;
+  text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;color:var(--ink);font-size:14px;min-height:56px}
+html body .m-app :is(.prow,.data-row-button){cursor:pointer}
+html body .m-app :is(.prow,.data-row-button):active{background:var(--surface-2)}
+html body .m-app .prow .prow-name{font-weight:600;font-size:15.5px;flex:1 1 60%;min-width:0;overflow-wrap:anywhere}
+html body .m-app .prow .prow-sum{font-weight:700;font-size:16px;white-space:nowrap}
+html body .m-app .prow .prow-date{flex:1 1 60%;font-size:13px;color:var(--ink-2);min-width:0;overflow-wrap:anywhere}
+html body .m-app .data-row>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+html body .m-app .data-row>div:first-child{flex:1 1 55%}
+html body .m-app .data-row>div:last-child{align-items:flex-end;text-align:right}
+html body .m-app .data-row b{font-size:15px;font-weight:700}
+html body .m-app .data-row span,html body .m-app .data-row small{font-size:12.5px;color:var(--ink-2);overflow-wrap:anywhere}
+html body .m-app .profit-row-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+html body .m-app .received-totals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+html body .m-app .received-totals>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;min-width:0}
+html body .m-app .received-totals span{display:block;font-size:12px;color:var(--ink-3);line-height:1.3}
+html body .m-app .received-totals b{display:block;font-size:16px;font-weight:700;margin-top:4px;overflow-wrap:anywhere}
+html body .m-app .field-hint{font-size:13px;color:var(--ink-3);line-height:1.45;margin:8px 0}
+html body .m-app .received-period{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px;margin-bottom:10px;font-size:13px;color:var(--ink-2)}
+html body .m-app .received-period label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
+html body .m-app .received-period select{min-width:0}
+html body .m-app .received-period select{width:100%;min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 40px 12px 14px;
+  font-size:16px;color:var(--ink);-webkit-appearance:none;appearance:none;background-repeat:no-repeat;background-position:right 14px center;background-size:16px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A95A8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
+html body .m-app .received-range{display:grid;grid-template-columns:1fr;gap:10px}
+html body .m-app .monthly-profit-register{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:10px 0}
+html body .m-app .monthly-profit-register>*{display:grid;grid-template-columns:minmax(0,1fr) 88px 88px;gap:10px;align-items:center;padding:10px 12px;border:none;
+  border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font-size:13.5px;text-align:left;min-height:44px}
+html body .m-app .monthly-profit-register>*:last-child{border-bottom:none}
+html body .m-app .monthly-profit-register-hd{font-size:11.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;font-weight:700;min-height:0}
+html body .m-app .monthly-profit-register button{cursor:pointer}
+html body .m-app .monthly-profit-register button.on{background:var(--brand-soft)}
+html body .m-app .monthly-profit-register :is(b,strong){white-space:nowrap;text-align:right}
+html body .m-app .monthly-profit-register-hd span:not(:first-child){text-align:right}
+html body .m-app .monthly-profit-register strong{color:var(--emerald)}
+html body .m-app .seg-toggle{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;padding:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:13px;margin:10px 0}
+html body .m-app .seg-toggle button{min-height:44px;border:none;border-radius:10px;background:transparent;color:var(--ink-2);font-size:13.5px;font-weight:600;cursor:pointer;line-height:1.2;padding:4px 6px}
+html body .m-app .seg-toggle button.on{background:var(--brand);color:#fff}
+html body .m-app .storage-warn{background:var(--clay-soft);color:var(--clay);border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.4;margin:8px 0}
+html body .m-app .empty{padding:20px 14px;text-align:center;color:var(--ink-2);font-size:14px;background:var(--surface);border:1px dashed var(--line);border-radius:14px}
 
 /* ещё */
 .m-account{display:flex;align-items:center;gap:14px;margin-top:4px}

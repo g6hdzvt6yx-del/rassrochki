@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useIsMobile } from './mobile/kit';
 
 const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const dateLabel = (date) => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 
 export default function DateCalendar({ value, onChange, showValue = false, label = "Выбрать дату в календаре", min, max }) {
   const [view, setView] = useState(null);
+  const mobile = useIsMobile();
   const trigger = useRef(null);
   const panel = useRef(null);
   const close = (focus = false) => { setView(null); if (focus) trigger.current?.focus({ preventScroll: true }); };
@@ -54,6 +56,8 @@ export default function DateCalendar({ value, onChange, showValue = false, label
   const first = view ? (new Date(view.year, view.month, 1).getDay() + 6) % 7 : 0;
   const today = iso(new Date());
 
+  // на телефоне — системный выбор даты
+  if (mobile) return <input type="date" className="m-date" value={value || ''} min={min} max={max} aria-label={label} onChange={(e) => e.target.value && onChange(e.target.value)} />;
   return <>
     <button ref={trigger} type="button" className={`date-picker-button${showValue ? " date-picker-value" : ""}`} onClick={open}
       title={label} aria-label={showValue ? `${label}: ${value ? value.split("-").reverse().join(".") : "не выбрана"}` : label} aria-haspopup="dialog" aria-expanded={Boolean(view)}>
