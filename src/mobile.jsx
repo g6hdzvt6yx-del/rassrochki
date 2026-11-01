@@ -11,11 +11,10 @@ import { createPortal } from "react-dom";
 import {
   LayoutGrid, ScrollText, Plus, Landmark, Menu, X, ChevronLeft, ChevronRight, Wallet,
   Phone, MessageCircle, Check, TrendingUp, CheckCircle2, Users, AlertTriangle,
-  Search, SlidersHorizontal, ChevronDown, MoreHorizontal, Clock, Pencil, Printer, Trash2, Undo2, Paperclip, FileText,
+  Search, SlidersHorizontal, ChevronDown, MoreHorizontal, Clock, Upload, Download, LogOut, Sun, Moon, Smartphone, Pencil, Printer, Trash2, Undo2, Paperclip, FileText,
 } from "lucide-react";
 import {
   money, fmtDate, fmtPhone, waReminderLink, contractStats, Badge, Ribbon, Field, DateFields, WITHDRAWAL_PURPOSES,
-  css as desktopCss, // временно, пока не все окна переведены на мобильный вид
 } from "./rassrochki.jsx";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -335,12 +334,11 @@ export function MobileApp({ app, children }) {
     screen.body = <Capital app={app} />;
   } else {
     screen.title = "Ещё";
-    screen.body = <Placeholder />;
+    screen.body = <More app={app} />;
   }
 
   return (
     <MobileRoot>
-      <style>{desktopCss}</style>
       <header className="m-top">
         <div className="m-top-row">
           <div className="m-top-titles">
@@ -390,7 +388,6 @@ export function MobileApp({ app, children }) {
   );
 }
 
-const Placeholder = () => <div className="m-empty">Экран в работе</div>;
 
 /* --------------------------- Общие кусочки ------------------------- */
 
@@ -1219,6 +1216,87 @@ export function MAddWithdrawalForm({ f, setF, set, valid, investors, onClose, su
   );
 }
 
+/* --------------------------- Ещё ----------------------------------- */
+
+function More({ app }) {
+  const { session, setImporting, exportXlsx, logout, contracts, investors } = app;
+  const pref = useThemePref();
+  const email = session?.user?.email || "";
+  return (
+    <>
+      <div className="m-card m-account">
+        <div className="m-logo"><Wallet size={22} /></div>
+        <div className="m-account-info">
+          <div className="m-name">Рассрочки</div>
+          <div className="m-meta">{email || "учёт договоров и платежей"}</div>
+        </div>
+      </div>
+
+      <SecHd title="Данные" sub={`Договоров: ${contracts.length} · вкладчиков: ${investors.length}`} />
+      <div className="m-options">
+        <button type="button" className="m-option" onClick={() => setImporting(true)}>
+          <span><Upload size={19} /> Импорт из Excel</span><ChevronRight size={18} className="m-opt-chev" />
+        </button>
+        <button type="button" className="m-option" onClick={exportXlsx}>
+          <span><Download size={19} /> Экспорт в Excel</span><ChevronRight size={18} className="m-opt-chev" />
+        </button>
+      </div>
+
+      <SecHd title="Тема оформления" />
+      <div className="m-seg three m-theme" role="group" aria-label="Тема оформления">
+        {[["auto", "Авто", Smartphone], ["light", "Светлая", Sun], ["dark", "Тёмная", Moon]].map(([key, label, Icon]) => (
+          <button key={key} type="button" className={pref === key ? "on" : ""} onClick={() => setThemePref(key)} aria-pressed={pref === key}>
+            <Icon size={16} /> {label}
+          </button>
+        ))}
+      </div>
+      <div className="m-hint">«Авто» — как в настройках телефона.</div>
+
+      <SecHd title="Аккаунт" />
+      <div className="m-options">
+        <button type="button" className="m-option danger" onClick={() => { if (window.confirm("Выйти из аккаунта?")) logout(); }}>
+          <span><LogOut size={19} /> Выйти</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function MImportModal({ busy, result, handleFile, onClose }) {
+  return (
+    <Sheet title="Импорт из Excel" onClose={onClose}>
+      <p className="m-import-hint">
+        Скачайте шаблон, заполните вкладки «Вкладчики», «Договоры» и, если нужно, «Платежи»
+        (для отметки уже оплаченных платежей), затем загрузите файл обратно.
+        Новые записи добавятся к уже существующим на сайте.
+      </p>
+      <div className="m-import-btns">
+        <label className={`m-btn primary block ${busy ? "is-busy" : ""}`} htmlFor="m-import-file-input">
+          <Upload size={18} /> {busy ? "Загрузка…" : "Выбрать файл .xlsx"}
+          <input id="m-import-file-input" type="file" accept=".xlsx,.xls" className="m-hidden" disabled={busy} onChange={handleFile} />
+        </label>
+        <a className="m-btn ghost block" href={`${import.meta.env.BASE_URL}rassrochki_template.xlsx`} download>
+          <Download size={18} /> Скачать шаблон
+        </a>
+      </div>
+      {result && (
+        <div className="m-card m-import-result">
+          <div className="m-import-ok">
+            <CheckCircle2 size={18} />
+            <span>Добавлено вкладчиков: {result.investors}, договоров: {result.contracts}, отмечено платежей: {result.payments}</span>
+          </div>
+          {result.errors.length > 0 && (
+            <>
+              <div className="m-mini-hd clay m-mini-gap">Замечания ({result.errors.length})</div>
+              {result.errors.map((err, i) => <div key={i} className="m-import-err">{err}</div>)}
+            </>
+          )}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 /* --------------------------- Детали раздела сводки ------------------ */
 
 export function MSectionDetail({ title, rows, onClose, onOpenContract }) {
@@ -1544,6 +1622,7 @@ body:has(.m-root[data-theme="dark"]){background:#0E1714}
 .m-group-name{display:flex;align-items:center;gap:7px;font-weight:700;font-size:16px}
 .m-group-stats{display:block;font-size:13px;color:var(--ink-2);margin-top:3px}
 .m-group-stats b{color:var(--ink)}
+.m-group-stats .num,.m-cc-next .num,.m-unassigned .num,.m-note .num{white-space:nowrap}
 .m-group-over{color:var(--clay);font-weight:600;white-space:nowrap}
 .m-options{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .m-option{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:50px;padding:0 16px;border:none;
@@ -1569,6 +1648,20 @@ body:has(.m-root[data-theme="dark"]){background:#0E1714}
 .m-unassigned{margin-top:10px}
 .m-wd-main{display:flex;flex-direction:column;gap:2px;min-width:0}
 .m-wd-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+
+/* ещё */
+.m-account{display:flex;align-items:center;gap:14px;cursor:default;margin-top:4px}
+.m-account-info{min-width:0}
+.m-opt-chev{color:var(--ink-3);flex-shrink:0}
+.m-theme button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px}
+.m-import-hint{font-size:14.5px;color:var(--ink-2);line-height:1.5;margin:0 0 16px}
+.m-import-btns{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.m-btn.is-busy{opacity:.6;pointer-events:none}
+.m-import-result{cursor:default}
+.m-import-ok{display:flex;gap:8px;font-weight:600;font-size:14.5px}
+.m-import-ok svg{color:var(--emerald);flex-shrink:0;margin-top:1px}
+.m-import-err{font-size:13.5px;color:var(--clay);padding:6px 0;border-bottom:1px dashed var(--line);overflow-wrap:anywhere}
+.m-import-err:last-child{border-bottom:none}
 
 /* формы */
 .m-sheet.m-tall{height:calc(100vh - env(safe-area-inset-top) - 24px);height:calc(100dvh - env(safe-area-inset-top) - 24px)}

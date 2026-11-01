@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
-import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail, MAddForm, MAddInvestorForm, MAddWithdrawalForm } from "./mobile.jsx";
+import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail, MAddForm, MAddInvestorForm, MAddWithdrawalForm, MImportModal } from "./mobile.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -2080,7 +2080,7 @@ function AddWithdrawalForm({ investors, onClose, onSave, mobile }) {
 
 /* --------------------------- Импорт из Excel ------------------------ */
 
-function ImportModal({ investors, contracts, onClose, onImport }) {
+function ImportModal({ investors, contracts, onClose, onImport, mobile }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
 
@@ -2100,6 +2100,8 @@ function ImportModal({ investors, contracts, onClose, onImport }) {
       e.target.value = "";
     }
   };
+
+  if (mobile) return <MImportModal busy={busy} result={result} handleFile={handleFile} onClose={onClose} />;
 
   return (
     <div className="overlay" onClick={onClose}>
