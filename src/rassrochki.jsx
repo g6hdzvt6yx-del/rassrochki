@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
-import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail } from "./mobile.jsx";
+import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail } from "./mobile.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -1463,7 +1463,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract, mobile }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit }) {
+function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit, mobile }) {
   const st = contractStats(contract);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
@@ -1569,6 +1569,18 @@ function Detail({ contract, investors, onClose, onToggle, onUpdatePaidDate, onPa
       window.open(receipt.dataUrl, "_blank");
     }
   };
+
+  if (mobile)
+    return (
+      <MDetail
+        contract={contract} st={st} investorName={investorName} comment={comment} setComment={setComment}
+        payingIdx={payingIdx} setPayingIdx={setPayingIdx} payMode={payMode} payDate={payDate} setPayDate={setPayDate}
+        payAmount={payAmount} setPayAmount={setPayAmount} startPay={startPay} startEditDate={startEditDate}
+        confirmPay={confirmPay} handleFile={handleFile} printContract={printContract} openReceipt={openReceipt}
+        onClose={onClose} onToggle={onToggle} onRemoveReceipt={onRemoveReceipt} onEarlyPayoff={onEarlyPayoff}
+        onDelete={onDelete} onUpdateComment={onUpdateComment} onEdit={onEdit}
+      />
+    );
 
   return (
     <div className="overlay" onClick={onClose}>

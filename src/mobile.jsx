@@ -11,7 +11,7 @@ import { createPortal } from "react-dom";
 import {
   LayoutGrid, ScrollText, Plus, Landmark, Menu, X, ChevronLeft, ChevronRight, Wallet,
   Phone, MessageCircle, Check, TrendingUp, CheckCircle2, Users, AlertTriangle,
-  Search, SlidersHorizontal, ChevronDown,
+  Search, SlidersHorizontal, ChevronDown, MoreHorizontal, Pencil, Printer, Trash2, Undo2, Paperclip, FileText,
 } from "lucide-react";
 import {
   money, fmtDate, fmtPhone, waReminderLink, contractStats, Badge, Ribbon, Field, DateFields,
@@ -777,6 +777,203 @@ function FiltersSheet({ app, onClose }) {
   );
 }
 
+/* --------------------------- Карточка договора --------------------- */
+/*  Состояние и действия приходят из Detail (rassrochki.jsx) — здесь     */
+/*  только разметка под телефон.                                         */
+
+export function MDetail(p) {
+  const {
+    contract, st, investorName, comment, setComment,
+    payingIdx, setPayingIdx, payMode, payDate, setPayDate, payAmount, setPayAmount,
+    startPay, startEditDate, confirmPay, handleFile, printContract, openReceipt,
+    onClose, onToggle, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onEdit,
+  } = p;
+  const [menu, setMenu] = useState(false);
+  const next = st.next;
+  const waLink = contract.phone && next
+    ? waReminderLink(contract.phone, contract.clientName, next.remainingDue ?? next.amountDue, next.dueDate)
+    : null;
+  const payingRow = payingIdx !== null ? st.rows.find((r) => r.index === payingIdx) : null;
+
+  const earlyPayoff = () => {
+    if (window.confirm("Отметить все оставшиеся платежи оплаченными сегодняшним числом?")) onEarlyPayoff(contract.id);
+  };
+  const undoPay = (r) => {
+    if (window.confirm(`Отменить отметку об оплате платежа №${r.n}?`)) onToggle(contract.id, r.index);
+  };
+  const menuAction = (fn) => () => { setMenu(false); fn(); };
+
+  return (
+    <Sheet
+      full
+      title={contract.clientName}
+      subtitle={contract.item || null}
+      onClose={onClose}
+      left={<BackBtn onClick={onClose} />}
+      right={
+        <>
+          {waLink && (
+            <a className="m-ib wa" href={waLink} target="_blank" rel="noreferrer" aria-label="Напомнить в WhatsApp">
+              <MessageCircle size={20} />
+            </a>
+          )}
+          <button type="button" className="m-ib" onClick={() => setMenu(true)} aria-label="Действия с договором">
+            <MoreHorizontal size={20} />
+          </button>
+        </>
+      }
+    >
+      <div className="m-hero m-hero-static">
+        <span className="m-hero-label">Остаток долга</span>
+        <span className="m-hero-num num">{money(st.remaining)}</span>
+        <Ribbon paid={st.paidSum} overdue={st.overdueSum} remaining={st.remaining} />
+        <span className="m-legend">
+          <span><i className="m-dot s-paid" />Оплачено<b className="num">{money(st.paidSum)}</b></span>
+          <span><i className="m-dot s-over" />Просрочено<b className="num">{money(st.overdueSum)}</b></span>
+          <span><i className="m-dot s-rem" />К оплате<b className="num">{money(st.financed)}</b></span>
+        </span>
+      </div>
+
+      <div className="m-card m-contacts">
+        <div className="m-contact">
+          <div className="m-contact-info">
+            <span className="m-contact-lbl">Клиент</span>
+            <span className="m-contact-val">{contract.phone ? fmtPhone(contract.phone) : "телефон не указан"}</span>
+          </div>
+          {contract.phone && <a className="m-ib call" href={`tel:${contract.phone}`} aria-label="Позвонить клиенту"><Phone size={19} /></a>}
+          {waLink && (
+            <a className="m-ib wa" href={waLink} target="_blank" rel="noreferrer" aria-label="WhatsApp клиенту"><MessageCircle size={19} /></a>
+          )}
+        </div>
+        <div className="m-contact">
+          <div className="m-contact-info">
+            <span className="m-contact-lbl">Поручитель</span>
+            <span className="m-contact-val">
+              {contract.guarantorName || "не указан"}
+              {contract.guarantorPhone ? ` · ${fmtPhone(contract.guarantorPhone)}` : ""}
+            </span>
+          </div>
+          {contract.guarantorPhone && (
+            <a className="m-ib call" href={`tel:${contract.guarantorPhone}`} aria-label="Позвонить поручителю"><Phone size={19} /></a>
+          )}
+        </div>
+      </div>
+
+      <div className="m-grid2">
+        <div><span>Цена</span><b className="num">{money(contract.totalPrice)}</b></div>
+        <div><span>Взнос</span><b className="num">{money(contract.downPayment)}</b></div>
+        <div><span>Наценка</span><b className="num">{money(contract.markup)}{contract.markupPercent ? ` (${contract.markupPercent}%)` : ""}</b></div>
+        <div><span>Срок</span><b className="num">{contract.termMonths} мес</b></div>
+        <div><span>К оплате</span><b className="num">{money(st.financed)}</b></div>
+        <div><span>Остаток</span><b className="num strong">{money(st.remaining)}</b></div>
+        <div><span>Источник</span><b>{investorName}</b></div>
+        <div><span>Первый платёж</span><b className="num">{fmtDate(contract.startDate)}</b></div>
+      </div>
+
+      <div className="m-ft-row m-det-btns">
+        <button type="button" className="m-btn ghost" onClick={() => onEdit(contract)}><Pencil size={17} /> Изменить</button>
+        <button type="button" className="m-btn ghost" onClick={printContract}><Printer size={17} /> Печать</button>
+      </div>
+
+      <Field label="Комментарий">
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Заметки по договору…" rows={2} />
+      </Field>
+      {comment !== (contract.comment || "") && (
+        <button type="button" className="m-btn primary block m-comment-save" onClick={() => onUpdateComment(contract.id, comment)}>
+          Сохранить комментарий
+        </button>
+      )}
+
+      <SecHd
+        title="График платежей"
+        sub={`${st.rows.filter((r) => r.paid).length} из ${st.rows.length} оплачено`}
+        action={!st.done && (
+          <button type="button" className="m-btn ghost sm" onClick={earlyPayoff}><CheckCircle2 size={17} /> Досрочно</button>
+        )}
+      />
+      <div className="m-list">
+        {st.rows.map((r) => (
+          <div key={r.index} className={`m-card m-lrow ${r.status}`}>
+            <div className="m-lrow-top">
+              <span className="m-lnum num">{r.n}</span>
+              <span className="m-lrow-info">
+                <span className="m-ldate">{fmtDate(r.dueDate)}</span>
+                {r.paidDate && <span className="m-lsub">{r.paid ? "Оплачен" : "Внесено"} {fmtDate(r.paidDate)}</span>}
+              </span>
+              <span className="m-lrow-right">
+                <b className="num">{money(r.amountDue)}</b>
+                <Badge s={r.status} />
+              </span>
+            </div>
+            {r.paidAmount > 0 && !r.paid && (
+              <div className="m-note amber">Оплачено {money(r.paidAmount)} из {money(r.amountDue)} — остаток {money(r.remainingDue)}</div>
+            )}
+            <div className="m-lrow-acts">
+              {r.paid ? (
+                <>
+                  <button type="button" className="m-btn ghost sm" onClick={() => undoPay(r)}><Undo2 size={17} /> Отменить</button>
+                  <button type="button" className="m-btn ghost sm" onClick={() => startEditDate(r.index, r.paidDate)}><Pencil size={16} /> Дата</button>
+                </>
+              ) : r.paidAmount > 0 ? (
+                <>
+                  <button type="button" className="m-btn success sm m-grow" onClick={() => startPay(r.index, r.remainingDue)}><Check size={18} /> Доплатить</button>
+                  <button type="button" className="m-ib" onClick={() => undoPay(r)} aria-label="Сбросить оплату"><Undo2 size={18} /></button>
+                </>
+              ) : (
+                <button type="button" className="m-btn success sm m-grow" onClick={() => startPay(r.index, r.remainingDue)}><Check size={18} /> Оплатить</button>
+              )}
+              {r.receipt ? (
+                <span className="m-receipt">
+                  <button type="button" className="m-receipt-link" onClick={() => openReceipt(r.receipt)}>
+                    <FileText size={16} /><span>{r.receipt.name}</span>
+                  </button>
+                  <button type="button" className="m-receipt-x" onClick={() => onRemoveReceipt(contract.id, r.index)} aria-label="Удалить чек">
+                    <X size={16} />
+                  </button>
+                </span>
+              ) : (
+                <label className="m-btn ghost sm m-receipt-add" htmlFor={`m-receipt-${contract.id}-${r.index}`}>
+                  <Paperclip size={16} /> Чек
+                  <input id={`m-receipt-${contract.id}-${r.index}`} type="file" accept="image/*,application/pdf"
+                    className="m-hidden" onChange={(e) => handleFile(e, r.index)} />
+                </label>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {payingRow && (
+        <PaySheet
+          title={payMode === "edit" ? "Дата оплаты" : payingRow.paidAmount > 0 ? "Доплата" : "Оплата"}
+          subtitle={`Платёж №${payingRow.n} от ${fmtDate(payingRow.dueDate)}`}
+          row={payingRow}
+          mode={payMode}
+          date={payDate}
+          setDate={setPayDate}
+          amount={payAmount}
+          setAmount={setPayAmount}
+          onClose={() => setPayingIdx(null)}
+          onConfirm={() => confirmPay(payingRow.index)}
+        />
+      )}
+
+      {menu && (
+        <Sheet title="Договор" subtitle={contract.clientName} onClose={() => setMenu(false)}>
+          <div className="m-options">
+            <button type="button" className="m-option" onClick={menuAction(() => onEdit(contract))}><span><Pencil size={18} /> Изменить договор</span></button>
+            <button type="button" className="m-option" onClick={menuAction(printContract)}><span><Printer size={18} /> Печать</span></button>
+            {!st.done && (
+              <button type="button" className="m-option" onClick={menuAction(earlyPayoff)}><span><CheckCircle2 size={18} /> Досрочное погашение</span></button>
+            )}
+            <button type="button" className="m-option danger" onClick={menuAction(() => onDelete(contract.id))}><span><Trash2 size={18} /> Удалить договор</span></button>
+          </div>
+        </Sheet>
+      )}
+    </Sheet>
+  );
+}
+
 /* --------------------------- Детали раздела сводки ------------------ */
 
 export function MSectionDetail({ title, rows, onClose, onOpenContract }) {
@@ -1110,6 +1307,47 @@ body:has(.m-root[data-theme="dark"]){background:#0E1714}
 .m-option.on{color:var(--brand);font-weight:600}
 .m-option:active{background:var(--surface-2)}
 .m-ft-row{display:grid;grid-template-columns:auto 1fr;gap:10px}
+.m-option>span{display:inline-flex;align-items:center;gap:12px}
+.m-option.danger{color:var(--clay)}
+
+/* карточка договора */
+.m-hero-static{cursor:default;margin-top:4px}
+.m-contacts{cursor:default;padding:4px 16px;margin-bottom:12px}
+.m-contact{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.m-contact:last-child{border-bottom:none}
+.m-contact-info{flex:1;min-width:0;display:flex;flex-direction:column}
+.m-contact-lbl{font-size:12.5px;color:var(--ink-3)}
+.m-contact-val{font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.m-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.m-grid2>div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.m-grid2 span{display:block;font-size:12px;color:var(--ink-3);margin-bottom:2px}
+.m-grid2 b{display:block;font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.m-det-btns{grid-template-columns:1fr 1fr;margin-bottom:16px}
+.m-comment-save{margin:-4px 0 6px}
+.m-lrow{cursor:default;padding:12px 14px}
+.m-lrow.overdue{border-color:var(--clay-soft);background:linear-gradient(0deg,var(--clay-soft),var(--clay-soft)),var(--surface)}
+.m-lrow.partial{background:linear-gradient(0deg,var(--amber-soft),var(--amber-soft)),var(--surface)}
+.m-lrow.paid{background:linear-gradient(0deg,var(--emerald-soft),var(--emerald-soft)),var(--surface);border-color:transparent}
+.m-lrow-top{display:flex;align-items:center;gap:12px}
+.m-lnum{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;font-size:13px;
+  background:var(--surface-2);color:var(--ink-2);box-shadow:inset 0 0 0 1px var(--line)}
+.m-lrow-info{flex:1;min-width:0;display:flex;flex-direction:column}
+.m-ldate{font-size:15px;font-weight:600}
+.m-lsub{font-size:12.5px;color:var(--ink-2)}
+.m-lrow-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.m-lrow-right b{font-size:17px;font-weight:600;white-space:nowrap}
+.m-lrow-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+.m-lrow-acts .m-btn{flex:1}
+.m-lrow-acts .m-grow{flex:2}
+.m-receipt-add{flex:0 0 auto!important;color:var(--ink-2)}
+.m-hidden{display:none}
+.m-receipt{display:flex;align-items:center;min-width:0;flex:1 1 100%;min-height:44px;border:1px solid var(--line);border-radius:12px;
+  background:var(--surface);overflow:hidden}
+.m-receipt-link{flex:1;min-width:0;display:flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--emerald);
+  font-size:13.5px;font-weight:600;padding:0 4px 0 12px;min-height:44px;cursor:pointer}
+.m-receipt-link span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-receipt-x{width:40px;min-height:44px;border:none;border-left:1px solid var(--line);background:transparent;color:var(--ink-3);
+  display:grid;place-items:center;cursor:pointer;flex-shrink:0}
 
 /* вход и статусы */
 .m-logo{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;color:#fff;
