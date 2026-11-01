@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
-import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail, MAddForm } from "./mobile.jsx";
+import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail, MDetail, MAddForm, MAddInvestorForm, MAddWithdrawalForm } from "./mobile.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -1989,10 +1989,13 @@ export function DateFields({ value, onChange }) {
 
 /* --------------------------- Новый вкладчик ------------------------ */
 
-function AddInvestorForm({ onClose, onSave }) {
+function AddInvestorForm({ onClose, onSave, mobile }) {
   const [f, setF] = useState({ name: "", amount: "" });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const valid = f.name.trim() && +f.amount > 0;
+  const submit = () => onSave({ name: f.name.trim(), amount: +f.amount });
+
+  if (mobile) return <MAddInvestorForm f={f} set={set} valid={valid} onClose={onClose} submit={submit} />;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -2006,7 +2009,7 @@ function AddInvestorForm({ onClose, onSave }) {
           <Field label="Сумма вклада"><input type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
           <div className="sheet-actions">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
-            <button className="btn primary" disabled={!valid} onClick={() => onSave({ name: f.name.trim(), amount: +f.amount })}>
+            <button className="btn primary" disabled={!valid} onClick={submit}>
               Добавить
             </button>
           </div>
@@ -2018,13 +2021,19 @@ function AddInvestorForm({ onClose, onSave }) {
 
 /* --------------------------- Новый вывод средств --------------------- */
 
-function AddWithdrawalForm({ investors, onClose, onSave }) {
+function AddWithdrawalForm({ investors, onClose, onSave, mobile }) {
   const [f, setF] = useState({
     amount: "", date: new Date().toISOString().slice(0, 10),
     investorId: "", purpose: "owner", note: "",
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const valid = +f.amount > 0 && f.date;
+  const submit = () => onSave({
+    amount: +f.amount, date: f.date, investorId: f.investorId, purpose: f.purpose, note: f.note.trim(),
+  });
+
+  if (mobile)
+    return <MAddWithdrawalForm f={f} setF={setF} set={set} valid={valid} investors={investors} onClose={onClose} submit={submit} />;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -2061,9 +2070,7 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
 
           <div className="sheet-actions">
             <button className="btn ghost" onClick={onClose}>Отмена</button>
-            <button className="btn primary" disabled={!valid} onClick={() => onSave({
-              amount: +f.amount, date: f.date, investorId: f.investorId, purpose: f.purpose, note: f.note.trim(),
-            })}>Вывести</button>
+            <button className="btn primary" disabled={!valid} onClick={submit}>Вывести</button>
           </div>
         </div>
       </div>

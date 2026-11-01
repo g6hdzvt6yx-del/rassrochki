@@ -11,10 +11,10 @@ import { createPortal } from "react-dom";
 import {
   LayoutGrid, ScrollText, Plus, Landmark, Menu, X, ChevronLeft, ChevronRight, Wallet,
   Phone, MessageCircle, Check, TrendingUp, CheckCircle2, Users, AlertTriangle,
-  Search, SlidersHorizontal, ChevronDown, MoreHorizontal, Pencil, Printer, Trash2, Undo2, Paperclip, FileText,
+  Search, SlidersHorizontal, ChevronDown, MoreHorizontal, Clock, Pencil, Printer, Trash2, Undo2, Paperclip, FileText,
 } from "lucide-react";
 import {
-  money, fmtDate, fmtPhone, waReminderLink, contractStats, Badge, Ribbon, Field, DateFields,
+  money, fmtDate, fmtPhone, waReminderLink, contractStats, Badge, Ribbon, Field, DateFields, WITHDRAWAL_PURPOSES,
   css as desktopCss, // временно, пока не все окна переведены на мобильный вид
 } from "./rassrochki.jsx";
 
@@ -331,7 +331,8 @@ export function MobileApp({ app, children }) {
     screen.body = <Contracts app={app} onQuickPay={onQuickPay} openFilters={() => setFiltersOpen(true)} />;
   } else if (active === "capital") {
     screen.title = "Капитал";
-    screen.body = <Placeholder />;
+    screen.sub = "вкладчики, прибыль и выводы";
+    screen.body = <Capital app={app} />;
   } else {
     screen.title = "Ещё";
     screen.body = <Placeholder />;
@@ -1068,6 +1069,156 @@ export function MAddForm({
   );
 }
 
+/* --------------------------- Капитал ------------------------------- */
+
+function Capital({ app }) {
+  const { capital, investors, withdrawals, setAddingInvestor, setAddingWithdrawal, removeInvestor, removeWithdrawal } = app;
+  return (
+    <>
+      <div className="m-hero m-hero-static">
+        <span className="m-hero-label">Капитал вкладчиков</span>
+        <span className="m-hero-num num">{money(capital.invested)}</span>
+        <Ribbon paid={capital.deployed} overdue={capital.free < 0 ? -capital.free : 0} remaining={Math.max(0, capital.free)} />
+        <span className="m-legend m-legend-auto">
+          <span><i className="m-dot s-paid" />В обороте<b className="num">{money(capital.deployed)}</b></span>
+          {capital.free < 0 && (
+            <span><i className="m-dot s-over" />Не хватает вложений<b className="num">{money(-capital.free)}</b></span>
+          )}
+          <span><i className="m-dot s-rem" />Свободно<b className="num">{money(Math.max(0, capital.free))}</b></span>
+          {capital.withdrawnTotal > 0 && (
+            <span><i className="m-dot m-dot-none" />Выведено всего<b className="num">{money(capital.withdrawnTotal)}</b></span>
+          )}
+        </span>
+      </div>
+
+      <div className="m-stats">
+        <MStat icon={<TrendingUp size={18} />} label="Прибыль получена" value={money(capital.profitRealized)} />
+        <MStat icon={<Clock size={18} />} label="Прибыль ожидается" value={money(capital.profitExpected)} />
+        <MStat wide icon={<Wallet size={18} />} label="Прибыль всего по договорам" value={money(capital.profitTotal)} />
+      </div>
+
+      <SecHd
+        title="Вкладчики"
+        action={<button type="button" className="m-btn primary sm" onClick={() => setAddingInvestor(true)}><Plus size={18} /> Вкладчик</button>}
+      />
+      {investors.length === 0 ? (
+        <div className="m-empty">Вкладчиков пока нет.</div>
+      ) : (
+        <div className="m-list">
+          {investors.map((inv) => {
+            const invDeployed = capital.perInvestor[inv.id] || 0;
+            const invWithdrawn = capital.withdrawnByInvestor[inv.id] || 0;
+            const invFree = (+inv.amount || 0) - invDeployed - invWithdrawn;
+            const pct = capital.invested ? Math.round(((+inv.amount || 0) / capital.invested) * 100) : 0;
+            const invProfit = capital.profitByInvestor[inv.id] || { realized: 0, expected: 0 };
+            return (
+              <div key={inv.id} className="m-card m-inv">
+                <div className="m-row1">
+                  <span className="m-name">{inv.name}</span>
+                  <button type="button" className="m-ib m-ib-danger" onClick={() => removeInvestor(inv.id)} aria-label={`Удалить вкладчика ${inv.name}`}>
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+                <div className="m-inv-sum">
+                  <span className="m-amt num">{money(inv.amount)}</span>
+                  <span className="m-meta">вклад · доля <b className="num">{pct}%</b></span>
+                </div>
+                <div className="m-grid2 m-inv-grid">
+                  <div><span>В обороте</span><b className="num">{money(invDeployed)}</b></div>
+                  <div><span>Выведено</span><b className="num">{money(invWithdrawn)}</b></div>
+                  <div className="m-grid2-wide"><span>Свободно</span><b className="num strong">{money(invFree)}</b></div>
+                  <div><span>Прибыль получена</span><b className="num">{money(invProfit.realized)}</b></div>
+                  <div><span>Прибыль ожидается</span><b className="num">{money(invProfit.expected)}</b></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {capital.perInvestor[""] > 0 && (
+        <div className="m-hint m-unassigned">Без привязки к вкладчику в обороте: <b className="num">{money(capital.perInvestor[""])}</b></div>
+      )}
+
+      <SecHd
+        title="Выводы"
+        action={<button type="button" className="m-btn primary sm" onClick={() => setAddingWithdrawal(true)}><Plus size={18} /> Вывод</button>}
+      />
+      {withdrawals.length === 0 ? (
+        <div className="m-empty">Выводов пока не было.</div>
+      ) : (
+        <div className="m-list">
+          {withdrawals.map((w) => {
+            const invName = w.investorId
+              ? (investors.find((i) => i.id === w.investorId)?.name || "—")
+              : "Общий пул / собственные";
+            return (
+              <div key={w.id} className="m-card m-wd">
+                <div className="m-row1">
+                  <span className="m-wd-main">
+                    <span className="m-amt num">{money(w.amount)}</span>
+                    <span className="m-meta">{fmtDate(w.date)} · {invName}</span>
+                  </span>
+                  <button type="button" className="m-ib m-ib-danger" onClick={() => removeWithdrawal(w.id)} aria-label="Удалить вывод">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+                <div className="m-wd-foot">
+                  <span className="badge b-brass">{WITHDRAWAL_PURPOSES[w.purpose] || "Прочее"}</span>
+                  {w.note && <span className="m-meta">{w.note}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+export function MAddInvestorForm({ f, set, valid, onClose, submit }) {
+  return (
+    <Sheet
+      title="Новый вкладчик"
+      onClose={onClose}
+      footer={<button type="button" className="m-btn primary block" disabled={!valid} onClick={submit}>Добавить</button>}
+    >
+      <Field label="Имя вкладчика">
+        <input value={f.name} onChange={set("name")} placeholder="Иванов Пётр" autoCapitalize="words" autoComplete="off" />
+      </Field>
+      <Field label="Сумма вклада, ₽"><NumInput value={f.amount} onChange={set("amount")} /></Field>
+    </Sheet>
+  );
+}
+
+export function MAddWithdrawalForm({ f, setF, set, valid, investors, onClose, submit }) {
+  return (
+    <Sheet
+      title="Новый вывод средств"
+      onClose={onClose}
+      footer={<button type="button" className="m-btn primary block" disabled={!valid} onClick={submit}>Вывести</button>}
+    >
+      <Field label="Сумма, ₽"><NumInput value={f.amount} onChange={set("amount")} /></Field>
+      <Field label="Дата">
+        <DateFields value={f.date} onChange={(v) => setF((prev) => ({ ...prev, date: v }))} />
+      </Field>
+      <Field label="С кем рассчитываемся">
+        <select value={f.investorId} onChange={set("investorId")}>
+          <option value="">Общий пул / собственные средства</option>
+          {investors.map((inv) => <option key={inv.id} value={inv.id}>{inv.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Назначение вывода">
+        <select value={f.purpose} onChange={set("purpose")}>
+          {Object.entries(WITHDRAWAL_PURPOSES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+      </Field>
+      <Field label="Комментарий (необязательно)">
+        <input value={f.note} onChange={set("note")} placeholder="Например, модель телефона для закупки" />
+      </Field>
+    </Sheet>
+  );
+}
+
 /* --------------------------- Детали раздела сводки ------------------ */
 
 export function MSectionDetail({ title, rows, onClose, onOpenContract }) {
@@ -1403,6 +1554,21 @@ body:has(.m-root[data-theme="dark"]){background:#0E1714}
 .m-ft-row{display:grid;grid-template-columns:auto 1fr;gap:10px}
 .m-option>span{display:inline-flex;align-items:center;gap:12px}
 .m-option.danger{color:var(--clay)}
+
+/* капитал */
+.m-legend-auto{grid-template-columns:repeat(auto-fit,minmax(96px,1fr))}
+.m-dot-none{background:transparent}
+.m-ib-danger{color:var(--ink-3);background:transparent}
+.m-ib-danger:active{color:var(--clay)}
+.m-inv,.m-wd{cursor:default}
+.m-inv .m-row1,.m-wd .m-row1{align-items:center}
+.m-inv-sum{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.m-inv-grid{margin-bottom:0}
+.m-inv-grid>div{background:var(--surface-2)}
+.m-grid2-wide{grid-column:1/-1}
+.m-unassigned{margin-top:10px}
+.m-wd-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.m-wd-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 
 /* формы */
 .m-sheet.m-tall{height:calc(100vh - env(safe-area-inset-top) - 24px);height:calc(100dvh - env(safe-area-inset-top) - 24px)}
