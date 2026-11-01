@@ -599,6 +599,63 @@ html body .m-app :is(.pay-inline,.defer-inline,.contact-form) .btn{min-height:48
 html body .m-app :is(.pay-inline,.defer-inline) [role=alert]{background:var(--clay-soft);color:var(--clay);border-radius:12px;padding:10px 12px;font-size:13.5px;margin:0}
 html body .m-app .payment-allocation-note{font-size:13px;color:var(--ink-3);line-height:1.4}
 
+/* формы в шторках (общая разметка AddForm, вкладчик, вывод) */
+html body .m-app .m-sh-body fieldset{border:0;padding:0;margin:0;min-width:0}
+html body .m-app .m-sh-body .field{display:block;margin-bottom:14px;min-width:0}
+html body .m-app .m-sh-body .field>span{display:block;font-size:13px;color:var(--ink-2);margin-bottom:6px;font-weight:500}
+html body .m-app .m-sh-body .field :is(input,select,textarea){width:100%;min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:12px;
+  padding:12px 14px;font-size:16px;color:var(--ink);-webkit-appearance:none;appearance:none;box-shadow:none}
+html body .m-app .m-sh-body .field :is(input,select,textarea):focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+html body .m-app .m-sh-body .field select{padding-right:40px;background-repeat:no-repeat;background-position:right 14px center;background-size:16px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A95A8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
+html body .m-app .m-sh-body .field textarea{min-height:88px;resize:vertical}
+html body .m-app .m-sh-body .frow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+html body .m-app .m-sh-body .frow>*{min-width:0}
+html body .m-app .m-sh-body :is(.passport-block,.guarantor-block){background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px 12px 2px;margin-bottom:14px}
+html body .m-app .m-sh-body .passport-hd{font-size:12px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--ink-3);margin-bottom:10px}
+html body .m-app .m-sh-body .guarantor-toggle{width:100%;margin-bottom:14px;color:var(--ink-2)}
+html body .m-app .m-sh-body .duplicate-client-hint{display:flex;gap:8px;align-items:flex-start;background:var(--amber-soft);color:var(--amber);border-radius:12px;padding:10px 12px;
+  font-size:13.5px;line-height:1.4;margin:-4px 0 14px}
+html body .m-app .m-sh-body .duplicate-client-hint svg{flex-shrink:0;margin-top:2px}
+html body .m-app .m-sh-body .duplicate-client-hint button{min-height:40px;border-radius:10px;border:1px solid currentColor;background:transparent;color:inherit;padding:0 10px;margin-top:6px;font-weight:600}
+html body .m-app .m-sh-body .calc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0 14px}
+html body .m-app .m-sh-body .calc>div{background:var(--hero);color:var(--hero-ink);border-radius:12px;padding:10px 12px;min-width:0}
+html body .m-app .m-sh-body .calc span{display:block;font-size:12px;color:var(--hero-soft)}
+html body .m-app .m-sh-body .calc b{display:block;font-size:17px;font-weight:700;overflow-wrap:anywhere}
+html body .m-app .m-sh-body .mini-block{margin:10px 0}
+html body .m-app .m-sh-body .sheet-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;position:sticky;bottom:-16px;margin:16px -16px -16px;padding:12px 16px 16px;
+  background:var(--surface);border-top:1px solid var(--line);z-index:2}
+html body .m-app .m-sh-body .sheet-actions .btn{width:100%;min-height:46px;font-size:15px;padding:0 10px}
+html body .m-app .m-sh-body .sheet-actions .btn.primary{grid-column:1/-1;order:-1;min-height:50px}
+html body .m-app .m-sh-body [role=alert]{background:var(--clay-soft);color:var(--clay);border-radius:12px;padding:10px 12px;font-size:13.5px;line-height:1.4;margin:8px 0}
+html body .m-app .m-sh-body input[type=checkbox]{width:22px;height:22px;accent-color:var(--brand);min-height:0}
+/* подсказки клиента и товара */
+html body .m-app .search-picker{position:relative}
+html body .m-app .search-picker-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;max-height:260px;overflow:auto;background:var(--surface);
+  border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.3);padding:4px}
+html body .m-app .search-picker-list button,html body .m-app .search-picker-list [role=option]{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;
+  min-height:48px;padding:8px 12px;border:none;border-radius:10px;background:transparent;color:var(--ink);text-align:left;font-size:15px;cursor:pointer}
+html body .m-app .search-picker-list :is(button,[role=option]):active{background:var(--surface-2)}
+html body .m-app .search-picker-list small{font-size:12.5px;color:var(--ink-3)}
+html body .m-app .search-picker-empty{padding:12px;color:var(--ink-3);font-size:14px}
+/* импорт и черновики */
+html body .m-app .import-hint{font-size:14.5px;color:var(--ink-2);line-height:1.5;margin:0 0 14px}
+html body .m-app .import-actions{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+html body .m-app .import-actions :is(.btn,label){width:100%}
+html body .m-app .m-sh-body label.btn{cursor:pointer}
+html body .m-app .import-result{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+html body .m-app .import-result-row{display:flex;gap:8px;font-weight:600;font-size:14.5px;line-height:1.4}
+html body .m-app .import-error{color:var(--clay);font-size:13.5px}
+html body .m-app .m-sh-body .mini-hd{font-size:12px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--ink-3);margin:12px 0 6px}
+html body .m-app .m-sh-body .mini-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:8px 0;border-bottom:1px dashed var(--line);background:transparent;border-radius:0;margin:0}
+
+html body .m-app .draft-row{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+html body .m-app .draft-row b{font-size:15.5px}
+html body .m-app .draft-row span,html body .m-app .draft-row small{font-size:13px;color:var(--ink-2)}
+html body .m-app .draft-row-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+html body .m-app .draft-row-actions .btn{min-height:44px;font-size:14.5px}
+html body .m-app .import-confirm-actions{position:static;margin:12px 0 0;padding:0;border:none;background:transparent}
+
 /* ещё */
 .m-account{display:flex;align-items:center;gap:14px;margin-top:4px}
 .m-account-info{min-width:0}

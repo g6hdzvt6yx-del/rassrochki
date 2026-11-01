@@ -1651,8 +1651,8 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           onClose={() => setMarksHistoryId(null)}
           onOpenContract={() => { setMarksHistoryId(null); openAddMark(marksHistoryId); }}
         />}
-        {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} onDraftsChanged={reloadDrafts} />}
-        {draftsOpen && <DraftsList drafts={cloudDrafts}
+        {adding && <AddForm mobile={isMobile} cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} onDraftsChanged={reloadDrafts} />}
+        {draftsOpen && <DraftsList mobile={isMobile} drafts={cloudDrafts}
           onClose={() => setDraftsOpen(false)}
           onContinue={(item) => { setDraftsOpen(false); setDraftToContinue(item); }}
           onDelete={async (item) => {
@@ -1661,7 +1661,7 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           }}
         />}
         {editingContract && (
-          <AddForm cards={cards}
+          <AddForm mobile={isMobile} cards={cards}
             investors={investors}
             clients={clientOptions} products={productOptions}
             editing={editingContract}
@@ -1671,7 +1671,7 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           />
         )}
         {draftToContinue && draftToContinue.draft_type !== "Импорт Excel" && (
-          <AddForm cards={cards}
+          <AddForm mobile={isMobile} cards={cards}
             investors={investors}
             clients={clientOptions} products={productOptions}
             draft={draftToContinue}
@@ -1683,7 +1683,7 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           />
         )}
         {draftToContinue && draftToContinue.draft_type === "Импорт Excel" && (
-          <ImportModal
+          <ImportModal mobile={isMobile}
             investors={investors}
             contracts={contracts}
             draft={draftToContinue}
@@ -1691,13 +1691,13 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
             onImport={importData}
           />
         )}
-        {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
-        {editingInvestor && <AddInvestorForm editing={editingInvestor} onClose={() => setEditingInvestor(null)} onSave={updateInvestor} />}
+        {addingInvestor && <AddInvestorForm mobile={isMobile} onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
+        {editingInvestor && <AddInvestorForm mobile={isMobile} editing={editingInvestor} onClose={() => setEditingInvestor(null)} onSave={updateInvestor} />}
         {addingWithdrawal && (
-          <AddWithdrawalForm investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
+          <AddWithdrawalForm mobile={isMobile} investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
         )}
         {importing && (
-          <ImportModal investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
+          <ImportModal mobile={isMobile} investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
         )}
         {sectionModal && (
           <SectionDetail
@@ -3257,7 +3257,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
 
 /* --------------------------- Новый договор ------------------------- */
 
-function AddForm({ cards = [], investors, clients = [], products = [], onClose, onSave, editing, draft, onDraftsChanged }) {
+function AddForm({ cards = [], investors, clients = [], products = [], onClose, onSave, editing, draft, onDraftsChanged, mobile }) {
   const draftData = draft?.data || null;
   const source = draftData || editing;
   const [f, setF] = useState({
@@ -3294,6 +3294,10 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
   const newContractId = useRef(draftData?.newContractId || `c${crypto.randomUUID()}`);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  // телефон: ошибка внизу длинной формы — прокручиваем к ней, иначе её закрывают кнопки
+  useEffect(() => {
+    if (mobile && formError) document.querySelector(".m-form .m-sh-body > [role=alert], .m-form fieldset > [role=alert]")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [mobile, formError]);
   const [draftStatus, setDraftStatus] = useState("");
   const saveInProgress = useRef(false);
   const draftSaved = useRef(false);
@@ -3439,14 +3443,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     return phone && normalizePhone(client.phone) === phone && client.contractIds.some((id) => id !== editing?.id);
   });
 
-  return (
-    <div className="overlay" onClick={closeForm}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <div className="sheet-name">{editing ? "Изменить договор" : "Новый договор рассрочки"}</div>
-          <button className="icon-btn" disabled={saving} onClick={closeForm}><X size={18} /></button>
-        </div>
-        <div className="sheet-body">
+  const body = (<>
           <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <AutocompleteField
             label="ФИО клиента"
@@ -3458,7 +3455,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             newHint="Нет в базе — будет новый клиент"
             renderOption={(client) => <><b>{client.name}</b><small>{[client.phone && fmtPhone(client.phone), client.contractCount > 1 ? `договоров ${client.contractCount}` : "1 договор"].filter(Boolean).join(" · ")}</small></>}
           />
-          <Field label="Телефон"><input value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
+          <Field label="Телефон"><input inputMode="tel" value={f.phone} onChange={set("phone")} placeholder="+7 …" /></Field>
           <div className="frow">
             <Field label="Дата договора">
               <DateFields value={f.contractDate} onChange={(v) => setF((prev) => ({ ...prev, contractDate: v }))} />
@@ -3491,7 +3488,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
                   <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
                 </Field>
                 <Field label="Поручитель, телефон">
-                  <input value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
+                  <input inputMode="tel" value={f.guarantorPhone} onChange={set("guarantorPhone")} placeholder="+7 …" />
                 </Field>
               </div>
               {showGuarantorPassport ? (
@@ -3508,8 +3505,8 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             </button>
           )}
           <div className="frow">
-            <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
-            <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
+            <Field label="Цена товара"><input type="number" inputMode="numeric" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
+            <Field label="Первонач. взнос"><input type="number" inputMode="numeric" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
             {+f.downPayment > 0 && <PaymentDestination method={f.downPaymentMethod} card={f.downPaymentCard} onMethod={v=>setF(prev=>({...prev,downPaymentMethod:v}))} onCard={v=>setF(prev=>({...prev,downPaymentCard:v}))} cards={cards}/>}
           </div>
           <Field label="Считать процент наценки от">
@@ -3531,15 +3528,15 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             </div>
           </Field>
           <div className="frow">
-            <Field label="Наценка, %"><input type="number" value={f.markupPercent} onChange={onMarkupPercent} placeholder="20" /></Field>
-            <Field label="Наценка, ₽"><input type="number" value={f.markupAmount} onChange={onMarkupAmount} placeholder="0" /></Field>
+            <Field label="Наценка, %"><input type="number" inputMode="decimal" value={f.markupPercent} onChange={onMarkupPercent} placeholder="20" /></Field>
+            <Field label="Наценка, ₽"><input type="number" inputMode="numeric" value={f.markupAmount} onChange={onMarkupAmount} placeholder="0" /></Field>
           </div>
           <div className="frow">
-            <Field label="Срок, мес"><input type="number" value={f.termMonths} onChange={onTermMonths} placeholder="6" /></Field>
-            <Field label="К оплате всего, ₽"><input type="number" value={f.totalPayable} onChange={onTotalPayable} onBlur={() => setF((prev) => ({ ...prev, totalPayable: String(financed) }))} placeholder="0" /></Field>
+            <Field label="Срок, мес"><input type="number" inputMode="numeric" value={f.termMonths} onChange={onTermMonths} placeholder="6" /></Field>
+            <Field label="К оплате всего, ₽"><input type="number" inputMode="numeric" value={f.totalPayable} onChange={onTotalPayable} onBlur={() => setF((prev) => ({ ...prev, totalPayable: String(financed) }))} placeholder="0" /></Field>
           </div>
           <Field label="Платёж в месяц, ₽">
-            <input type="number" min="0" step="1" value={f.monthlyPayment} onChange={onMonthlyPayment} placeholder="0" />
+            <input type="number" inputMode="numeric" min="0" step="1" value={f.monthlyPayment} onChange={onMonthlyPayment} placeholder="0" />
             <small className="field-hint">Введите платёж вручную — общая сумма и наценка пересчитаются по сроку договора.</small>
             {markup < 0 && <small className="field-hint" role="alert">Платёж за весь срок не покрывает стоимость товара за вычетом первоначального взноса. Увеличьте платёж или срок.</small>}
           </Field>
@@ -3596,6 +3593,16 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             }}>{saving ? "Сохраняем…" : editing ? "Сохранить изменения" : "Создать договор"}</button>
           </div>
           </fieldset>
+        </>);
+  if (mobile) return <Sheet title={editing ? "Изменить договор" : "Новый договор"} subtitle={draft ? "продолжение черновика" : editing ? editing.clientName : null} onClose={() => (saving ? false : closeForm())} className="tall m-form">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={closeForm}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">{editing ? "Изменить договор" : "Новый договор рассрочки"}</div>
+          <button className="icon-btn" disabled={saving} onClick={closeForm}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
@@ -3603,15 +3610,8 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
 }
 
 // Список сохранённых черновиков договоров (веб-версия).
-function DraftsList({ drafts, onClose, onContinue, onDelete }) {
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <div className="sheet-name">Черновики договоров</div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="sheet-body">
+function DraftsList({ drafts, onClose, onContinue, onDelete, mobile }) {
+  const body = (<>
           {!drafts.length && <div className="empty">Черновиков нет.</div>}
           {drafts.map((item) => (
             <div className="draft-row" key={item.id}>
@@ -3625,6 +3625,16 @@ function DraftsList({ drafts, onClose, onContinue, onDelete }) {
               </div>
             </div>
           ))}
+        </>);
+  if (mobile) return <Sheet title={"Черновики договоров"} subtitle={null} onClose={onClose} className="">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Черновики договоров</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
@@ -3729,7 +3739,7 @@ function DateFields({ value, onChange }) {
 
 /* --------------------------- Новый вкладчик ------------------------ */
 
-function AddInvestorForm({ onClose, onSave, editing }) {
+function AddInvestorForm({ onClose, onSave, editing, mobile }) {
   const [f, setF] = useState({
     name: editing?.name || "", amount: editing ? String(editing.amount || "") : "",
     monthlyPayment: editing ? String(editing.monthlyPayment || "") : "",
@@ -3738,19 +3748,12 @@ function AddInvestorForm({ onClose, onSave, editing }) {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const valid = f.name.trim() && +f.amount > 0;
 
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <div className="sheet-name">{editing ? "Изменить вкладчика" : "Новый вкладчик"}</div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="sheet-body">
+  const body = (<>
           <Field label="Имя вкладчика"><input value={f.name} onChange={set("name")} placeholder="Иванов Пётр" /></Field>
-          <Field label="Сумма вклада"><input type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
+          <Field label="Сумма вклада"><input type="number" inputMode="numeric" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
           <div className="frow">
             <Field label="Начисление в месяц">
-              <input type="number" value={f.monthlyPayment} onChange={set("monthlyPayment")} placeholder="Например, 28 000" />
+              <input type="number" inputMode="numeric" value={f.monthlyPayment} onChange={set("monthlyPayment")} placeholder="Например, 28 000" />
             </Field>
             <Field label="Дата первого начисления">
               <DateFields value={f.accrualStartDate} onChange={(value) => setF((prev) => ({ ...prev, accrualStartDate: value }))} />
@@ -3766,6 +3769,16 @@ function AddInvestorForm({ onClose, onSave, editing }) {
               {editing ? "Сохранить" : "Добавить"}
             </button>
           </div>
+        </>);
+  if (mobile) return <Sheet title={editing ? "Изменить вкладчика" : "Новый вкладчик"} subtitle={null} onClose={onClose} className="m-form">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">{editing ? "Изменить вкладчика" : "Новый вкладчик"}</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
@@ -3774,7 +3787,7 @@ function AddInvestorForm({ onClose, onSave, editing }) {
 
 /* --------------------------- Новый вывод средств --------------------- */
 
-function AddWithdrawalForm({ investors, onClose, onSave }) {
+function AddWithdrawalForm({ investors, onClose, onSave, mobile }) {
   const [f, setF] = useState({
     amount: "", date: new Date().toISOString().slice(0, 10),
     investorId: "", purpose: "owner", note: "",
@@ -3782,16 +3795,9 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const valid = +f.amount > 0 && f.date;
 
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <div className="sheet-name">Новый вывод средств</div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="sheet-body">
+  const body = (<>
           <div className="frow">
-            <Field label="Сумма"><input type="number" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
+            <Field label="Сумма"><input type="number" inputMode="numeric" value={f.amount} onChange={set("amount")} placeholder="0" /></Field>
             <Field label="Дата">
               <DateFields value={f.date} onChange={(v) => setF((prev) => ({ ...prev, date: v }))} />
             </Field>
@@ -3821,6 +3827,16 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
               amount: +f.amount, date: f.date, investorId: f.investorId, purpose: f.purpose, note: f.note.trim(),
             })}>Вывести</button>
           </div>
+        </>);
+  if (mobile) return <Sheet title={"Новый вывод средств"} subtitle={null} onClose={onClose} className="m-form">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Новый вывод средств</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
@@ -3829,7 +3845,7 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
 
 /* --------------------------- Импорт из Excel ------------------------ */
 
-function ImportModal({ investors, contracts, onClose, onImport, draft }) {
+function ImportModal({ investors, contracts, onClose, onImport, draft, mobile }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(draft?.data?.result || null);
   const [pending, setPending] = useState(draft?.data?.pending || null);
@@ -3855,14 +3871,7 @@ function ImportModal({ investors, contracts, onClose, onImport, draft }) {
     }
   };
 
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-hd">
-          <div className="sheet-name">Импорт из Excel</div>
-          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="sheet-body">
+  const body = (<>
           <p className="import-hint">
             Скачайте шаблон, заполните вкладки «Вкладчики», «Договоры» и, если нужно, «Платежи»
             (для отметки уже оплаченных платежей), затем загрузите файл обратно.
@@ -3915,6 +3924,16 @@ function ImportModal({ investors, contracts, onClose, onImport, draft }) {
               </div>}
             </div>
           )}
+        </>);
+  if (mobile) return <Sheet title={"Импорт из Excel"} subtitle={null} onClose={onClose} className="tall">{body}</Sheet>;
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd">
+          <div className="sheet-name">Импорт из Excel</div>
+          <button className="icon-btn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="sheet-body">{body}
         </div>
       </div>
     </div>
