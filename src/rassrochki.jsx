@@ -7,19 +7,20 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
+import { useIsMobile, MobileApp, MobileStatus, MLogin } from "./mobile.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
 /* ------------------------------------------------------------------ */
 
-const money = (n) =>
+export const money = (n) =>
   new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(Math.round(n || 0)) + " ₽";
 
-const fmtDate = (d) =>
+export const fmtDate = (d) =>
   new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(d));
 
 // приводим телефон к виду 8-900-123-45-67; если не похоже на рос. номер — возвращаем как есть
-const fmtPhone = (raw) => {
+export const fmtPhone = (raw) => {
   let d = String(raw || "").replace(/\D/g, "");
   if (!d) return "";
   if (d.length === 11 && d[0] === "7") d = "8" + d.slice(1);
@@ -29,7 +30,7 @@ const fmtPhone = (raw) => {
 };
 
 // ссылка wa.me с предзаполненным напоминанием; null, если номер не похож на российский
-const waReminderLink = (phone, name, amount, dueDate) => {
+export const waReminderLink = (phone, name, amount, dueDate) => {
   let d = String(phone || "").replace(/\D/g, "");
   if (d.length === 11 && d[0] === "8") d = "7" + d.slice(1);
   else if (d.length === 10) d = "7" + d;
@@ -87,7 +88,7 @@ const buildSchedule = (c) => {
   });
 };
 
-const contractStats = (c) => {
+export const contractStats = (c) => {
   const rows = buildSchedule(c);
   const financed = rows.reduce((s, r) => s + r.amountDue, 0);
   const paidSum = rows.reduce((s, r) => s + r.paidAmount, 0);
@@ -101,7 +102,7 @@ const contractStats = (c) => {
 /*  Вкладчики / капитал                                                */
 /* ------------------------------------------------------------------ */
 
-const WITHDRAWAL_PURPOSES = {
+export const WITHDRAWAL_PURPOSES = {
   owner: "Прибыль собственнику",
   investor_payout: "Выплата вкладчику",
   restock: "Закупка товара",
@@ -373,7 +374,7 @@ const buildExportWorkbook = (contracts, investors) => {
 /*  Мелкие компоненты                                                  */
 /* ------------------------------------------------------------------ */
 
-const STATUS = {
+export const STATUS = {
   paid: { label: "Оплачен", cls: "b-emerald" },
   partial: { label: "Частично", cls: "b-amber" },
   overdue: { label: "Просрочен", cls: "b-clay" },
@@ -383,13 +384,13 @@ const STATUS = {
   done: { label: "Закрыт", cls: "b-emerald" },
 };
 
-const Badge = ({ s }) => {
+export const Badge = ({ s }) => {
   const st = STATUS[s] || STATUS.upcoming;
   return <span className={`badge ${st.cls}`}>{st.label}</span>;
 };
 
 // «Лента долга» — фирменный элемент: полоса, поделённая на оплачено / просрочено / остаток
-const Ribbon = ({ paid, overdue, remaining }) => {
+export const Ribbon = ({ paid, overdue, remaining }) => {
   const total = Math.max(1, paid + remaining);
   const p = (paid / total) * 100;
   const o = (overdue / total) * 100;
@@ -436,6 +437,9 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [investorFilter, setInvestorFilter] = useState("all");
   const [sortBy, setSortBy] = useState("created");
+
+  // телефон (≤ 768 px) — отдельная мобильная разметка, компьютерная не меняется
+  const isMobile = useIsMobile();
 
   // сессия входа
   useEffect(() => {
@@ -859,6 +863,83 @@ export default function App() {
       return { key, list, remaining, overdue };
     });
   }, [filteredContracts]);
+
+  // окна и шторки — общие для компьютерной и мобильной версии
+  const modals = (
+    <>
+      {open && (
+        <Detail
+          mobile={isMobile}
+          contract={open}
+          investors={investors}
+          onClose={() => setOpenId(null)}
+          onToggle={togglePay}
+          onUpdatePaidDate={updatePaidDate}
+          onPay={payPayment}
+          onAttachReceipt={attachReceipt}
+          onRemoveReceipt={removeReceipt}
+          onEarlyPayoff={earlyPayoff}
+          onDelete={deleteContract}
+          onUpdateComment={updateComment}
+          onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
+        />
+      )}
+      {adding && <AddForm mobile={isMobile} investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
+      {editingContract && (
+        <AddForm
+          mobile={isMobile}
+          investors={investors}
+          editing={editingContract}
+          onClose={() => setEditingContract(null)}
+          onSave={updateContract}
+        />
+      )}
+      {addingInvestor && <AddInvestorForm mobile={isMobile} onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
+      {addingWithdrawal && (
+        <AddWithdrawalForm mobile={isMobile} investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
+      )}
+      {importing && (
+        <ImportModal mobile={isMobile} investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
+      )}
+      {sectionModal && (
+        <SectionDetail
+          mobile={isMobile}
+          title={sectionTitles[sectionModal]}
+          rows={sectionRows}
+          onClose={() => setSectionModal(null)}
+          onOpenContract={(id) => { setSectionModal(null); setOpenId(id); }}
+        />
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    if (!supabaseConfigured)
+      return <MobileStatus text="Supabase не подключён — не заданы VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY." />;
+    if (session === undefined) return <MobileStatus text="Проверка входа…" />;
+    if (!session) return <Login mobile onLogin={login} busy={authBusy} error={authError} />;
+    if (loadError)
+      return <MobileStatus text={`Не удалось загрузить данные: ${loadError}`} onRetry={() => setReloadTick((t) => t + 1)} />;
+    if (!loaded) return <MobileStatus text="Загрузка ведомости…" />;
+    return (
+      <MobileApp
+        app={{
+          session, logout, contracts, investors, withdrawals, totals, capital, monthlyStats,
+          filteredContracts, groupedContracts, search, setSearch, statusFilter, setStatusFilter,
+          investorFilter, setInvestorFilter, sortBy, setSortBy, expandedId, setExpandedId,
+          tab, setTab, setOpenId, setAdding, setImporting, setSectionModal,
+          setAddingInvestor, setAddingWithdrawal, removeInvestor, removeWithdrawal,
+          payPayment, storageError,
+          exportXlsx: () => XLSX.writeFile(
+            buildExportWorkbook(contracts, investors),
+            `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`
+          ),
+        }}
+      >
+        {modals}
+      </MobileApp>
+    );
+  }
 
   if (!supabaseConfigured)
     return (
@@ -1284,53 +1365,14 @@ export default function App() {
         </main>
       )}
 
-      {open && (
-        <Detail
-          contract={open}
-          investors={investors}
-          onClose={() => setOpenId(null)}
-          onToggle={togglePay}
-          onUpdatePaidDate={updatePaidDate}
-          onPay={payPayment}
-          onAttachReceipt={attachReceipt}
-          onRemoveReceipt={removeReceipt}
-          onEarlyPayoff={earlyPayoff}
-          onDelete={deleteContract}
-          onUpdateComment={updateComment}
-          onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
-        />
-      )}
-      {adding && <AddForm investors={investors} onClose={() => setAdding(false)} onSave={addContract} />}
-      {editingContract && (
-        <AddForm
-          investors={investors}
-          editing={editingContract}
-          onClose={() => setEditingContract(null)}
-          onSave={updateContract}
-        />
-      )}
-      {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
-      {addingWithdrawal && (
-        <AddWithdrawalForm investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
-      )}
-      {importing && (
-        <ImportModal investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
-      )}
-      {sectionModal && (
-        <SectionDetail
-          title={sectionTitles[sectionModal]}
-          rows={sectionRows}
-          onClose={() => setSectionModal(null)}
-          onOpenContract={(id) => { setSectionModal(null); setOpenId(id); }}
-        />
-      )}
+      {modals}
     </div>
   );
 }
 
 /* --------------------------- Вход --------------------------------- */
 
-function Login({ onLogin, busy, error }) {
+function Login({ onLogin, busy, error, mobile }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -1339,6 +1381,12 @@ function Login({ onLogin, busy, error }) {
     if (!email.trim() || !password || busy) return;
     onLogin(email.trim(), password);
   };
+
+  if (mobile)
+    return (
+      <MLogin email={email} setEmail={setEmail} password={password} setPassword={setPassword}
+        submit={submit} busy={busy} error={error} />
+    );
 
   return (
     <div className="app">
@@ -1846,12 +1894,12 @@ function AddForm({ investors, onClose, onSave, editing }) {
   );
 }
 
-const Field = ({ label, children }) => (
+export const Field = ({ label, children }) => (
   <label className="field"><span>{label}</span>{children}</label>
 );
 
 // поле даты из трёх сегментов (ДД/ММ/ГГГГ) с автопереходом — вместо капризного native <input type="date">
-function DateFields({ value, onChange }) {
+export function DateFields({ value, onChange }) {
   const [vy, vm, vd] = value ? value.split("-") : ["", "", ""];
   const [day, setDay] = useState(vd || "");
   const [month, setMonth] = useState(vm || "");
@@ -2076,7 +2124,7 @@ function ImportModal({ investors, contracts, onClose, onImport }) {
 /*  Стили                                                              */
 /* ------------------------------------------------------------------ */
 
-const css = `
+export const css = `
 @import url('https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 .app{
