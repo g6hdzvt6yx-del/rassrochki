@@ -332,7 +332,7 @@ const parseImportWorkbook = async (file, existingInvestors, existingContracts) =
       if (!markup && markupPercent) markup = Math.round((principal * markupPercent) / 100);
       else if (!markupPercent && markup && principal > 0) markupPercent = Math.round((markup / principal) * 1000) / 10;
 
-      const startDate = excelDateToIso(row["Дата 1-го платежа"], XLSX) || new Date().toISOString().slice(0, 10);
+      const startDate = excelDateToIso(row["Дата 1-го платежа"], XLSX) || toIsoDate(new Date());
 
       // пропускаем дубли — как с уже существующими договорами, так и между строками файла
       const key = dupKey(clientName, item, startDate);
@@ -862,7 +862,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
 
   const payInvestorAccrual = async (investor, amount) => {
     await addWithdrawal({
-      amount, date: new Date().toISOString().slice(0, 10), investorId: investor.id,
+      amount, date: toIsoDate(new Date()), investorId: investor.id,
       purpose: "investor_payout", note: `Ежемесячное начисление вкладчику ${investor.name}`,
     });
   };
@@ -964,6 +964,14 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
     const payments = { ...(c.payments || {}) };
     const cur = payments[idx];
     if (cur && cur.paidDate) {
+      const row = buildSchedule(c).find((item) => item.index === idx);
+      const paidNow = actualPaid(cur, row?.amountDue || 0);
+      if (!await requestConfirm({
+        title: "Сбросить оплату?",
+        message: `Клиент «${c.clientName}», платёж №${idx + 1}${paidNow > 0 ? ` — внесено ${money(paidNow)}` : ""}${cur.paidDate ? ` от ${fmtDate(cur.paidDate)}` : ""}. Оплата будет удалена, платёж снова станет неоплаченным.`,
+        confirmLabel: "Да, сбросить оплату",
+        danger: true,
+      })) return;
       const { paidDate: _paidDate, paidAmount: _paidAmount, paymentEvents: _paymentEvents, ...metadata } = cur;
       if (Object.keys(metadata).length) payments[idx] = metadata;
       else delete payments[idx];
@@ -1207,7 +1215,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
     const unpaidRows = buildSchedule(c).filter((row) => !row.paid);
     if (!unpaidRows.length) return;
     const payoffTotal = unpaidRows.reduce((sum, row) => sum + row.remainingDue, 0);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toIsoDate(new Date());
     if (!await requestConfirm({
       title: "Подтвердить досрочное погашение?",
       message: `Клиент «${c.clientName}». Будут отмечены оплаченными ${unpaidRows.length} платежей на общую сумму ${money(payoffTotal)} датой ${fmtDate(today)}. После подтверждения договор будет закрыт.`,
@@ -1521,7 +1529,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
   const exportFilteredContracts = async () => {
     const XLSX = await import("xlsx");
     const names = { all: "vse", active: "aktivnye", overdue: "prosrochka", done: "zakrytye" };
-    const fileName = `rassrochki_${names[statusFilter] || "spisok"}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const fileName = `rassrochki_${names[statusFilter] || "spisok"}_${toIsoDate(new Date())}.xlsx`;
     XLSX.writeFile(buildFilteredContractsWorkbook(XLSX, filteredContracts, investors), fileName);
     await localData.log({
       actionType: "export_excel", entityType: "export", entityName: fileName,
@@ -1636,7 +1644,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
   const contractFiltersActive = Boolean(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created");
   const exportExcel = async () => {
     const XLSX = await import("xlsx");
-    XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${toIsoDate(new Date())}.xlsx`);
     await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
   };
   const syncStatus = !isDesktopApp && <WebSyncStatus
@@ -2734,7 +2742,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   const [editEventIndex,setEditEventIndex] = useState(0);
   const [editRecord,setEditRecord] = useState(null);
   const [payMode, setPayMode] = useState("new"); // "new" | "edit"
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(toIsoDate(new Date()));
   const [payAmount, setPayAmount] = useState(initialAction === "pay" && st.next ? String(st.next.remainingDue) : "");
   const [payComment, setPayComment] = useState("");
   const [payMethod,setPayMethod] = useState("");
@@ -2775,7 +2783,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
     setDeferringIdx(null);
     setPayingIdx(idx);
     setPayMode("new");
-    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayDate(toIsoDate(new Date()));
     setPayAmount(String(remainingDue));
     setPayComment("");
   };
@@ -3240,7 +3248,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
       (+source.totalPrice || 0) - (+source.downPayment || 0) + (+(source.markupAmount ?? source.markup) || 0))) : "0",
     monthlyPayment: source ? String(source.monthlyPayment || 0) : "0",
     termMonths: source ? String(source.termMonths || 1) : "6",
-    startDate: source?.startDate || new Date().toISOString().slice(0, 10),
+    startDate: source?.startDate || toIsoDate(new Date()),
     contractDate: source ? (source.contractDate || "") : toIsoDate(new Date()),
     investorId: source?.investorId || "",
     guarantorName: source?.guarantorName || "", guarantorPhone: source?.guarantorPhone || "",
@@ -3697,7 +3705,7 @@ function AddInvestorForm({ onClose, onSave, editing }) {
   const [f, setF] = useState({
     name: editing?.name || "", amount: editing ? String(editing.amount || "") : "",
     monthlyPayment: editing ? String(editing.monthlyPayment || "") : "",
-    accrualStartDate: editing?.accrualStartDate || new Date().toISOString().slice(0, 10),
+    accrualStartDate: editing?.accrualStartDate || toIsoDate(new Date()),
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const valid = f.name.trim() && +f.amount > 0;
@@ -3740,7 +3748,7 @@ function AddInvestorForm({ onClose, onSave, editing }) {
 
 function AddWithdrawalForm({ investors, onClose, onSave }) {
   const [f, setF] = useState({
-    amount: "", date: new Date().toISOString().slice(0, 10),
+    amount: "", date: toIsoDate(new Date()),
     investorId: "", purpose: "owner", note: "",
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
