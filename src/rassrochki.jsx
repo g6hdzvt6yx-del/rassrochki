@@ -38,6 +38,7 @@ import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
 import usePhoneLayout from "./usePhoneLayout";
 import { MobileTopBar, MobileTabBar, MobileMoreSheet, MobileHome, moreIcons, weekdayLabel } from "./MobileShell";
+import MobileContracts from "./MobileContracts";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -1626,6 +1627,13 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       </div>
     );
 
+  const resetContractFilters = () => {
+    setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
+  };
+  const chooseWorkView = (key) => {
+    setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");setSortDir("desc");
+  };
+  const contractFiltersActive = Boolean(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created");
   const exportExcel = async () => {
     const XLSX = await import("xlsx");
     XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -1642,7 +1650,10 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
     <div className={isPhone ? "app is-phone" : "app"}>
       <style>{css}</style>
 
-      {isPhone && <MobileTopBar subtitle={weekdayLabel(toIsoDate(new Date()))}>{syncStatus}</MobileTopBar>}
+      {isPhone && <MobileTopBar
+        title={{ contracts: "Договоры", cash: "Касса", capital: "Капитал", directories: "Справочники" }[tab] || "Рассрочки"}
+        subtitle={tab === "contracts" ? `Всего договоров: ${contracts.length}` : weekdayLabel(toIsoDate(new Date()))}
+      >{syncStatus}</MobileTopBar>}
       {!isPhone && <header className="hd">
         <div className="brand">
           <span className="mark"><Wallet size={18} /></span>
@@ -1865,7 +1876,21 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
         </main>
       )}
 
-      {tab === "contracts" && (
+      {tab === "contracts" && isPhone && (
+        <MobileContracts
+          total={contracts.length} list={filteredContracts} groups={groupedContracts} getStats={contractStats} investors={investors}
+          counts={filterCounts} summary={filteredSummary} marks={contractMarks} onMarksHistory={setMarksHistoryId}
+          f={{
+            search, setSearch, statusFilter, setStatusFilter, workView, chooseWorkView, sortBy, setSortBy, sortDir, setSortDir,
+            investorFilter, setInvestorFilter, contactFilter, setContactFilter, notificationFilter, setNotificationFilter,
+            deferralFilter, setDeferralFilter, markStatuses, setMarkStatuses, markAuthor, setMarkAuthor, markAuthorOptions,
+            reset: resetContractFilters, anyActive: contractFiltersActive,
+          }}
+          selection={{ selectedIds, toggleSelected, setSelectedIds, visibleSelected, reminderFor, beginReminders }}
+          onOpen={setOpenId} onPay={openQuickPay} onRemind={notifyPayment} onExport={exportFilteredContracts} onAdd={() => setAdding(true)}
+        />
+      )}
+      {tab === "contracts" && !isPhone && (
         <main className={`wrap ${listMode === "table" ? "wrap-table" : ""}`}>
           {contracts.length === 0 ? (
             <div className="panel"><div className="empty">Договоров пока нет — добавьте первый кнопкой «Новый договор».</div></div>
@@ -1945,13 +1970,11 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
             <button className="btn ghost btn-sm export-filtered" disabled={!filteredContracts.length} onClick={exportFilteredContracts}>
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
-            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
-            }}><RotateCcw size={14} /> Сбросить фильтры</button>}
+            {contractFiltersActive && <button className="btn ghost btn-sm" onClick={resetContractFilters}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
           <div className="workbench-controls">
-            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");setSortDir("desc");}}>{label}</button>)}</div>
+            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>chooseWorkView(key)}>{label}</button>)}</div>
             <div className="seg-toggle" aria-label="Вид списка"><button className={listMode==="cards"?"on":""} onClick={()=>setListMode("cards")}>Карточки</button><button className={listMode==="table"?"on":""} onClick={()=>setListMode("table")}>Таблица</button></div>
             {workView && <small className="workbench-hint">{workView==="large"?"Просрочка от 100 000 ₽, по убыванию остатка долга":workView==="promised"?"Незакрытые договоры с обещанием на сегодня или будущую дату":"Контакты и обещания на сегодня или раньше; просрочки без уведомления за 72 часа"}</small>}
             <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>

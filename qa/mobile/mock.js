@@ -17,7 +17,8 @@ const paidRecords = (amounts, count, start, partialLast = 0) => {
   const out = {};
   for (let i = 0; i < count; i += 1) {
     const d = new Date(`${start}T00:00:00`); d.setMonth(d.getMonth() + i);
-    out[i] = { paidDate: iso(d), paidAmount: amounts[i], paymentEvents: [{ date: iso(d), amount: amounts[i] }] };
+    // Без суммы: приложение само засчитает платёж полностью по своему графику (без копеечных остатков).
+    out[i] = { paidDate: iso(d) };
   }
   if (partialLast) out[count] = { paidDate: iso(today), paidAmount: partialLast, paymentEvents: [{ date: iso(shift(-1)), amount: partialLast }] };
   return out;

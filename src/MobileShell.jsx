@@ -74,7 +74,7 @@ export function MobileTabBar({ tab, onTab, onAdd, onMore, moreActive }) {
 
 /* ---------------- шторка «Ещё» ---------------- */
 
-export function MobileMoreSheet({ onClose, groups, footer }) {
+export function MSheet({ title, onClose, children, footer }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -83,31 +83,38 @@ export function MobileMoreSheet({ onClose, groups, footer }) {
   }, [onClose]);
   return (
     <div className="m-sheet-backdrop" onClick={onClose}>
-      <section className="m-sheet" role="dialog" aria-modal="true" aria-label="Ещё" onClick={(e) => e.stopPropagation()}>
+      <section className="m-sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="m-sheet-grip" aria-hidden="true" />
         <header className="m-sheet-head">
-          <h2>Ещё</h2>
+          <h2>{title}</h2>
           <button type="button" className="m-icon-btn" onClick={onClose} aria-label="Закрыть"><X size={20} /></button>
         </header>
-        <div className="m-sheet-body">
-          {groups.filter((g) => g.items.some(Boolean)).map((group) => (
-            <div key={group.title} className="m-menu-group">
-              <h3>{group.title}</h3>
-              <div className="m-list">
-                {group.items.filter(Boolean).map((it) => (
-                  <button type="button" key={it.key} className={`m-menu-row ${it.tone || ""}`} disabled={it.disabled} onClick={() => { onClose(); it.onClick(); }}>
-                    <span className="m-menu-icon" aria-hidden="true">{it.icon}</span>
-                    <span className="m-menu-text"><b>{it.label}</b>{it.hint && <small>{it.hint}</small>}</span>
-                    <ChevronRight size={18} className="m-chevron" aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          {footer && <p className="m-foot-note">{footer}</p>}
-        </div>
+        <div className="m-sheet-body">{children}</div>
+        {footer && <footer className="m-sheet-foot">{footer}</footer>}
       </section>
     </div>
+  );
+}
+
+export function MobileMoreSheet({ onClose, groups, footer }) {
+  return (
+    <MSheet title="Ещё" onClose={onClose}>
+      {groups.filter((g) => g.items.some(Boolean)).map((group) => (
+        <div key={group.title} className="m-menu-group">
+          <h3>{group.title}</h3>
+          <div className="m-list">
+            {group.items.filter(Boolean).map((it) => (
+              <button type="button" key={it.key} className={`m-menu-row ${it.tone || ""}`} disabled={it.disabled} onClick={() => { onClose(); it.onClick(); }}>
+                <span className="m-menu-icon" aria-hidden="true">{it.icon}</span>
+                <span className="m-menu-text"><b>{it.label}</b>{it.hint && <small>{it.hint}</small>}</span>
+                <ChevronRight size={18} className="m-chevron" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {footer && <p className="m-foot-note">{footer}</p>}
+    </MSheet>
   );
 }
 
@@ -285,7 +292,7 @@ const shortMoney = (n) => {
   return String(Math.round(n));
 };
 
-function MRibbon({ parts, thin = false }) {
+export function MRibbon({ parts, thin = false }) {
   const total = Math.max(1, parts.reduce((s, [v]) => s + Math.max(0, v), 0));
   return (
     <div className={`m-ribbon ${thin ? "thin" : ""}`} aria-hidden="true">
@@ -294,4 +301,4 @@ function MRibbon({ parts, thin = false }) {
   );
 }
 
-export { weekdayLabel };
+export { weekdayLabel, money as mMoney, plural as mPlural, dayLabel as mDayLabel, isoDay as mIsoDay };
