@@ -4,12 +4,14 @@ import { accessFor } from './access';
 import OperatorDesk from './OperatorDesk';
 import TeamPanel from './TeamPanel';
 import './webAccess.css';
+import { useIsMobile, MobileStatus, MobileLogin, MobileScreen } from './mobile/kit';
 const MacBackupImport = React.lazy(() => import('./MacBackupImport'));
 const AdminApp = React.lazy(() => import('./rassrochki.jsx'));
 export default function WebAccess() {
   const [session,setSession]=useState(undefined), [profile,setProfile]=useState(null), [checked,setChecked]=useState(false);
   const [error,setError]=useState(''), [busy,setBusy]=useState(false), [team,setTeam]=useState(false), [importOpen,setImportOpen]=useState(false), [importBusy,setImportBusy]=useState(false), [appVersion,setAppVersion]=useState(0), [tick,setTick]=useState(0);
   const sessionUser = useRef(null);
+  const isMobile = useIsMobile(); // телефон (≤ 768 px) — мобильная разметка, компьютерная не меняется
   useEffect(()=>{
     if (!supabaseConfigured) {setSession(null); return;}
     supabase.auth.getSession().then(({data,error})=>{if(error)setError(error.message);setSession(data.session);});
@@ -27,12 +29,25 @@ export default function WebAccess() {
     return ()=>{live=false;clearInterval(timer);window.removeEventListener('focus',check);};
   },[session,tick]);
   const logout=()=>supabase.auth.signOut();
+  const submitLogin=async e=>{e.preventDefault();setBusy(true);setError('');try{const f=new FormData(e.currentTarget);const {error}=await supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)setError('Не удалось войти. Проверьте почту и пароль.');}catch{setError('Нет связи с сервером.');}finally{setBusy(false);}};
+  if(isMobile){
+    if(!supabaseConfigured) return <MobileStatus title="Настройка подключения" text="База данных ещё не подключена."/>;
+    if(session===undefined) return <MobileStatus text="Проверка входа…"/>;
+    if(!session) return <MobileLogin onSubmit={submitLogin} busy={busy} error={error}/>;
+    if(!checked) return <MobileStatus text="Проверка прав…"/>;
+    const mobileRole=accessFor(profile);
+    if(mobileRole==='blocked') return <MobileStatus title="Доступ не предоставлен" text={error||'Учётная запись не активирована администратором.'}><button className="m-btn primary block" onClick={()=>setTick(t=>t+1)}>Проверить снова</button><button className="m-btn ghost block" onClick={logout}>Выйти</button></MobileStatus>;
+    if(mobileRole==='operator') return <OperatorDesk onLogout={logout} mobile/>;
+  }
   if(!supabaseConfigured) return <main className="web-card"><h1>Настройка подключения</h1><p>База данных ещё не подключена.</p></main>;
   if(session===undefined) return <main className="web-card">Проверка входа…</main>;
-  if(!session) return <main className="web-card"><h1>Рассрочки</h1><p>Вход в рабочий кабинет</p><form onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{const f=new FormData(e.currentTarget);const {error}=await supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)setError('Не удалось войти. Проверьте почту и пароль.');}catch{setError('Нет связи с сервером.');}finally{setBusy(false);}}}><label>Почта<input name="email" type="email" autoComplete="username" required/></label><label>Пароль<input name="password" type="password" autoComplete="current-password" required/></label><button disabled={busy}>{busy?'Входим…':'Войти'}</button></form>{error&&<p role="alert">{error}</p>}</main>;
+  if(!session) return <main className="web-card"><h1>Рассрочки</h1><p>Вход в рабочий кабинет</p><form onSubmit={submitLogin}><label>Почта<input name="email" type="email" autoComplete="username" required/></label><label>Пароль<input name="password" type="password" autoComplete="current-password" required/></label><button disabled={busy}>{busy?'Входим…':'Войти'}</button></form>{error&&<p role="alert">{error}</p>}</main>;
   if(!checked) return <main className="web-card">Проверка прав…</main>;
   const role=accessFor(profile);
   if(role==='blocked') return <main className="web-card"><h1>Доступ не предоставлен</h1><p>{error||'Учётная запись не активирована администратором.'}</p><button onClick={()=>setTick(t=>t+1)}>Проверить снова</button> <button onClick={logout}>Выйти</button></main>;
   if(role==='operator') return <OperatorDesk onLogout={logout}/>;
-  return <><div className="web-admin-bar"><span>Администратор</span><button disabled={importBusy} onClick={()=>{setImportOpen(false);setTeam(!team);}}>{team?'Вернуться к приложению':'Операторы и назначения'}</button><button disabled={importBusy} onClick={()=>{setTeam(false);setImportOpen(!importOpen);}}>{importOpen?'Вернуться к приложению':'Перенести копию с Mac'}</button></div>{importOpen?<React.Suspense fallback={<p>Загрузка импорта…</p>}><MacBackupImport ownerId={session.user.id} onBusyChange={setImportBusy} onDone={()=>setAppVersion(v=>v+1)}/></React.Suspense>:team?<TeamPanel/>:<React.Suspense fallback={<p>Загрузка…</p>}><AdminApp key={session.user.id+":"+appVersion}/></React.Suspense>}</>;
+  // Приложение администратора стоит на одном месте в обоих видах: при повороте экрана
+  // или смене ширины открытые окна и недописанные формы не пропадают.
+  const macImport=<React.Suspense fallback={<p>Загрузка импорта…</p>}><MacBackupImport ownerId={session.user.id} onBusyChange={setImportBusy} onDone={()=>setAppVersion(v=>v+1)}/></React.Suspense>;
+  return <>{!isMobile&&<div className="web-admin-bar"><span>Администратор</span><button disabled={importBusy} onClick={()=>{setImportOpen(false);setTeam(!team);}}>{team?'Вернуться к приложению':'Операторы и назначения'}</button><button disabled={importBusy} onClick={()=>{setTeam(false);setImportOpen(!importOpen);}}>{importOpen?'Вернуться к приложению':'Перенести копию с Mac'}</button></div>}{importOpen?(isMobile?<MobileScreen title="Перенести копию с Mac" onBack={()=>{if(importBusy)return false;setImportOpen(false);}}>{macImport}</MobileScreen>:macImport):team?(isMobile?<MobileScreen title="Операторы и назначения" onBack={()=>setTeam(false)}><TeamPanel/></MobileScreen>:<TeamPanel/>):<React.Suspense fallback={isMobile?<MobileStatus text="Загрузка…"/>:<p>Загрузка…</p>}><AdminApp key={session.user.id+":"+appVersion} onOpenTeam={()=>{setImportOpen(false);setTeam(true);}} onOpenImport={()=>{setTeam(false);setImportOpen(true);}}/></React.Suspense>}</>;
 }

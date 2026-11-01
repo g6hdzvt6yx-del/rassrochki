@@ -36,6 +36,8 @@ import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
+import { useIsMobile, useTheme, MobileStatus, MobileLogin, ConfirmSheet, LegacyLayer } from "./mobile/kit";
+import AdminMobile from "./mobile/AdminMobile";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -559,7 +561,7 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 /*  Приложение                                                         */
 /* ------------------------------------------------------------------ */
 
-export default function App() {
+export default function App({ onOpenTeam, onOpenImport } = {}) {
   const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
   const {logs:operatorLogs,people:operatorPeople,error:operatorLogsError}=useCallLogs(!isDesktopApp ? session?.user?.id : null);
   const [authError, setAuthError] = useState("");
@@ -633,6 +635,9 @@ export default function App() {
   const dailyError = !dailyDate || !dailyEnd ? "Укажите даты периода." : dailyDate > dailyEnd ? "Начало периода не может быть позже окончания." : "";
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [appMessage, setAppMessage] = useState(null);
+  // телефон (≤ 768 px) — отдельная мобильная разметка, компьютерная не меняется
+  const isMobile = useIsMobile();
+  const mobileTheme = useTheme();
 
   useEffect(() => {
     let timer;
@@ -1586,6 +1591,148 @@ export default function App() {
     });
   }, [filteredContracts]);
 
+  const exportAll = async () => {
+    const XLSX = await import("xlsx");
+    XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
+  };
+
+  // проверка изменений с других устройств — общая для компьютерной и мобильной версии
+  const syncStatus = !isDesktopApp && <WebSyncStatus
+    rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
+    paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
+    onRefresh={() => setReloadTick(t => t + 1)}
+  />;
+
+  // окна и шторки — общие для компьютерной и мобильной версии
+  const modals = (
+    <>
+        {reminderQueue && <div className="overlay"><div className="sheet reminder-queue" role="dialog" aria-modal="true" aria-label="Очередь напоминаний"><div className="sheet-hd"><b>Напоминания · осталось {reminderQueue.length}</b><button className="icon-btn" disabled={queueBusy} onClick={()=>setReminderQueue(null)} aria-label="Закрыть"><X size={18}/></button></div><div className="sheet-body">
+          {queueContract ? <><h3>{queueContract.clientName}</h3><p>{queueContract.phone} · {queueContract.item}</p>{queueUrl && <pre className="reminder-preview">{new URL(queueUrl).searchParams.get("text")}</pre>}<p className="field-hint">Отправьте сообщение в WhatsApp и подтвердите отправку. Затем откроется следующий клиент очереди.</p><div className="sheet-actions"><button className="btn primary" disabled={queueBusy || !queueUrl} onClick={async()=>{setQueueBusy(true);try{const sent=await notifyPayment(queueContract.id,contractStats(queueContract).next.index,queueUrl);if(sent)setReminderQueue(q=>q.slice(1));}finally{setQueueBusy(false);}}}>Открыть WhatsApp</button><button className="btn ghost" disabled={queueBusy} onClick={()=>setReminderQueue(q=>q.slice(1))}>Пропустить</button></div></>:<><p>Очередь завершена.</p><button className="btn primary" onClick={()=>{setReminderQueue(null);setSelectedIds(new Set());}}>Готово</button></>}
+        </div></div></div>}
+        {open && (
+          <Detail
+            key={`${open.id}:${openAction?.id===open.id ? openAction.mode:"view"}`}
+            initialAction={openAction?.id===open.id ? openAction.mode:undefined}
+            contracts={contracts}
+            contract={open}
+            clientContacts={openClientContacts}
+            investors={investors}
+            onClose={() => { setOpenId(null); setOpenAction(null); }}
+            onToggle={togglePay}
+            onNotify={notifyPayment}
+            onUndoNotify={undoPaymentNotification}
+            onDefer={deferPayment}
+            onUpdatePaidDate={updatePaidDate}
+            onEditPayment={editPaidPayment}
+            onDeletePayment={deletePaidPayment}
+            onPay={payPayment}
+            cards={cards}
+            onAttachReceipt={attachReceipts}
+            onRemoveReceipt={removeReceipt}
+            onEarlyPayoff={earlyPayoff}
+            onDelete={deleteContract}
+            onUpdateComment={updateComment}
+            onAddContact={addContact}
+            onDeleteContact={deleteContact}
+            onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
+            onHistory={(c) => setDataCenterOpen({ contract: { id: c.id, name: c.clientName || c.client_name || c.id } })}
+          />
+        )}
+        {marksHistoryId && contracts.some((c) => c.id === marksHistoryId) && <OperatorMarksHistory
+          contract={contracts.find((c) => c.id === marksHistoryId)}
+          marks={contractMarks[marksHistoryId] || []}
+          error={operatorLogsError}
+          onClose={() => setMarksHistoryId(null)}
+          onOpenContract={() => { setMarksHistoryId(null); openAddMark(marksHistoryId); }}
+        />}
+        {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} onDraftsChanged={reloadDrafts} />}
+        {draftsOpen && <DraftsList drafts={cloudDrafts}
+          onClose={() => setDraftsOpen(false)}
+          onContinue={(item) => { setDraftsOpen(false); setDraftToContinue(item); }}
+          onDelete={async (item) => {
+            if (!await requestConfirm({ title: "Удалить черновик?", message: `Черновик «${item.title}» будет удалён. Сохранённые договоры не изменятся.`, confirmLabel: "Удалить черновик", danger: true })) return;
+            try { await deleteCloudDraft(item.id); await reloadDrafts(); } catch (error) { showAppMessage(`Не удалось удалить черновик: ${error.message}`); }
+          }}
+        />}
+        {editingContract && (
+          <AddForm cards={cards}
+            investors={investors}
+            clients={clientOptions} products={productOptions}
+            editing={editingContract}
+            onClose={() => setEditingContract(null)}
+            onSave={updateContract}
+            onDraftsChanged={reloadDrafts}
+          />
+        )}
+        {draftToContinue && draftToContinue.draft_type !== "Импорт Excel" && (
+          <AddForm cards={cards}
+            investors={investors}
+            clients={clientOptions} products={productOptions}
+            draft={draftToContinue}
+            editing={contracts.find((contract) => contract.id === draftContractId(draftToContinue))}
+            onDraftsChanged={reloadDrafts}
+            onClose={() => setDraftToContinue(null)}
+            onSave={draftToContinue.draft_type === "Редактирование договора"
+              ? (data) => updateContract(data, draftContractId(draftToContinue)) : addContract}
+          />
+        )}
+        {draftToContinue && draftToContinue.draft_type === "Импорт Excel" && (
+          <ImportModal
+            investors={investors}
+            contracts={contracts}
+            draft={draftToContinue}
+            onClose={() => setDraftToContinue(null)}
+            onImport={importData}
+          />
+        )}
+        {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
+        {editingInvestor && <AddInvestorForm editing={editingInvestor} onClose={() => setEditingInvestor(null)} onSave={updateInvestor} />}
+        {addingWithdrawal && (
+          <AddWithdrawalForm investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
+        )}
+        {importing && (
+          <ImportModal investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
+        )}
+        {sectionModal && (
+          <SectionDetail
+            title={sectionTitles[sectionModal]}
+            rows={sectionRows}
+            onClose={() => setSectionModal(null)}
+            onOpenContract={(id) => { setSectionModal(null); setOpenId(id); }}
+          />
+        )}
+        {dataCenterOpen && (
+          <DataPanelBoundary onClose={() => setDataCenterOpen(false)}><React.Suspense fallback={<div className="overlay"><div className="loading">Загрузка данных приложения…</div></div>}>
+            <DataCenter
+              contractFilter={dataCenterOpen?.contract || null}
+              onClose={() => setDataCenterOpen(false)}
+              onRestored={() => setReloadTick((t) => t + 1)}
+              onContinueDraft={(draft) => { setDataCenterOpen(false); setDraftToContinue(draft); }}
+            />
+          </React.Suspense></DataPanelBoundary>
+        )}
+        {confirmDialog && <ConfirmDialog mobile={isMobile} options={confirmDialog} onCancel={() => finishConfirm(false)} onConfirm={() => finishConfirm(true)} />}
+        {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
+        {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
+        {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
+    </>
+  );
+
+  if (isMobile) {
+    if (!supabaseConfigured)
+      return <MobileStatus title="Настройка подключения" text="Supabase не подключён — не заданы VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY." />;
+    if (session === undefined) return <MobileStatus text="Проверка входа…" />;
+    if (!session) return <Login mobile onLogin={login} busy={authBusy} error={authError} />;
+    if (loadError)
+      return (
+        <MobileStatus title="Не удалось загрузить данные" text={loadError}>
+          <button className="m-btn primary block" onClick={() => { setStorageError(""); setReloadTick((t) => t + 1); }}>Повторить</button>
+        </MobileStatus>
+      );
+    if (!loaded) return <MobileStatus text="Загрузка ведомости…" />;
+  }
+
   if (!supabaseConfigured)
     return (
       <div className="app"><style>{css}</style>
@@ -1622,8 +1769,21 @@ export default function App() {
       </div>
     );
 
+  // Один корневой блок для обоих видов: при смене ширины (поворот планшета) открытые
+  // окна и недописанные формы не пересоздаются.
   return (
-    <div className="app">
+    <div className={isMobile ? "m-app m-root" : "app"} data-theme={isMobile ? mobileTheme : undefined}>
+      {isMobile ? (
+        <AdminMobile
+          app={{
+          session, logout, isDesktopApp, contracts, investors, withdrawals, totals, capital, received, monthlyStats,
+          tab, setTab, setAdding, setOpenId, openQuickPay, openAddMark, setImporting, setDraftsOpen, cloudDrafts,
+          setDataCenterOpen, exportAll, requestConfirm, onOpenTeam, onOpenImport, syncStatus,
+          storageError, setStorageError, reload: () => setReloadTick((t) => t + 1), operatorLogsError, appMessage, setAppMessage,
+          appVersion: APP_VERSION, buildDate: fmtDate(`${BUILD_DATE}T00:00:00`),
+          }}
+        />
+      ) : <>
       <style>{css}</style>
 
       <header className="hd">
@@ -1640,11 +1800,7 @@ export default function App() {
           </button>
           <button
             className="btn on-dark"
-            onClick={async () => {
-              const XLSX = await import("xlsx");
-              XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
-              await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
-            }}
+            onClick={exportAll}
           >
             <Download size={16} /> Экспорт
           </button>
@@ -1659,11 +1815,7 @@ export default function App() {
           </button>
         </div>
       </header>
-      {!isDesktopApp && <WebSyncStatus
-        rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
-        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
-        onRefresh={() => setReloadTick(t => t + 1)}
-      />}
+      {syncStatus}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
         <span>{saveState.pending ? "Сохраняем…" : saveState.error ? `Ошибка сохранения: ${saveState.error}` : saveState.lastSavedAt ? `Сохранено · ${fmtDateTime(saveState.lastSavedAt)}` : "Данные загружены с Mac"}</span>
         <button className="btn ghost btn-sm" onClick={() => setDataCenterOpen(true)}>Последняя успешная копия: {lastBackupAt ? fmtDateTime(lastBackupAt) : "ещё не создана"}</button>
@@ -2252,123 +2404,17 @@ export default function App() {
         </main>
       )}
 
-      {reminderQueue && <div className="overlay"><div className="sheet reminder-queue" role="dialog" aria-modal="true" aria-label="Очередь напоминаний"><div className="sheet-hd"><b>Напоминания · осталось {reminderQueue.length}</b><button className="icon-btn" disabled={queueBusy} onClick={()=>setReminderQueue(null)} aria-label="Закрыть"><X size={18}/></button></div><div className="sheet-body">
-        {queueContract ? <><h3>{queueContract.clientName}</h3><p>{queueContract.phone} · {queueContract.item}</p>{queueUrl && <pre className="reminder-preview">{new URL(queueUrl).searchParams.get("text")}</pre>}<p className="field-hint">Отправьте сообщение в WhatsApp и подтвердите отправку. Затем откроется следующий клиент очереди.</p><div className="sheet-actions"><button className="btn primary" disabled={queueBusy || !queueUrl} onClick={async()=>{setQueueBusy(true);try{const sent=await notifyPayment(queueContract.id,contractStats(queueContract).next.index,queueUrl);if(sent)setReminderQueue(q=>q.slice(1));}finally{setQueueBusy(false);}}}>Открыть WhatsApp</button><button className="btn ghost" disabled={queueBusy} onClick={()=>setReminderQueue(q=>q.slice(1))}>Пропустить</button></div></>:<><p>Очередь завершена.</p><button className="btn primary" onClick={()=>{setReminderQueue(null);setSelectedIds(new Set());}}>Готово</button></>}
-      </div></div></div>}
-      {open && (
-        <Detail
-          key={`${open.id}:${openAction?.id===open.id ? openAction.mode:"view"}`}
-          initialAction={openAction?.id===open.id ? openAction.mode:undefined}
-          contracts={contracts}
-          contract={open}
-          clientContacts={openClientContacts}
-          investors={investors}
-          onClose={() => { setOpenId(null); setOpenAction(null); }}
-          onToggle={togglePay}
-          onNotify={notifyPayment}
-          onUndoNotify={undoPaymentNotification}
-          onDefer={deferPayment}
-          onUpdatePaidDate={updatePaidDate}
-          onEditPayment={editPaidPayment}
-          onDeletePayment={deletePaidPayment}
-          onPay={payPayment}
-          cards={cards}
-          onAttachReceipt={attachReceipts}
-          onRemoveReceipt={removeReceipt}
-          onEarlyPayoff={earlyPayoff}
-          onDelete={deleteContract}
-          onUpdateComment={updateComment}
-          onAddContact={addContact}
-          onDeleteContact={deleteContact}
-          onEdit={(c) => { setOpenId(null); setEditingContract(c); }}
-          onHistory={(c) => setDataCenterOpen({ contract: { id: c.id, name: c.clientName || c.client_name || c.id } })}
-        />
-      )}
-      {marksHistoryId && contracts.some((c) => c.id === marksHistoryId) && <OperatorMarksHistory
-        contract={contracts.find((c) => c.id === marksHistoryId)}
-        marks={contractMarks[marksHistoryId] || []}
-        error={operatorLogsError}
-        onClose={() => setMarksHistoryId(null)}
-        onOpenContract={() => { setMarksHistoryId(null); openAddMark(marksHistoryId); }}
-      />}
-      {adding && <AddForm cards={cards} investors={investors} clients={clientOptions} products={productOptions} onClose={() => setAdding(false)} onSave={addContract} onDraftsChanged={reloadDrafts} />}
-      {draftsOpen && <DraftsList drafts={cloudDrafts}
-        onClose={() => setDraftsOpen(false)}
-        onContinue={(item) => { setDraftsOpen(false); setDraftToContinue(item); }}
-        onDelete={async (item) => {
-          if (!await requestConfirm({ title: "Удалить черновик?", message: `Черновик «${item.title}» будет удалён. Сохранённые договоры не изменятся.`, confirmLabel: "Удалить черновик", danger: true })) return;
-          try { await deleteCloudDraft(item.id); await reloadDrafts(); } catch (error) { showAppMessage(`Не удалось удалить черновик: ${error.message}`); }
-        }}
-      />}
-      {editingContract && (
-        <AddForm cards={cards}
-          investors={investors}
-          clients={clientOptions} products={productOptions}
-          editing={editingContract}
-          onClose={() => setEditingContract(null)}
-          onSave={updateContract}
-          onDraftsChanged={reloadDrafts}
-        />
-      )}
-      {draftToContinue && draftToContinue.draft_type !== "Импорт Excel" && (
-        <AddForm cards={cards}
-          investors={investors}
-          clients={clientOptions} products={productOptions}
-          draft={draftToContinue}
-          editing={contracts.find((contract) => contract.id === draftContractId(draftToContinue))}
-          onDraftsChanged={reloadDrafts}
-          onClose={() => setDraftToContinue(null)}
-          onSave={draftToContinue.draft_type === "Редактирование договора"
-            ? (data) => updateContract(data, draftContractId(draftToContinue)) : addContract}
-        />
-      )}
-      {draftToContinue && draftToContinue.draft_type === "Импорт Excel" && (
-        <ImportModal
-          investors={investors}
-          contracts={contracts}
-          draft={draftToContinue}
-          onClose={() => setDraftToContinue(null)}
-          onImport={importData}
-        />
-      )}
-      {addingInvestor && <AddInvestorForm onClose={() => setAddingInvestor(false)} onSave={addInvestor} />}
-      {editingInvestor && <AddInvestorForm editing={editingInvestor} onClose={() => setEditingInvestor(null)} onSave={updateInvestor} />}
-      {addingWithdrawal && (
-        <AddWithdrawalForm investors={investors} onClose={() => setAddingWithdrawal(false)} onSave={addWithdrawal} />
-      )}
-      {importing && (
-        <ImportModal investors={investors} contracts={contracts} onClose={() => setImporting(false)} onImport={importData} />
-      )}
-      {sectionModal && (
-        <SectionDetail
-          title={sectionTitles[sectionModal]}
-          rows={sectionRows}
-          onClose={() => setSectionModal(null)}
-          onOpenContract={(id) => { setSectionModal(null); setOpenId(id); }}
-        />
-      )}
-      {dataCenterOpen && (
-        <DataPanelBoundary onClose={() => setDataCenterOpen(false)}><React.Suspense fallback={<div className="overlay"><div className="loading">Загрузка данных приложения…</div></div>}>
-          <DataCenter
-            contractFilter={dataCenterOpen?.contract || null}
-            onClose={() => setDataCenterOpen(false)}
-            onRestored={() => setReloadTick((t) => t + 1)}
-            onContinueDraft={(draft) => { setDataCenterOpen(false); setDraftToContinue(draft); }}
-          />
-        </React.Suspense></DataPanelBoundary>
-      )}
-      {confirmDialog && <ConfirmDialog options={confirmDialog} onCancel={() => finishConfirm(false)} onConfirm={() => finishConfirm(true)} />}
-      {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
-      {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
-      {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
-      <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>
+      </>}
+      {/* окна, ещё не переведённые на мобильный вид, — в прежнем оформлении */}
+      {isMobile ? <LegacyLayer css={css}>{modals}</LegacyLayer> : modals}
+      {!isMobile && <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>}
     </div>
   );
 }
 
 /* --------------------------- Вход --------------------------------- */
 
-function Login({ onLogin, busy, error }) {
+function Login({ onLogin, busy, error, mobile }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -2377,6 +2423,12 @@ function Login({ onLogin, busy, error }) {
     if (!email.trim() || !password || busy) return;
     onLogin(email.trim(), password);
   };
+
+  if (mobile)
+    return (
+      <MobileLogin subtitle="Войдите, чтобы продолжить" onSubmit={submit} busy={busy} error={error}
+        email={email} setEmail={setEmail} password={password} setPassword={setPassword} />
+    );
 
   return (
     <div className="app">
@@ -2413,7 +2465,8 @@ const Stat = ({ icon, label, value, tone, onClick }) => {
   );
 };
 
-function ConfirmDialog({ options, onCancel, onConfirm }) {
+function ConfirmDialog({ options, onCancel, onConfirm, mobile }) {
+  if (mobile) return <ConfirmSheet {...options} onCancel={onCancel} onConfirm={onConfirm} />;
   return (
     <div className="overlay nested-overlay" onClick={onCancel}>
       <div className="confirm-card" onClick={(e) => e.stopPropagation()}>
