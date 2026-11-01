@@ -24,6 +24,8 @@ html body .app :is(.badge.paid,.citem-card-wa,.filtered-summary-profit){backgrou
 html body .app :is(.badge.soon,.badge.partial){background:#413827;color:#f5d590;border-color:#766343}
 html body .app :is(.citem-overdue-meta,.daily-overdue-debt){color:#ffadb4}
 html body .app :is(.received-totals>div,.received-payment-list .data-row,.received-payment-list .data-row:last-child){border-color:#43536b}
+html body .app .section-total{background:#202e43;color:var(--ink);border:1px solid #43536b}
+html body .app .section-total b{color:#c4b5fd}
 html body .app :is(td,th){border-color:#3c4b61;background:#1c2839;color:#e6edf8}
 html body .app th{background:#26354b;color:#c7d2e5}
 html body .app a{color:#a9bfff}

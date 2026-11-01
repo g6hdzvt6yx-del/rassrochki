@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedProfitByMonth, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
+import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledProfitSummary, receivedProfitByMonth, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 
 const stats = (contract) => contract.stats;
 const localIso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -157,5 +157,58 @@ describe("произвольный период", () => {
   });
   it("возвращает все поступления после сброса периода, включая недатированные", () => {
     expect(receivedSummary(contracts, stats).received).toBe(960);
+  });
+});
+
+
+describe("общая прибыль по периодам", () => {
+  // 1000 капитала + 300 наценки на 3 месяца: второй платёж перенесён, третий не оплачен.
+  const contracts = [
+    { id: "a", clientName: "Бета", item: "Телефон", totalPrice: 1000, downPayment: 0, markup: 300, stats: { rows: [
+      { n: 1, dueDate: new Date(2026, 0, 15), amountDue: 433, paidAmount: 433 },
+      { n: 2, dueDate: new Date(2026, 2, 5), scheduledDueDate: new Date(2026, 1, 15), amountDue: 433, paidAmount: 200 },
+      { n: 3, dueDate: new Date(2026, 2, 15), amountDue: 434, paidAmount: 0 },
+    ] } },
+    { id: "b", clientName: "Альфа", item: "Часы", totalPrice: 500, downPayment: 100, markup: 0, stats: { rows: [
+      { n: 1, dueDate: new Date(2026, 0, 20), amountDue: 400, paidAmount: 400 },
+    ] } },
+  ];
+
+  it("за всё время равна сумме наценок договоров", () => {
+    const all = scheduledProfitByContract(contracts, stats);
+    expect(all.profit).toBe(300);
+    expect(all.contracts).toBe(2);
+    expect(all.rows.map((row) => [row.contractId, row.profit])).toEqual([["a", 300], ["b", 0]]);
+  });
+
+  it("относит прибыль к месяцу срока платежа с учётом переноса", () => {
+    expect(scheduledProfitByContract(contracts, stats, "2026-02").profit).toBe(0);
+    const march = scheduledProfitByContract(contracts, stats, "2026-03");
+    expect(march.profit).toBe(200);
+    expect(march.profitPaid).toBe(46);
+    expect(march.profitOutstanding).toBe(154);
+    expect(march.rows).toEqual([expect.objectContaining({ contractId: "a", payments: 2, scheduled: 867 })]);
+  });
+
+  it("учитывает обе границы произвольного периода", () => {
+    const range = scheduledProfitByContract(contracts, stats, "", { from: "2026-01-15", to: "2026-03-05" });
+    expect(range.scheduled).toBe(433 + 433 + 400);
+    expect(range.rows.find((row) => row.contractId === "a").payments).toBe(2);
+    expect(scheduledProfitByContract(contracts, stats, "", { from: "2026-03-06", to: "2026-03-01" }).contracts).toBe(0);
+  });
+
+  it("помесячные итоги совпадают с выбором месяца", () => {
+    const months = scheduledProfitByMonth(contracts, stats);
+    expect(months.map((row) => row.month)).toEqual(["2026-03", "2026-01"]);
+    months.forEach((row) => {
+      const period = scheduledProfitByContract(contracts, stats, row.month);
+      expect([row.profit, row.profitPaid, row.profitOutstanding, row.contracts])
+        .toEqual([period.profit, period.profitPaid, period.profitOutstanding, period.contracts]);
+    });
+  });
+
+  it("обрабатывает отсутствие договоров", () => {
+    expect(scheduledProfitByMonth([], stats)).toEqual([]);
+    expect(scheduledProfitByContract([], stats)).toMatchObject({ profit: 0, contracts: 0, rows: [] });
   });
 });

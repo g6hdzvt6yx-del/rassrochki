@@ -16,7 +16,7 @@ import {
   Database, RotateCcw, History, ClipboardList,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
-import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
+import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 import { formatPhone as fmtPhone, formatPhoneForExcel, normalizePhone } from "./phone";
 import { allocateContractPayment, editPaymentEventWithCarry, deletePaymentEvent } from "./payments";
 import { actualPaid, prepareContractEdit, draftContractId } from "./contractSafety";
@@ -609,6 +609,7 @@ export default function App() {
   const [receivedOpen, setReceivedOpen] = useState(false);
   const [receivedView, setReceivedView] = useState("received");
   const [profitGroupOpen, setProfitGroupOpen] = useState(null);
+  const [profitTotalOpen, setProfitTotalOpen] = useState(false);
   const confirmResolver = useRef(null);
   const [lastBackupAt, setLastBackupAt] = useState(null);
   const [backupError, setBackupError] = useState("");
@@ -1365,7 +1366,6 @@ export default function App() {
     financed: "Выдано в рассрочку — по договорам",
     active: "Активные договоры",
     debtors: "Должники (просрочка)",
-    profit: "Общая прибыль — по договорам",
     profitRealized: "Полученная прибыль — по договорам",
   };
 
@@ -1384,7 +1384,6 @@ export default function App() {
         item: c.item,
         amount: sectionModal === "financed" ? st.financed
           : sectionModal === "debtors" ? st.overdueSum
-          : sectionModal === "profit" ? Math.max(0, +c.markup || 0)
           : sectionModal === "profitRealized" ? contractCapital(c).profitRealized
           : st.remaining,
         badge: st.done ? "done" : st.overdueSum ? "overdue" : "active",
@@ -1662,7 +1661,7 @@ export default function App() {
       </header>
       {!isDesktopApp && <WebSyncStatus
         rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
-        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || tab === 'directories' || confirmDialog || sectionModal)}
+        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
         onRefresh={() => setReloadTick(t => t + 1)}
       />}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
@@ -1724,7 +1723,7 @@ export default function App() {
           <section className="cards">
             <Stat icon={<Wallet size={16} />} label="Получено всего" value={money(received.received)} onClick={() => { setReceivedView("received"); setReceivedOpen(true); }} />
             <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} onClick={() => setSectionModal("financed")} />
-            <Stat icon={<TrendingUp size={16} />} label="Общая прибыль" value={money(capital.profitTotal)} onClick={() => setSectionModal("profit")} />
+            <Stat icon={<TrendingUp size={16} />} label="Общая прибыль" value={money(capital.profitTotal)} onClick={() => setProfitTotalOpen(true)} />
             <Stat icon={<CheckCircle2 size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} onClick={() => { setReceivedView("profit"); setReceivedOpen(true); }} />
             <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} onClick={() => setSectionModal("active")} />
             <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
@@ -2360,6 +2359,7 @@ export default function App() {
       )}
       {confirmDialog && <ConfirmDialog options={confirmDialog} onCancel={() => finishConfirm(false)} onConfirm={() => finishConfirm(true)} />}
       {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
+      {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
       {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
       <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>
     </div>
@@ -2430,6 +2430,91 @@ function ConfirmDialog({ options, onCancel, onConfirm }) {
 
 /* --------------------------- Детали раздела сводки ------------------ */
 
+const ruPlural = (n, one, few, many) => {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  return mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? few : many;
+};
+
+const monthLabel = (value) => new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" })
+  .format(new Date(`${value}-01T12:00:00`));
+
+// Период отчёта: «За всё время», месяц (YYYY-MM) или произвольный диапазон дат.
+function useReportPeriod() {
+  const [month, setMonth] = useState("");
+  const [from, setFrom] = useState(() => `${toIsoDate(new Date()).slice(0, 8)}01`);
+  const [to, setTo] = useState(() => toIsoDate(new Date()));
+  const custom = month === "custom";
+  const error = custom && (!from || !to ? "Укажите начало и конец периода." : from > to ? "Начало периода не может быть позже окончания." : "");
+  const range = useMemo(() => custom ? { from, to } : null, [custom, from, to]);
+  return { month, setMonth, from, setFrom, to, setTo, custom, error, range, selectedMonth: custom ? "" : month };
+}
+
+function ReportPeriodPicker({ id, period, months }) {
+  return <>
+    <div className="received-period">
+      <label htmlFor={id}>Период</label>
+      <select id={id} value={period.month} onChange={(e) => period.setMonth(e.target.value)}>
+        <option value="">За всё время</option>
+        <option value="custom">Произвольный период</option>
+        {months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}
+      </select>
+    </div>
+    {period.custom && <div className="received-period received-range">
+      <label>С даты<DateCalendar showValue value={period.from} max={period.to || undefined} onChange={period.setFrom} label="С даты" /></label>
+      <label>По дату включительно<DateCalendar showValue value={period.to} min={period.from || undefined} onChange={period.setTo} label="По дату включительно" /></label>
+    </div>}
+  </>;
+}
+
+const contractBadge = (contract) => {
+  const st = contractStats(contract);
+  return st.done ? "done" : st.overdueSum ? "overdue" : "active";
+};
+
+function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
+  const period = useReportPeriod();
+  const monthly = useMemo(() => scheduledProfitByMonth(contracts, contractStats), [contracts]);
+  const months = useMemo(() => monthly.map((row) => row.month), [monthly]);
+  const summary = useMemo(
+    () => scheduledProfitByContract(contracts, contractStats, period.selectedMonth, period.range),
+    [contracts, period.selectedMonth, period.range]
+  );
+  const badges = useMemo(() => new Map(contracts.map((c) => [c.id, contractBadge(c)])), [contracts]);
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-hd"><div className="sheet-name">Общая прибыль</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
+        <div className="sheet-body">
+          <ReportPeriodPicker id="profit-total-month" period={period} months={months} />
+          {period.error ? <p role="alert" className="storage-warn">{period.error}</p> : <>
+          <div className="received-totals received-plan-totals">
+            <div><span>Общая прибыль за период</span><b>{money(summary.profit)}</b></div>
+            <div><span>Договоров с платежами в периоде</span><b>{summary.contracts}</b></div>
+            <div><span>Из неё уже получено</span><b>{money(summary.profitPaid)}</b></div>
+            <div><span>Ещё не получено</span><b>{money(summary.profitOutstanding)}</b></div>
+          </div>
+          <p className="field-hint">Общая прибыль — наценка в платежах по графику, срок которых попадает в выбранный период (с учётом переносов), включая уже оплаченные. За всё время она равна сумме наценок всех договоров. Получено — наценка в уже оплаченной части этих платежей, независимо от даты оплаты.</p>
+          {!period.month && monthly.length > 0 && <div className="monthly-profit-register profit-comparison">
+            <div className="monthly-profit-register-hd"><span>Месяц</span><span>Общая прибыль</span><span>Из неё получено</span></div>
+            {monthly.map((row) => <button type="button" key={row.month} onClick={() => period.setMonth(row.month)}>
+              <span>{monthLabel(row.month)}</span><b className="num">{money(row.profit)}</b><strong className="num">{money(row.profitPaid)}</strong>
+            </button>)}
+          </div>}
+          <div className="data-list received-payment-list">
+            {summary.rows.map((row) => <button className="data-row data-row-button" key={row.contractId} onClick={() => onOpenContract(row.contractId)}>
+              <div><b>{row.clientName}</b><span className="profit-row-meta">{row.item || "Без товара"} · {row.payments} {ruPlural(row.payments, "платёж", "платежа", "платежей")} <Badge s={badges.get(row.contractId)} /></span></div>
+              <div><b className="num">{money(row.profit)}</b><small>получено {money(row.profitPaid)}</small></div>
+            </button>)}
+            {!summary.rows.length && <div className="empty">За выбранный период платежей по графику нет.</div>}
+          </div>
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SectionDetail({ title, rows, onClose, onOpenContract }) {
   return (
     <div className="overlay" onClick={onClose}>
@@ -2444,7 +2529,7 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
           ) : (
             <>
               <div className="section-total">
-                <span>Итого · {rows.length} {rows.length === 1 ? "договор" : rows.length < 5 ? "договора" : "договоров"}</span>
+                <span>Итого · {rows.length} {ruPlural(rows.length, "договор", "договора", "договоров")}</span>
                 <b className="num">{money(rows.reduce((s, r) => s + r.amount, 0))}</b>
               </div>
               <div className="rows">
@@ -2466,18 +2551,8 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
 }
 
 function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received", onClose, onOpenContract }) {
-  const [month, setMonth] = useState("");
-  const [from, setFrom] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  });
-  const [to, setTo] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  });
-  const custom = month === "custom";
-  const periodError = custom && (!from || !to ? "Укажите начало и конец периода." : from > to ? "Начало периода не может быть позже окончания." : "");
-  const range = useMemo(() => custom ? { from, to } : null, [custom, from, to]);
+  const period = useReportPeriod();
+  const { month, setMonth, custom, range, error: periodError } = period;
   const [profitMode, setProfitMode] = useState("actual");
   const monthlyProfit = useMemo(() => profitComparisonByMonth(contracts, contractStats), [contracts]);
   const planned = useMemo(() => scheduledProfitSummary(contracts, contractStats, custom ? "" : month, range), [contracts, month, custom, range]);
@@ -2487,25 +2562,12 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
     () => month ? receivedSummary(contracts, contractStats, custom ? "" : month, range) : allTimeSummary,
     [contracts, allTimeSummary, month, custom, range]
   );
-  const monthLabel = (value) => new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" })
-    .format(new Date(`${value}-01T12:00:00`));
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">{view === "profit" ? "Плановая и фактическая прибыль" : "Получено всего"}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
-          <div className="received-period">
-            <label htmlFor="received-month">Период</label>
-            <select id="received-month" value={month} onChange={(e) => setMonth(e.target.value)}>
-              <option value="">За всё время</option>
-              <option value="custom">Произвольный период</option>
-              {months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}
-            </select>
-          </div>
-          {custom && <div className="received-period received-range">
-            <label>С даты<DateCalendar showValue value={from} max={to || undefined} onChange={setFrom} label="С даты" /></label>
-            <label>По дату включительно<DateCalendar showValue value={to} min={from || undefined} onChange={setTo} label="По дату включительно" /></label>
-          </div>}
+          <ReportPeriodPicker id="received-month" period={period} months={months} />
           {periodError ? <p role="alert" className="storage-warn">{periodError}</p> : <>
           {view === "profit" ? <>
             <div className="received-totals">
@@ -4259,6 +4321,7 @@ body:has(.dashboard-wrap){background:#0f172a}
 .received-payment-list .data-row>div{min-width:0;gap:6px;overflow-wrap:anywhere}
 .received-payment-list .data-row:hover{border-color:var(--emerald)}
 .received-payment-list .data-row:focus-visible{outline:2px solid var(--emerald);outline-offset:3px}
+.profit-row-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 
 /* Consistent readable frames across tabs and detail sheets. */
 .app{--line:#b8c7bf}

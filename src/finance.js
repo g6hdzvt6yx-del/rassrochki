@@ -75,6 +75,17 @@ export function receivedProfitByMonth(contracts, getStats) {
   return months.map((month) => ({ month, ...receivedSummary(contracts, getStats, month) }));
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// Срок платежа в виде YYYY-MM-DD по местному времени.
+function dueDay(date) {
+  return date instanceof Date
+    ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+    : String(date || "").slice(0, 10);
+}
+
+const contractPrincipal = (contract) => Math.max(0, (+contract.totalPrice || 0) - (+contract.downPayment || 0));
+
 // План включает полную сумму обязательства, даже если оно уже оплачено.
 export function scheduledProfitSummary(contracts, getStats, month = "", range = null) {
   let scheduled = 0, profitScheduled = 0;
@@ -82,11 +93,8 @@ export function scheduledProfitSummary(contracts, getStats, month = "", range = 
   contracts.forEach((contract) => {
     let amount = 0;
     getStats(contract).rows.forEach((payment) => {
-      const date = payment.dueDate;
-      const dueDate = date instanceof Date
-        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-        : String(date || "").slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || (month && dueDate.slice(0, 7) !== month) || !inDateRange(dueDate, range)) return;
+      const dueDate = dueDay(payment.dueDate);
+      if (!ISO_DAY.test(dueDate) || (month && dueDate.slice(0, 7) !== month) || !inDateRange(dueDate, range)) return;
       const value = Math.max(0, +payment.amountDue || 0);
       amount += value;
       rows.push({ contractId: contract.id, clientName: contract.clientName, item: contract.item || "", paymentNo: payment.n, dueDate, amount: value });
@@ -98,6 +106,69 @@ export function scheduledProfitSummary(contracts, getStats, month = "", range = 
   });
   rows.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
   return { scheduled, profitScheduled, rows };
+}
+
+// Общая прибыль договора по группам сроков платежей. keyOf(срок) возвращает ключ группы
+// или пусто, если платёж не учитывается. Прибыль группы — доля наценки в платежах графика
+// (с учётом переносов), полученная — доля наценки в уже оплаченной части этих же платежей,
+// независимо от даты оплаты. Сумма по всем срокам равна наценке договора.
+function contractProfitGroups(contract, getStats, keyOf) {
+  const groups = new Map();
+  getStats(contract).rows.forEach((payment) => {
+    const dueDate = dueDay(payment.dueDate);
+    const key = ISO_DAY.test(dueDate) ? keyOf(dueDate) : "";
+    if (!key) return;
+    const group = groups.get(key) || { due: 0, paid: 0, payments: 0 };
+    group.due += Math.max(0, +payment.amountDue || 0);
+    group.paid += Math.max(0, +payment.paidAmount || 0);
+    group.payments += 1;
+    groups.set(key, group);
+  });
+  const principal = contractPrincipal(contract);
+  return [...groups].map(([key, group]) => {
+    const scheduled = splitReceived(group.due, principal, contract.markup);
+    const paid = splitReceived(group.paid, principal, contract.markup);
+    return { key, payments: group.payments, scheduled: scheduled.received, profit: scheduled.profitReceived,
+      profitPaid: paid.profitReceived, profitOutstanding: Math.max(0, scheduled.profitReceived - paid.profitReceived) };
+  });
+}
+
+const addProfitTotals = (target, part) => {
+  target.scheduled += part.scheduled;
+  target.profit += part.profit;
+  target.profitPaid += part.profitPaid;
+  target.profitOutstanding += part.profitOutstanding;
+  target.contracts += 1;
+  return target;
+};
+
+const emptyProfitTotals = () => ({ scheduled: 0, profit: 0, profitPaid: 0, profitOutstanding: 0, contracts: 0 });
+
+// «Общая прибыль» за месяц или произвольный период — по договорам, у которых в периоде есть платежи.
+export function scheduledProfitByContract(contracts, getStats, month = "", range = null) {
+  const totals = emptyProfitTotals();
+  const rows = [];
+  contracts.forEach((contract) => {
+    const [part] = contractProfitGroups(contract, getStats, (dueDate) =>
+      (!month || dueDate.slice(0, 7) === month) && inDateRange(dueDate, range) ? "period" : "");
+    if (!part) return;
+    addProfitTotals(totals, part);
+    rows.push({ contractId: contract.id, clientName: contract.clientName, item: contract.item || "", ...part });
+  });
+  rows.sort((a, b) => b.profit - a.profit || String(a.clientName || "").localeCompare(String(b.clientName || ""), "ru"));
+  return { ...totals, rows };
+}
+
+// Общая прибыль по месяцам сроков платежей, от поздних к ранним.
+export function scheduledProfitByMonth(contracts, getStats) {
+  const months = new Map();
+  contracts.forEach((contract) => {
+    contractProfitGroups(contract, getStats, (dueDate) => dueDate.slice(0, 7)).forEach((part) => {
+      if (!months.has(part.key)) months.set(part.key, { month: part.key, ...emptyProfitTotals() });
+      addProfitTotals(months.get(part.key), part);
+    });
+  });
+  return [...months.values()].sort((a, b) => b.month.localeCompare(a.month));
 }
 
 export function profitComparisonByMonth(contracts, getStats) {
