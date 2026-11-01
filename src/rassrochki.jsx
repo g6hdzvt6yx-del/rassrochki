@@ -1796,6 +1796,8 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           markAuthor, setMarkAuthor, markAuthorOptions, markFilterActive, workView, setWorkView,
           selectedIds, setSelectedIds, toggleSelected, visibleSelected, reminderFor, beginReminders, exportFilteredContracts,
           expandedId, setExpandedId, expandedClientContacts, contractMarks, setMarksHistoryId,
+          investorProfits, setProfitGroupOpen, setAddingInvestor, setEditingInvestor, removeInvestor, setAddingWithdrawal,
+          removeWithdrawal, payInvestorAccrual, cards, addCashCard, updateDirectoryClient,
           }}
         />
       ) : <>

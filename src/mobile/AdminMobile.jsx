@@ -10,6 +10,9 @@ import {
   UserCog, HardDriveDownload, LogOut, Moon, Sun, Smartphone, ChevronRight, AlertTriangle,
 } from "lucide-react";
 import Dashboard from "./Dashboard";
+import Capital from "./Capital";
+import CashDesk from "../CashDesk";
+import Directories from "../Directories.jsx";
 import Contracts, { ContractsToolbar, ContractsActions, FiltersSheet } from "./Contracts";
 import { ScreenHeader, TabBar, SecHd, useBackClose, useThemePref, useTheme, setThemePref, useThemeColorMeta } from "./kit";
 
@@ -51,9 +54,12 @@ export default function AdminMobile({ app }) {
 
   let screen;
   if (tab === "capital") {
-    screen = { title: "Капитал", onBack: backToMore, body: <Placeholder /> };
+    screen = { title: "Капитал", sub: "вкладчики, прибыль и выводы", onBack: backToMore, body: <Capital app={app} /> };
   } else if (tab === "directories") {
-    screen = { title: "Справочники", onBack: backToMore, body: <Placeholder /> };
+    screen = {
+      title: "Справочники", sub: "клиенты и товары из договоров", onBack: backToMore,
+      body: <div className="m-legacy-screen"><Directories contracts={contracts} onSaveClient={app.updateDirectoryClient} /></div>,
+    };
   } else if (moreOpen) {
     screen = { title: "Ещё", body: <More app={app} openSub={(key) => { setTab(key); window.scrollTo(0, 0); }} /> };
   } else if (tab === "contracts") {
@@ -67,7 +73,10 @@ export default function AdminMobile({ app }) {
       body: <Contracts app={app} selecting={selecting} setSelecting={setSelecting} openFilters={() => setFiltersOpen(true)} />,
     };
   } else if (tab === "cash") {
-    screen = { title: "Касса", body: <Placeholder /> };
+    screen = {
+      title: "Касса", sub: "поступления от клиентов",
+      body: <div className="m-legacy-screen"><CashDesk contracts={contracts} cards={app.cards} onAddCard={app.addCashCard} onOpen={app.setOpenId} /></div>,
+    };
   } else {
     screen = {
       title: "Сводка",
@@ -102,7 +111,6 @@ export default function AdminMobile({ app }) {
   );
 }
 
-const Placeholder = () => <div className="m-empty">Экран в работе</div>;
 
 /* --------------------------- Предупреждения ------------------------- */
 
