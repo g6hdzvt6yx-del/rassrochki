@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import {
   LayoutGrid, ScrollText, Plus, Landmark, Menu, X, ChevronLeft, ChevronRight, Wallet,
   Phone, MessageCircle, Check, TrendingUp, CheckCircle2, Users, AlertTriangle,
+  Search, SlidersHorizontal, ChevronDown,
 } from "lucide-react";
 import {
   money, fmtDate, fmtPhone, waReminderLink, contractStats, Badge, Ribbon, Field, DateFields,
@@ -299,6 +300,7 @@ export function MobileApp({ app, children }) {
   const { tab, setTab, setAdding, storageError, contracts } = app;
   const [more, setMore] = useState(false);
   const [quickPay, setQuickPay] = useState(null); // { cid, idx }
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const onQuickPay = (cid, idx) => setQuickPay({ cid, idx });
   const active = more ? "more" : tab;
 
@@ -309,7 +311,7 @@ export function MobileApp({ app, children }) {
     window.scrollTo(0, 0);
   };
 
-  const screen = { title: "", sub: null, actions: null, body: null };
+  const screen = { title: "", sub: null, actions: null, extra: null, body: null };
   if (active === "dashboard") {
     screen.title = "Сводка";
     screen.sub = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
@@ -317,7 +319,16 @@ export function MobileApp({ app, children }) {
   } else if (active === "contracts") {
     screen.title = "Договоры";
     screen.sub = contracts.length ? `${contracts.length} всего` : null;
-    screen.body = <Placeholder />;
+    if (contracts.length) {
+      const filtersOn = app.sortBy !== "created" || app.investorFilter !== "all";
+      screen.actions = (
+        <button type="button" className="m-ib" onClick={() => setFiltersOpen(true)} aria-label="Сортировка и фильтры">
+          <SlidersHorizontal size={20} />{filtersOn && <i className="m-dot" />}
+        </button>
+      );
+      screen.extra = <ContractsToolbar app={app} />;
+    }
+    screen.body = <Contracts app={app} onQuickPay={onQuickPay} openFilters={() => setFiltersOpen(true)} />;
   } else if (active === "capital") {
     screen.title = "Капитал";
     screen.body = <Placeholder />;
@@ -337,6 +348,7 @@ export function MobileApp({ app, children }) {
           </div>
           {screen.actions}
         </div>
+        {screen.extra}
       </header>
 
       {storageError && (
@@ -372,6 +384,7 @@ export function MobileApp({ app, children }) {
 
       {children}
       {quickPay && <QuickPay app={app} target={quickPay} onClose={() => setQuickPay(null)} />}
+      {filtersOpen && <FiltersSheet app={app} onClose={() => setFiltersOpen(false)} />}
     </MobileRoot>
   );
 }
@@ -499,7 +512,7 @@ function Dashboard({ app, onQuickPay }) {
       <button type="button" className="m-hero m-press" onClick={() => setSectionModal("remaining")}>
         <span className="m-hero-label">Остаток к получению <ChevronRight size={16} /></span>
         <span className="m-hero-num num">{money(totals.remaining)}</span>
-        <Ribbon paid={totals.paid} overdue={totals.overdue} remaining={totals.remaining - totals.overdue} />
+        <Ribbon paid={totals.paid} overdue={totals.overdue} remaining={totals.remaining} />
         <span className="m-legend">
           <span><i className="m-dot s-paid" />Оплачено<b className="num">{money(totals.paid)}</b></span>
           <span><i className="m-dot s-over" />Просрочено<b className="num">{money(totals.overdue)}</b></span>
@@ -573,6 +586,196 @@ const MonthRow = ({ label, value, profit, max, cls }) => (
     </span>
   </div>
 );
+
+/* --------------------------- Договоры ------------------------------ */
+
+const SORTS = [
+  ["created", "Сначала новые"], ["dueDate", "По ближайшему платежу"],
+  ["name", "По имени (А-Я)"], ["remaining", "По остатку долга"],
+];
+const STATUS_CHIPS = [["all", "Все"], ["active", "Активные"], ["overdue", "Просрочка"], ["done", "Закрытые"]];
+
+const investorLabelOf = (c, investors) => (c.investorId
+  ? (investors.find((i) => i.id === c.investorId)?.name || "—")
+  : "Общий пул");
+
+function ContractsToolbar({ app }) {
+  const { search, setSearch, statusFilter, setStatusFilter } = app;
+  return (
+    <div className="m-toolbar">
+      <div className="m-search">
+        <Search size={18} />
+        <input type="search" enterKeyHint="search" value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Имя, телефон, товар" aria-label="Поиск договоров" />
+        {search && (
+          <button type="button" className="m-search-clear" onClick={() => setSearch("")} aria-label="Очистить"><X size={16} /></button>
+        )}
+      </div>
+      <div className="m-chips m-chips-scroll">
+        {STATUS_CHIPS.map(([key, label]) => (
+          <button key={key} type="button" className={`m-chip ${statusFilter === key ? "on" : ""}`} onClick={() => setStatusFilter(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContractCard({ c, app, onQuickPay }) {
+  const st = contractStats(c);
+  const badge = st.done ? "done" : st.overdueSum ? "overdue" : "active";
+  const expanded = app.expandedId === c.id;
+  const next = st.next;
+  const waLink = next ? waReminderLink(c.phone, c.clientName, next.remainingDue ?? next.amountDue, next.dueDate) : null;
+  const overdueRows = st.rows.filter((r) => r.status === "overdue");
+  const upcomingRows = st.rows.filter((r) => !r.paid && r.status !== "overdue");
+  const paidRows = st.rows.filter((r) => r.paid);
+  return (
+    <div className="m-card m-ccard">
+      <div className="m-cc-main" role="button" tabIndex={0} onClick={() => app.setOpenId(c.id)}>
+        <div className="m-row1">
+          <span className="m-name">{c.clientName}</span>
+          <Badge s={badge} />
+        </div>
+        <div className="m-meta m-cc-sub">{[c.item, investorLabelOf(c, app.investors)].filter(Boolean).join(" · ")}</div>
+        <div className="m-row2">
+          <span className="m-cc-lbl">Остаток</span>
+          {st.overdueSum > 0
+            ? <span className="m-note clay m-cc-right">просрочено <b className="num">{money(st.overdueSum)}</b></span>
+            : <span className="m-meta m-cc-right">из <span className="num">{money(st.financed)}</span></span>}
+        </div>
+        <div className="m-amt num m-cc-amt">{money(st.remaining)}</div>
+        <Ribbon paid={st.paidSum} overdue={st.overdueSum} remaining={st.remaining} />
+        {next && (
+          <div className="m-cc-next">
+            <span>Следующий платёж</span>
+            <span><b className="num">{money(next.remainingDue)}</b> · {fmtDate(next.dueDate)}</span>
+          </div>
+        )}
+      </div>
+      {(c.phone || waLink || next) && (
+        <QuickActions phone={c.phone} waLink={waLink} onPay={next ? () => onQuickPay(c.id, next.index) : null} />
+      )}
+      <button type="button" className="m-cc-toggle" onClick={() => app.setExpandedId(expanded ? null : c.id)} aria-expanded={expanded}>
+        График платежей <ChevronDown size={18} className={`m-chev ${expanded ? "on" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="m-cc-exp">
+          <div className="m-mini-row"><span>Дата составления договора</span><b className="num">{fmtDate(c.startDate)}</b></div>
+          {overdueRows.length > 0 && (
+            <>
+              <div className="m-mini-hd clay m-mini-gap">Просрочено</div>
+              {overdueRows.map((r) => (
+                <div key={r.index} className="m-mini-row"><span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.remainingDue)}</span></div>
+              ))}
+            </>
+          )}
+          {upcomingRows.length > 0 && (
+            <>
+              <div className="m-mini-hd m-mini-gap">Предстоящие</div>
+              {upcomingRows.map((r) => (
+                <div key={r.index} className="m-mini-row"><span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.remainingDue)}</span></div>
+              ))}
+            </>
+          )}
+          {paidRows.length > 0 && (
+            <>
+              <div className="m-mini-hd emerald m-mini-gap">История платежей</div>
+              {paidRows.map((r) => (
+                <div key={r.index} className="m-mini-row"><span>{fmtDate(r.dueDate)}</span><span className="num">{money(r.amountDue)}</span></div>
+              ))}
+            </>
+          )}
+          <button type="button" className="m-btn ghost block m-cc-open" onClick={() => app.setOpenId(c.id)}>Открыть договор</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Contracts({ app, onQuickPay, openFilters }) {
+  const { contracts, filteredContracts, groupedContracts, sortBy, setSortBy, investorFilter, setInvestorFilter, investors, setAdding } = app;
+  if (contracts.length === 0) {
+    return (
+      <div className="m-empty">
+        Договоров пока нет — добавьте первый.
+        <button type="button" className="m-btn primary block m-empty-btn" onClick={() => setAdding(true)}><Plus size={18} /> Новый договор</button>
+      </div>
+    );
+  }
+  const filtersOn = [];
+  if (sortBy !== "created") filtersOn.push(SORTS.find(([k]) => k === sortBy)?.[1]);
+  if (investorFilter !== "all") {
+    filtersOn.push(investorFilter === "" ? "Общий пул" : (investors.find((i) => i.id === investorFilter)?.name || "Источник"));
+  }
+  return (
+    <>
+      {filtersOn.length > 0 && (
+        <div className="m-filter-line">
+          <button type="button" className="m-filter-what" onClick={openFilters}><SlidersHorizontal size={15} /> {filtersOn.join(" · ")}</button>
+          <button type="button" className="m-link" onClick={() => { setSortBy("created"); setInvestorFilter("all"); }}>Сбросить</button>
+        </div>
+      )}
+      {filteredContracts.length === 0 ? (
+        <div className="m-empty">Ничего не найдено по этому запросу или фильтру.</div>
+      ) : (
+        <div className="m-list">
+          {groupedContracts.map((g) => (g.list.length === 1 ? (
+            <ContractCard key={g.list[0].id} c={g.list[0]} app={app} onQuickPay={onQuickPay} />
+          ) : (
+            <div key={"g-" + g.key} className="m-group">
+              <div className="m-group-hd">
+                <span className="m-group-name"><Users size={16} /> {g.list[0].clientName}</span>
+                <span className="m-group-stats">
+                  Договоров: {g.list.length} · Остаток <b className="num">{money(g.remaining)}</b>
+                  {g.overdue > 0 && <span className="m-group-over"> · Просрочка <span className="num">{money(g.overdue)}</span></span>}
+                </span>
+              </div>
+              <div className="m-list">
+                {g.list.map((c) => <ContractCard key={c.id} c={c} app={app} onQuickPay={onQuickPay} />)}
+              </div>
+            </div>
+          )))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function FiltersSheet({ app, onClose }) {
+  const { sortBy, setSortBy, investorFilter, setInvestorFilter, investors, filteredContracts } = app;
+  const sources = [["all", "Все источники"], ["", "Общий пул"], ...investors.map((i) => [i.id, i.name])];
+  return (
+    <Sheet
+      title="Сортировка и фильтры"
+      onClose={onClose}
+      footer={
+        <div className="m-ft-row">
+          <button type="button" className="m-btn ghost" onClick={() => { setSortBy("created"); setInvestorFilter("all"); }}>Сбросить</button>
+          <button type="button" className="m-btn primary" onClick={onClose}>Показать · {filteredContracts.length}</button>
+        </div>
+      }
+    >
+      <div className="m-mini-hd">Сортировка</div>
+      <div className="m-options">
+        {SORTS.map(([key, label]) => (
+          <button key={key} type="button" className={`m-option ${sortBy === key ? "on" : ""}`} onClick={() => setSortBy(key)}>
+            {label}{sortBy === key && <Check size={19} />}
+          </button>
+        ))}
+      </div>
+      <div className="m-mini-hd m-mini-gap">Источник финансирования</div>
+      <div className="m-options">
+        {sources.map(([key, label]) => (
+          <button key={key || "pool"} type="button" className={`m-option ${investorFilter === key ? "on" : ""}`} onClick={() => setInvestorFilter(key)}>
+            {label}{investorFilter === key && <Check size={19} />}
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
 
 /* --------------------------- Детали раздела сводки ------------------ */
 
@@ -854,6 +1057,59 @@ body:has(.m-root[data-theme="dark"]){background:#0E1714}
 .m-chip{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid var(--line);background:var(--surface);
   color:var(--ink-2);font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
 .m-chip.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+
+/* договоры */
+.m-toolbar{margin-top:8px}
+.m-search{display:flex;align-items:center;gap:8px;min-height:46px;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:0 6px 0 14px;color:var(--ink-3)}
+.m-search:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.m-search input{flex:1;min-width:0;border:none;background:transparent;font:inherit;font-size:16px;color:var(--ink);
+  padding:11px 0;outline:none;-webkit-appearance:none;appearance:none}
+.m-search input::-webkit-search-cancel-button{display:none}
+.m-search input::placeholder{color:var(--ink-3)}
+.m-search-clear{width:36px;height:36px;border:none;border-radius:10px;background:var(--surface-2);color:var(--ink-2);
+  display:grid;place-items:center;cursor:pointer;flex-shrink:0}
+.m-chips-scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:10px -16px 0;padding:0 16px 2px}
+.m-chips-scroll::-webkit-scrollbar{display:none}
+.m-chips-scroll .m-chip{flex-shrink:0}
+.m-filter-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 10px}
+.m-filter-what{display:inline-flex;align-items:center;gap:6px;min-height:36px;border:none;background:var(--brand-soft);color:var(--brand);
+  border-radius:18px;padding:0 12px;font-size:13px;font-weight:600;cursor:pointer;min-width:0;text-align:left}
+.m-link{border:none;background:transparent;color:var(--brand);font-weight:600;font-size:14px;cursor:pointer;min-height:44px;padding:0 4px}
+.m-empty-btn{margin-top:14px}
+.m-ccard{cursor:default;padding:0;overflow:hidden}
+.m-cc-main{padding:14px 16px 0;cursor:pointer}
+.m-cc-main:active{background:var(--surface-2)}
+.m-cc-sub{margin-top:2px}
+.m-cc-lbl{font-size:12.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.m-cc-right{text-align:right;margin:0}
+.m-cc-amt{font-size:24px;margin:2px 0 10px}
+.m-cc-next{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-top:10px;padding-bottom:2px}
+.m-cc-next b{color:var(--ink)}
+.m-ccard .m-qa{padding:0 16px}
+.m-cc-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:46px;margin-top:12px;
+  border:none;border-top:1px solid var(--line);background:transparent;color:var(--ink-2);font-size:14px;font-weight:600;
+  padding:0 16px;cursor:pointer}
+.m-chev{transition:transform .15s}
+.m-chev.on{transform:rotate(180deg)}
+.m-cc-exp{padding:0 16px 16px}
+.m-mini-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.m-mini-row:last-of-type{border-bottom:none}
+.m-mini-row b{font-weight:600}
+.m-cc-open{margin-top:14px}
+.m-group{background:var(--surface-2);border:1px solid var(--line);border-radius:18px;padding:12px 10px 10px}
+.m-group-hd{padding:0 6px 10px}
+.m-group-name{display:flex;align-items:center;gap:7px;font-weight:700;font-size:16px}
+.m-group-stats{display:block;font-size:13px;color:var(--ink-2);margin-top:3px}
+.m-group-stats b{color:var(--ink)}
+.m-group-over{color:var(--clay);font-weight:600;white-space:nowrap}
+.m-options{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.m-option{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:50px;padding:0 16px;border:none;
+  background:transparent;color:var(--ink);font-size:15.5px;text-align:left;cursor:pointer;border-bottom:1px solid var(--line)}
+.m-option:last-child{border-bottom:none}
+.m-option.on{color:var(--brand);font-weight:600}
+.m-option:active{background:var(--surface-2)}
+.m-ft-row{display:grid;grid-template-columns:auto 1fr;gap:10px}
 
 /* вход и статусы */
 .m-logo{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;color:#fff;
