@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseConfigured } from "./supabaseClient";
-import { useIsMobile, MobileApp, MobileStatus, MLogin } from "./mobile.jsx";
+import { useIsMobile, MobileApp, MobileStatus, MLogin, MSectionDetail } from "./mobile.jsx";
 
 /* ------------------------------------------------------------------ */
 /*  Утилиты                                                            */
@@ -1425,7 +1425,8 @@ const Stat = ({ icon, label, value, tone, onClick }) => {
 
 /* --------------------------- Детали раздела сводки ------------------ */
 
-function SectionDetail({ title, rows, onClose, onOpenContract }) {
+function SectionDetail({ title, rows, onClose, onOpenContract, mobile }) {
+  if (mobile) return <MSectionDetail title={title} rows={rows} onClose={onClose} onOpenContract={onOpenContract} />;
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
