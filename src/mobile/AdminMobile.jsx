@@ -10,6 +10,7 @@ import {
   UserCog, HardDriveDownload, LogOut, Moon, Sun, Smartphone, ChevronRight, AlertTriangle,
 } from "lucide-react";
 import Dashboard from "./Dashboard";
+import Contracts, { ContractsToolbar, ContractsActions, FiltersSheet } from "./Contracts";
 import { ScreenHeader, TabBar, SecHd, useBackClose, useThemePref, useTheme, setThemePref, useThemeColorMeta } from "./kit";
 
 const TABS = (debtors) => [
@@ -31,6 +32,8 @@ export default function AdminMobile({ app }) {
   useThemeColorMeta(useTheme());
   const { tab, setTab, setAdding, totals, contracts } = app;
   const [moreOpen, setMoreOpen] = useState(false);
+  const [selecting, setSelecting] = useState(false);   // режим выбора договоров для напоминаний
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const inMore = moreOpen || tab === "capital" || tab === "directories";
   const active = inMore ? "more" : tab;
 
@@ -54,7 +57,15 @@ export default function AdminMobile({ app }) {
   } else if (moreOpen) {
     screen = { title: "Ещё", body: <More app={app} openSub={(key) => { setTab(key); window.scrollTo(0, 0); }} /> };
   } else if (tab === "contracts") {
-    screen = { title: "Договоры", sub: `${contracts.length} всего`, body: <Placeholder /> };
+    screen = {
+      title: "Договоры",
+      sub: `${contracts.length} всего`,
+      actions: contracts.length > 0 && (
+        <ContractsActions app={app} selecting={selecting} setSelecting={setSelecting} openFilters={() => setFiltersOpen(true)} />
+      ),
+      extra: contracts.length > 0 && <ContractsToolbar app={app} />,
+      body: <Contracts app={app} selecting={selecting} setSelecting={setSelecting} openFilters={() => setFiltersOpen(true)} />,
+    };
   } else if (tab === "cash") {
     screen = { title: "Касса", body: <Placeholder /> };
   } else {
@@ -86,6 +97,7 @@ export default function AdminMobile({ app }) {
         onMain={() => setAdding(true)}
         mainLabel="Новый договор"
       />
+      {filtersOpen && <FiltersSheet app={app} onClose={() => setFiltersOpen(false)} />}
     </>
   );
 }

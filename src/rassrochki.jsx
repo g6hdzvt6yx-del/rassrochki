@@ -1604,12 +1604,16 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
     onRefresh={() => setReloadTick(t => t + 1)}
   />;
 
+  // очередь напоминаний WhatsApp — общее содержимое окна
+  const reminderQueueBody = reminderQueue && (<>{queueContract ? <><h3>{queueContract.clientName}</h3><p>{queueContract.phone} · {queueContract.item}</p>{queueUrl && <pre className="reminder-preview">{new URL(queueUrl).searchParams.get("text")}</pre>}<p className="field-hint">Отправьте сообщение в WhatsApp и подтвердите отправку. Затем откроется следующий клиент очереди.</p><div className="sheet-actions"><button className="btn primary" disabled={queueBusy || !queueUrl} onClick={async()=>{setQueueBusy(true);try{const sent=await notifyPayment(queueContract.id,contractStats(queueContract).next.index,queueUrl);if(sent)setReminderQueue(q=>q.slice(1));}finally{setQueueBusy(false);}}}>Открыть WhatsApp</button><button className="btn ghost" disabled={queueBusy} onClick={()=>setReminderQueue(q=>q.slice(1))}>Пропустить</button></div></>:<><p>Очередь завершена.</p><button className="btn primary" onClick={()=>{setReminderQueue(null);setSelectedIds(new Set());}}>Готово</button></>}</>);
+
   // окна и шторки — общие для компьютерной и мобильной версии
   const modals = (
     <>
-        {reminderQueue && <div className="overlay"><div className="sheet reminder-queue" role="dialog" aria-modal="true" aria-label="Очередь напоминаний"><div className="sheet-hd"><b>Напоминания · осталось {reminderQueue.length}</b><button className="icon-btn" disabled={queueBusy} onClick={()=>setReminderQueue(null)} aria-label="Закрыть"><X size={18}/></button></div><div className="sheet-body">
-          {queueContract ? <><h3>{queueContract.clientName}</h3><p>{queueContract.phone} · {queueContract.item}</p>{queueUrl && <pre className="reminder-preview">{new URL(queueUrl).searchParams.get("text")}</pre>}<p className="field-hint">Отправьте сообщение в WhatsApp и подтвердите отправку. Затем откроется следующий клиент очереди.</p><div className="sheet-actions"><button className="btn primary" disabled={queueBusy || !queueUrl} onClick={async()=>{setQueueBusy(true);try{const sent=await notifyPayment(queueContract.id,contractStats(queueContract).next.index,queueUrl);if(sent)setReminderQueue(q=>q.slice(1));}finally{setQueueBusy(false);}}}>Открыть WhatsApp</button><button className="btn ghost" disabled={queueBusy} onClick={()=>setReminderQueue(q=>q.slice(1))}>Пропустить</button></div></>:<><p>Очередь завершена.</p><button className="btn primary" onClick={()=>{setReminderQueue(null);setSelectedIds(new Set());}}>Готово</button></>}
-        </div></div></div>}
+        {reminderQueue && (isMobile
+          ? <Sheet title={`Напоминания · осталось ${reminderQueue.length}`} onClose={() => (queueBusy ? false : setReminderQueue(null))}>{reminderQueueBody}</Sheet>
+          : <div className="overlay"><div className="sheet reminder-queue" role="dialog" aria-modal="true" aria-label="Очередь напоминаний"><div className="sheet-hd"><b>Напоминания · осталось {reminderQueue.length}</b><button className="icon-btn" disabled={queueBusy} onClick={()=>setReminderQueue(null)} aria-label="Закрыть"><X size={18}/></button></div><div className="sheet-body">{reminderQueueBody}
+        </div></div></div>)}
         {open && (
           <Detail
             key={`${open.id}:${openAction?.id===open.id ? openAction.mode:"view"}`}
@@ -1785,6 +1789,12 @@ export default function App({ onOpenTeam, onOpenImport } = {}) {
           setSectionModal, setReceivedView, setReceivedOpen, setProfitTotalOpen, notifyPayment,
           dailyPayments, dailyError, dailyContacts, visibleUpcoming, showAllUpcoming, setShowAllUpcoming,
           daily: { date: dailyDate, setDate: setDailyDate, range: dailyRange, setRange: setDailyRange, to: dailyTo, setTo: setDailyTo },
+          filteredContracts, groupedContracts, filterCounts, filteredSummary, search, setSearch, statusFilter, setStatusFilter,
+          sortBy, setSortBy, sortDir, setSortDir, investorFilter, setInvestorFilter, contactFilter, setContactFilter,
+          notificationFilter, setNotificationFilter, deferralFilter, setDeferralFilter, markStatuses, setMarkStatuses,
+          markAuthor, setMarkAuthor, markAuthorOptions, markFilterActive, workView, setWorkView,
+          selectedIds, setSelectedIds, toggleSelected, visibleSelected, reminderFor, beginReminders, exportFilteredContracts,
+          expandedId, setExpandedId, expandedClientContacts, contractMarks, setMarksHistoryId,
           }}
         />
       ) : <>
@@ -2696,7 +2706,7 @@ function ProfitGroupDetail({ group, onClose, onOpenContract, mobile }) {
 
 /* --------------------------- Детали договора ----------------------- */
 
-function ContactEntries({ contacts, contractId, onDelete }) {
+export function ContactEntries({ contacts, contractId, onDelete }) {
   if (!contacts.length) return null;
   return <div className="contact-list">
     {contacts.map((contact) => <article className="contact-entry" key={`${contact._contractId || contractId}:${contact.id}`}>
