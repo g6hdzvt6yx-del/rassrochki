@@ -48,6 +48,7 @@ const contracts = people.map(([name, item, price, term, paidMonths, days], i) =>
   const payments = days === -200 ? paidRecords(amounts, term, start) : paidRecords(amounts, paidMonths, start, partial);
   if (i === 1) payments.__contacts = [{ id: "c1", date: iso(shift(-2)), note: "Обещала оплатить после зарплаты", promisedDate: iso(today), promisedAmount: amounts[3] }];
   if (i === 9) payments.__contacts = [{ id: "c2", date: iso(shift(-5)), note: "Не берёт трубку, перезвонить", nextContactDate: iso(shift(1)) }];
+  if (i === 0) payments.__cashCards = ["Сбербанк · Иван · 1234", "Т-Банк · Пётр · 5678", "Альфа · Мария · 9012"];
   if (i === 4) payments[paidMonths] = { ...(payments[paidMonths] || {}), notifiedAt: new Date().toISOString() };
   return {
     id: `qa-${i + 1}`, client_name: name, phone: `+7 999 000-${pad(10 + i)}-${pad(40 + i)}`, item,

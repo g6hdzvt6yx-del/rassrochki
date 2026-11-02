@@ -1,8 +1,15 @@
 import React, {useState} from 'react';
 import {cashEntries,destinationLabel} from './cash';
+import usePhoneLayout from './usePhoneLayout';
 const money = n => Number(n).toLocaleString('ru-RU',{style:'currency',currency:'RUB'});
 export function PaymentDestination({method,card,onMethod,onCard,cards=[]}) {
- return <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><label>Способ оплаты <select aria-label="Способ оплаты" value={method} onChange={e=>onMethod(e.target.value)}><option value="">Выберите способ</option><option value="cash">Наличные</option><option value="bank">Безнал</option></select></label>{method === 'bank' && <label>Карта поступления <input aria-label="Карта поступления" list="cash-cards" value={card} onChange={e=>onCard(e.target.value)} placeholder="Банк · владелец · последние 4 цифры" maxLength={100}/><datalist id="cash-cards">{cards.map(c=><option key={c} value={c}/>)}</datalist></label>}</div>;
+ // На телефоне Safari почти не показывает подсказки <datalist>, поэтому сохранённые карты выводятся кнопками под полем.
+ const phone = usePhoneLayout();
+ const q = String(card || '').trim().toLocaleLowerCase('ru');
+ const exact = cards.includes(card);
+ const picks = phone && method === 'bank' ? cards.filter(c => c !== card && (exact || !q || c.toLocaleLowerCase('ru').includes(q))) : [];
+ const picksHint = exact ? (picks.length ? 'Выбрана сохранённая карта. Можно выбрать другую:' : 'Выбрана сохранённая карта.') : q && !picks.length ? 'Такой карты нет в списке — после сохранения платежа она добавится.' : 'Сохранённые карты — нажмите, чтобы подставить:';
+ return <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><label>Способ оплаты <select aria-label="Способ оплаты" value={method} onChange={e=>onMethod(e.target.value)}><option value="">Выберите способ</option><option value="cash">Наличные</option><option value="bank">Безнал</option></select></label>{method === 'bank' && <label>Карта поступления <input aria-label="Карта поступления" list="cash-cards" value={card} onChange={e=>onCard(e.target.value)} placeholder="Банк · владелец · последние 4 цифры" maxLength={100} autoComplete={phone ? 'off' : undefined} autoCorrect={phone ? 'off' : undefined} autoCapitalize={phone ? 'off' : undefined} spellCheck={phone ? false : undefined} name={phone ? 'payment-card-label' : undefined}/><datalist id="cash-cards">{cards.map(c=><option key={c} value={c}/>)}</datalist></label>}{phone && method === 'bank' && <div className="m-card-picks" role="group" aria-label="Сохранённые карты">{cards.length ? <><span className="m-card-picks-hd">{picksHint}</span>{picks.map(c=><button type="button" key={c} className="m-card-pick" onClick={()=>onCard(c)}>{c}</button>)}</> : <span className="m-card-picks-hd">Сохранённых карт пока нет. Введите карту — после сохранения платежа она появится здесь. Список карт — в разделе «Касса».</span>}</div>}</div>;
 }
 // Быстрый выбор периода на телефоне — только заполняет те же поля «С» и «По».
 const pad = n => String(n).padStart(2,'0');
