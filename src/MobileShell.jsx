@@ -122,7 +122,7 @@ export const moreIcons = { Landmark, Users, History, Upload, Download, FileText,
 
 /* ---------------- главная (Сводка) ---------------- */
 
-export function MobileHome({ contracts, getStats, totals, capital, received, monthlyStats, onOpenContract, onPay, onRemind, onSection, onReceived }) {
+export function MobileHome({ contracts, getStats, totals, capital, received, monthlyStats, onOpenContract, onPay, onRemind, onSection, onReceived, onProfitTotal }) {
   const today = isoDay(new Date());
   const [period, setPeriod] = useState("today");
   const [showAll, setShowAll] = useState(false);
@@ -256,7 +256,7 @@ export function MobileHome({ contracts, getStats, totals, capital, received, mon
         </button>
         <button type="button" className="m-metric" onClick={() => onReceived("received")}><span>Получено всего</span><b>{money(received.received)}</b></button>
         <button type="button" className="m-metric" onClick={() => onSection("financed")}><span>Выдано в рассрочку</span><b>{money(totals.financed)}</b></button>
-        <button type="button" className="m-metric" onClick={() => onSection("profit")}><span>Общая прибыль</span><b>{money(capital.profitTotal)}</b></button>
+        <button type="button" className="m-metric" onClick={onProfitTotal}><span>Общая прибыль</span><b>{money(capital.profitTotal)}</b></button>
         <button type="button" className="m-metric ok" onClick={() => onReceived("profit")}><span>Прибыль получена</span><b>{money(capital.profitRealized)}</b></button>
         <button type="button" className="m-metric" onClick={() => onSection("active")}><span>Активных договоров</span><b>{totals.active}</b></button>
         <button type="button" className={`m-metric ${totals.debtors ? "bad" : ""}`} onClick={() => onSection("debtors")}><span>Должников</span><b>{totals.debtors}</b></button>

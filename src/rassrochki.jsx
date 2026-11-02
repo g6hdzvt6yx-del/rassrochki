@@ -1741,6 +1741,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
           contracts={contracts} getStats={contractStats} totals={totals} capital={capital} received={received} monthlyStats={monthlyStats}
           onOpenContract={setOpenId} onPay={openQuickPay} onRemind={notifyPayment} onSection={setSectionModal}
           onReceived={(view) => { setReceivedView(view); setReceivedOpen(true); }}
+          onProfitTotal={() => setProfitTotalOpen(true)}
         />
       )}
       {tab === "dashboard" && !isPhone && (
@@ -2565,7 +2566,7 @@ function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
   const badges = useMemo(() => new Map(contracts.map((c) => [c.id, contractBadge(c)])), [contracts]);
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">Общая прибыль</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
           <ReportPeriodPicker id="profit-total-month" period={period} months={months} />
@@ -2600,7 +2601,7 @@ function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
 function SectionDetail({ title, rows, onClose, onOpenContract }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">{title}</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -2646,7 +2647,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
   );
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">{view === "profit" ? "Плановая и фактическая прибыль" : "Получено всего"}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
           <ReportPeriodPicker id="received-month" period={period} months={months} />
@@ -2696,7 +2697,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
 function ProfitGroupDetail({ group, onClose, onOpenContract }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">{group.name}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
           <div className="received-totals"><div><span>Прибыль получена</span><b>{money(group.profitReceived)}</b></div><div><span>Прибыль ожидается</span><b>{money(group.profitExpected)}</b></div><div><span>К выплате</span><b>{money(group.profitToPay)}</b></div></div>
