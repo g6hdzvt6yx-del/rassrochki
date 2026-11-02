@@ -1,0 +1,921 @@
+/*
+ * Телефонный вид сайта (ширина экрана до 760px), по образцу приложения finuchet-mobile.
+ * На широком экране ничего из этого не действует: все правила внутри медиазапроса,
+ * а элементы с классами m-* выводятся только в телефонной раскладке (.app.is-phone).
+ */
+
+/* Шрифт Onest (SIL OFL 1.1, см. assets/fonts/Onest-OFL-LICENSE.txt). Файлы скачиваются браузером,
+   только когда шрифт реально используется, то есть на телефоне. */
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-cyrillic-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-cyrillic-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Onest Variable"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("./assets/fonts/onest-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+@media (max-width: 760px) {
+  html, body { background: #0d1524; }
+  body.m-no-scroll { overflow: hidden; }
+
+  /* ---------- основа ---------- */
+  html body .app.is-phone {
+    --m-bg: #0d1524;
+    --m-tile: rgba(255, 255, 255, .055);
+    --m-tile-2: rgba(255, 255, 255, .09);
+    --m-tile-press: rgba(255, 255, 255, .13);
+    --m-line: rgba(255, 255, 255, .09);
+    --m-line-2: rgba(255, 255, 255, .14);
+    --m-text: #ffffff;
+    --m-muted: #9aa8bd;
+    --m-accent: #8a6cf1;
+    --m-accent-text: #c9b8ff;
+    --m-accent-soft: rgba(138, 108, 241, .2);
+    --m-ok: #3ccf9f;
+    --m-ok-soft: rgba(60, 207, 159, .14);
+    --m-bad: #ff7a86;
+    --m-bad-soft: rgba(255, 122, 134, .12);
+    --m-warn: #f2bf5e;
+    --m-rail: rgba(255, 255, 255, .12);
+    --m-safe-b: env(safe-area-inset-bottom, 0px);
+    --m-safe-t: env(safe-area-inset-top, 0px);
+    min-height: 100dvh;
+    padding-bottom: calc(86px + var(--m-safe-b));
+    color: var(--m-text);
+    background:
+      radial-gradient(120% 60% at 0% 0%, rgba(138, 108, 241, .2), transparent 60%),
+      radial-gradient(90% 50% at 100% 12%, rgba(60, 207, 159, .08), transparent 60%),
+      var(--m-bg);
+    background-attachment: fixed;
+    font-family: "Onest Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+  /* Суммы — обычным шрифтом, цифры одинаковой ширины. */
+  html body .app.is-phone .num { font-family: inherit; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  /* Кнопки во всех разделах — не меньше 44px по высоте. */
+  html body .app.is-phone :is(.btn, .icon-btn) { min-height: 44px; min-width: 44px; }
+  /* Сообщения не прячутся под нижней панелью. */
+  html body .app.is-phone .app-toast { left: 12px; right: 12px; bottom: calc(96px + var(--m-safe-b)); max-width: none; min-height: 44px; }
+
+  .app.is-phone :where(.m-topbar, .m-screen, .m-tabbar, .m-sheet) :where(h1, h2, h3, p) { margin: 0; }
+  .app.is-phone :where(.m-screen, .m-tabbar, .m-sheet, .m-topbar) button { font: inherit; color: inherit; cursor: pointer; }
+  .app.is-phone :is(.m-screen, .m-tabbar, .m-sheet, .m-topbar) :focus-visible { outline: 2px solid var(--m-accent-text); outline-offset: 2px; }
+
+  /* ---------- шапка ---------- */
+  .app.is-phone .m-topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    padding: calc(8px + var(--m-safe-t)) 12px 8px 16px;
+    background: rgba(13, 21, 36, .82);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-brand {
+    width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(145deg, #a185ff, #5432c4); color: #fff; font-weight: 800; font-size: 17px;
+    box-shadow: 0 6px 16px rgba(110, 76, 230, .35);
+  }
+  .app.is-phone .m-topbar-title { flex: 1; min-width: 0; }
+  .app.is-phone .m-topbar h1 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
+  .app.is-phone .m-topbar p { font-size: 12.5px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-topbar-side { flex-shrink: 0; }
+  /* Индикатор обновления данных встроен в шапку. */
+  .app.is-phone .m-topbar .sync-indicator { padding: 0; gap: 6px; font-size: 12px; color: var(--m-muted); }
+  .app.is-phone .m-topbar .sync-indicator > span:not(.sync-dot) { max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body .app.is-phone .m-topbar .sync-indicator .btn {
+    width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 12px;
+    background: var(--m-tile); border: 1px solid var(--m-line); color: var(--m-text); font-size: 18px;
+  }
+
+  /* ---------- экран ---------- */
+  .app.is-phone .m-screen { padding: 12px 16px 24px; max-width: 640px; margin: 0 auto; }
+  .app.is-phone .m-section-h { font-size: 17px; font-weight: 700; margin: 22px 2px 10px; display: flex; justify-content: space-between; align-items: baseline; }
+  .app.is-phone .m-section-h small { font-size: 13px; font-weight: 500; color: var(--m-muted); }
+  .app.is-phone .m-foot-note { text-align: center; color: var(--m-muted); font-size: 12.5px; margin: 18px 0 4px; }
+  .app.is-phone .m-empty { text-align: center; color: var(--m-muted); padding: 24px 12px; }
+  .app.is-phone .m-bad { color: var(--m-bad); }
+  .app.is-phone .m-warn { color: var(--m-warn); }
+  .app.is-phone .m-ok { color: var(--m-ok); }
+
+  /* переключатель */
+  .app.is-phone .m-segmented {
+    display: flex; gap: 3px; padding: 3px; border-radius: 14px;
+    background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-segmented button {
+    flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent;
+    color: var(--m-muted); font-weight: 600; font-size: 14.5px; padding: 0 6px;
+  }
+  .app.is-phone .m-segmented button.on { background: rgba(255, 255, 255, .14); color: var(--m-text); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
+
+  /* ---------- «Ждём сегодня» ---------- */
+  .app.is-phone .m-today {
+    border-radius: 22px; padding: 14px 16px 6px; margin-bottom: 12px;
+    background: linear-gradient(160deg, rgba(138, 108, 241, .32) 0%, rgba(138, 108, 241, .08) 55%, rgba(255, 255, 255, .04) 100%);
+    border: 1px solid rgba(160, 135, 255, .3);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-today-label { margin-top: 16px; font-size: 14px; color: var(--m-accent-text); font-weight: 600; }
+  .app.is-phone .m-today-sum { font-size: 38px; font-weight: 750; letter-spacing: -.025em; line-height: 1.08; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .app.is-phone .m-today-caption { color: var(--m-muted); font-size: 14.5px; margin: 4px 0 12px; }
+  .app.is-phone .m-today .m-ribbon { margin-bottom: 8px; }
+  .app.is-phone .m-today-more { width: 100%; min-height: 44px; border: 0; background: none; color: var(--m-accent-text); font-weight: 600; }
+
+  .app.is-phone .m-ribbon { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--m-rail); }
+  .app.is-phone .m-ribbon.thin { height: 6px; margin: 10px 0 8px; }
+  .app.is-phone .m-ribbon span { height: 100%; }
+  .app.is-phone .m-ribbon .paid, .app.is-phone .m-legend i.paid { background: var(--m-ok); }
+  .app.is-phone .m-ribbon .over { background: var(--m-bad); }
+  .app.is-phone .m-ribbon .rest, .app.is-phone .m-legend i.rest { background: var(--m-rail); }
+  .app.is-phone .m-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; color: var(--m-muted); }
+  .app.is-phone .m-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; }
+
+  /* клиенты к оплате */
+  .app.is-phone .m-due-list { margin: 0 -16px; border-top: 1px solid rgba(160, 135, 255, .22); }
+  .app.is-phone .m-due-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-due-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-due-main {
+    grid-row: 1 / 3; min-width: 0; align-self: stretch; min-height: 44px; padding: 0; border: 0; background: none;
+    text-align: left; display: flex; flex-direction: column; justify-content: center;
+  }
+  .app.is-phone .m-due-main b { display: block; font-weight: 650; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-due-main small { display: block; font-size: 13px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .app.is-phone .m-due-main .m-due-flag { font-size: 12.5px; margin-top: 3px; }
+  .app.is-phone .m-due-amount { text-align: right; font-weight: 700; font-size: 16.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .app.is-phone .m-due-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  html body .app.is-phone .m-act {
+    width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0;
+    border: 1px solid var(--m-line-2); background: var(--m-tile-2); color: var(--m-text); text-decoration: none; padding: 0;
+  }
+  html body .app.is-phone .m-act:active { background: var(--m-tile-press); }
+  html body .app.is-phone .m-act[data-off] { opacity: .3; }
+  html body .app.is-phone .m-act.wa { color: var(--m-ok); }
+  html body .app.is-phone .m-act.wa.done { background: var(--m-ok-soft); border-color: rgba(60, 207, 159, .4); }
+  html body .app.is-phone .m-act.pay { background: var(--m-accent); border-color: var(--m-accent); color: #fff; box-shadow: 0 6px 16px rgba(138, 108, 241, .35); }
+
+  /* просрочка */
+  .app.is-phone .m-alert {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; text-align: left;
+    padding: 14px 16px; border-radius: 18px; margin-bottom: 4px;
+    border: 1px solid rgba(255, 122, 134, .35); background: var(--m-bad-soft); color: var(--m-text);
+  }
+  .app.is-phone .m-alert > svg:first-child { color: var(--m-bad); flex-shrink: 0; }
+  .app.is-phone .m-alert > svg:last-child { color: var(--m-muted); flex-shrink: 0; }
+  .app.is-phone .m-alert-text { flex: 1; min-width: 0; }
+  .app.is-phone .m-alert-text small { display: block; color: var(--m-muted); font-size: 13.5px; }
+  .app.is-phone .m-alert-text b { display: block; font-size: 21px; font-weight: 750; color: var(--m-bad); font-variant-numeric: tabular-nums; }
+
+  /* списки */
+  .app.is-phone .m-list {
+    background: var(--m-tile); border: 1px solid var(--m-line); border-radius: 18px; overflow: hidden;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-list-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px;
+    padding: 12px 14px; border: 0; border-bottom: 1px solid var(--m-line); background: transparent; text-align: left;
+  }
+  .app.is-phone .m-list-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-list-row:active { background: var(--m-tile-press); }
+  .app.is-phone .m-list-main { flex: 1; min-width: 0; }
+  .app.is-phone .m-list-main b, .app.is-phone .m-list-end b { display: block; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-list-main small, .app.is-phone .m-list-end small { display: block; color: var(--m-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-list-end { text-align: right; flex-shrink: 0; max-width: 45%; font-variant-numeric: tabular-nums; }
+
+  /* плитки показателей */
+  .app.is-phone .m-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .app.is-phone .m-metric {
+    display: block; width: 100%; min-height: 76px; text-align: left; padding: 12px 13px;
+    background: var(--m-tile); border: 1px solid var(--m-line); border-radius: 16px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-metric:active { background: var(--m-tile-press); }
+  .app.is-phone .m-metric span { display: block; font-size: 13px; color: var(--m-muted); }
+  .app.is-phone .m-metric b { display: block; font-size: 19px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-metric small { display: block; font-size: 12.5px; color: var(--m-muted); }
+  .app.is-phone .m-metric.wide { grid-column: 1 / -1; }
+  .app.is-phone .m-metric.wide b { font-size: 26px; }
+  .app.is-phone .m-metric.ok b { color: var(--m-ok); }
+  .app.is-phone .m-metric.bad b { color: var(--m-bad); }
+
+  /* по месяцам */
+  .app.is-phone .m-panel {
+    margin-top: 12px; padding: 16px; border-radius: 18px;
+    background: var(--m-tile); border: 1px solid var(--m-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-panel h2 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+  .app.is-phone .m-bars { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: end; height: 140px; margin-top: 10px; }
+  .app.is-phone .m-bar-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 6px; min-width: 0; }
+  .app.is-phone .m-bar { width: 100%; max-width: 30px; border-radius: 6px 6px 3px 3px; background: var(--m-accent); min-height: 3px; }
+  .app.is-phone .m-bar.future { background: rgba(138, 108, 241, .45); }
+  .app.is-phone .m-bar-col small { font-size: 11.5px; color: var(--m-muted); }
+  .app.is-phone .m-bar-val { font-size: 10.5px; color: var(--m-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* ---------- нижняя панель ---------- */
+  .app.is-phone .m-tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+    padding: 6px 6px calc(6px + var(--m-safe-b));
+    background: rgba(17, 26, 43, .86);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-tabbar button {
+    min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px;
+    border: 0; background: none; color: var(--m-muted); font-size: 11px; font-weight: 600; padding: 4px 0; border-radius: 12px;
+  }
+  .app.is-phone .m-tabbar button.on { color: var(--m-accent-text); }
+  .app.is-phone .m-tabbar .m-tab-add { color: var(--m-text); }
+  .app.is-phone .m-plus {
+    width: 52px; height: 52px; margin-top: -24px; border-radius: 17px; display: grid; place-items: center;
+    background: linear-gradient(145deg, #9d7cff, #6a47d9); color: #fff; box-shadow: 0 10px 26px rgba(138, 108, 241, .5);
+  }
+
+  /* ---------- шторка «Ещё» ---------- */
+  .app.is-phone .m-sheet-backdrop {
+    position: fixed; inset: 0; z-index: 60; background: rgba(4, 8, 18, .62);
+    display: flex; align-items: flex-end; justify-content: center; animation: m-fade .18s ease;
+  }
+  .app.is-phone .m-sheet {
+    width: 100%; max-width: 640px; max-height: calc(100dvh - 40px - var(--m-safe-t)); display: flex; flex-direction: column;
+    background: #162133; border-radius: 22px 22px 0 0; box-shadow: 0 -18px 50px rgba(0, 0, 0, .45);
+    animation: m-rise .24s cubic-bezier(.2, .8, .2, 1);
+  }
+  .app.is-phone .m-sheet-grip { width: 38px; height: 5px; border-radius: 3px; background: var(--m-rail); margin: 8px auto 0; }
+  .app.is-phone .m-sheet-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 18px; }
+  .app.is-phone .m-sheet-head h2 { flex: 1; font-size: 20px; font-weight: 700; }
+  .app.is-phone .m-icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 12px; background: var(--m-tile-2); }
+  .app.is-phone .m-sheet-body { overflow-y: auto; padding: 4px 16px calc(18px + var(--m-safe-b)); overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .app.is-phone .m-menu-group h3 { font-size: 12.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--m-muted); margin: 14px 4px 8px; }
+  .app.is-phone .m-sheet .m-list { background: rgba(255, 255, 255, .045); }
+  .app.is-phone .m-menu-row {
+    display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 8px 12px 8px 14px;
+    border: 0; border-bottom: 1px solid var(--m-line); background: none; text-align: left;
+  }
+  .app.is-phone .m-menu-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-menu-row:active { background: var(--m-tile-press); }
+  .app.is-phone .m-menu-row:disabled { opacity: .45; }
+  .app.is-phone .m-menu-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--m-accent-soft); color: var(--m-accent-text); flex-shrink: 0; }
+  .app.is-phone .m-menu-row.bad .m-menu-icon { background: var(--m-bad-soft); color: var(--m-bad); }
+  .app.is-phone .m-menu-row.bad b { color: var(--m-bad); }
+  .app.is-phone .m-menu-text { flex: 1; min-width: 0; }
+  .app.is-phone .m-menu-text b { display: block; font-weight: 600; font-size: 16px; }
+  .app.is-phone .m-menu-text small { display: block; color: var(--m-muted); font-size: 13px; }
+  .app.is-phone .m-chevron { color: var(--m-muted); flex-shrink: 0; }
+
+  @keyframes m-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes m-fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---------- полоса администратора: на телефоне видна только внутри «Операторов» и «Переноса с Mac» ---------- */
+  .web-admin-bar:not(.is-open) { display: none; }
+  .web-admin-bar.is-open {
+    position: sticky; top: 0; z-index: 20; padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px; gap: 8px;
+    background: #111b2e; color: #fff; font-family: "Onest Variable", system-ui, sans-serif;
+  }
+  .web-admin-bar.is-open > span { display: none; }
+  .web-admin-bar.is-open button { min-height: 44px; flex: 1; background: #26334b; border-radius: 12px; font-family: inherit; }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .app.is-phone .m-sheet, .app.is-phone .m-sheet-backdrop { animation: none; }
+}
+
+/* ======================= Экран «Договоры» на телефоне ======================= */
+@media (max-width: 760px) {
+  /* Шапка фиксированной высоты — под ней закреплена панель поиска. */
+  .app.is-phone .m-topbar { box-sizing: border-box; height: calc(61px + var(--m-safe-t)); }
+
+  .app.is-phone .m-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 44px; padding: 0 16px; border-radius: 13px;
+    border: 1px solid var(--m-line-2); background: var(--m-tile-2); color: var(--m-text);
+    font-weight: 600; font-size: 15px; white-space: nowrap; text-decoration: none;
+  }
+  .app.is-phone .m-btn:active { background: var(--m-tile-press); }
+  .app.is-phone .m-btn:disabled { opacity: .45; }
+  .app.is-phone .m-btn.primary { background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
+  .app.is-phone .m-btn.block { width: 100%; min-height: 48px; }
+  .app.is-phone .m-btn.grow { flex: 1; min-width: 0; }
+  .app.is-phone .m-btn.sm { padding: 0 12px; font-size: 14px; }
+  .app.is-phone .m-mt8 { margin-top: 8px; }
+
+  /* закреплённая панель: поиск + статусы + подборки */
+  .app.is-phone .m-contracts { padding-top: 0; }
+  .app.is-phone .m-toolbar {
+    position: sticky; top: calc(61px + var(--m-safe-t)); z-index: 15;
+    margin: 0 -16px; padding: 10px 16px 8px;
+    background: rgba(13, 21, 36, .9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-search-row { display: flex; gap: 8px; }
+  .app.is-phone .m-toolbar-chips { padding-top: 2px; }
+  .app.is-phone .m-search {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 6px 0 12px;
+    border-radius: 14px; background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-muted);
+  }
+  html body .app.is-phone .m-search input {
+    flex: 1; min-width: 0; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--m-text);
+    font-size: 16px; outline: none; -webkit-appearance: none; appearance: none; border-radius: 0;
+  }
+  .app.is-phone .m-search input::placeholder { color: var(--m-muted); }
+  .app.is-phone .m-search input::-webkit-search-cancel-button { display: none; }
+  .app.is-phone .m-search button { width: 36px; height: 44px; border: 0; background: none; color: var(--m-muted); display: grid; place-items: center; }
+  .app.is-phone .m-tool-btn {
+    position: relative; width: 46px; height: 46px; flex-shrink: 0; display: grid; place-items: center;
+    border-radius: 14px; border: 1px solid var(--m-line-2); background: var(--m-tile-2); color: var(--m-text);
+  }
+  .app.is-phone .m-tool-btn.on { background: var(--m-accent-soft); border-color: rgba(160, 135, 255, .55); color: var(--m-accent-text); }
+  .app.is-phone .m-dot-count {
+    position: absolute; top: -5px; right: -5px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px;
+    background: var(--m-accent); color: #fff; font-size: 11.5px; font-weight: 700; display: grid; place-items: center;
+  }
+
+  .app.is-phone .m-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .app.is-phone .m-chips-scroll { flex-wrap: nowrap; overflow-x: auto; margin: 8px -16px 0; padding: 0 16px 2px; scrollbar-width: none; }
+  .app.is-phone .m-chips-scroll::-webkit-scrollbar { display: none; }
+  .app.is-phone .m-chip {
+    flex-shrink: 0; min-height: 44px; padding: 0 14px; border-radius: 13px; display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--m-line-2); background: var(--m-tile); color: var(--m-text); font-size: 14.5px; font-weight: 550; white-space: nowrap;
+  }
+  .app.is-phone .m-chip.on { background: var(--m-accent-soft); border-color: var(--m-accent); color: var(--m-accent-text); }
+  .app.is-phone .m-chip.view { color: var(--m-muted); }
+  .app.is-phone .m-chip.view.on { color: var(--m-accent-text); }
+  .app.is-phone .m-count { color: var(--m-muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .app.is-phone .m-chip.on .m-count { color: inherit; opacity: .8; }
+  .app.is-phone .m-hint { margin: 10px 2px 0; font-size: 13px; color: var(--m-muted); }
+
+  /* итоги выборки */
+  .app.is-phone .m-summary {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; width: 100%; min-height: 44px; margin: 10px 0 8px;
+    padding: 6px 2px; border: 0; background: none; text-align: left; font-size: 13.5px; color: var(--m-muted);
+  }
+  .app.is-phone .m-summary b { color: var(--m-text); font-variant-numeric: tabular-nums; }
+  .app.is-phone .m-summary b.m-bad { color: var(--m-bad); }
+  .app.is-phone .m-summary-chev { margin-left: auto; transition: transform .15s; }
+  .app.is-phone .m-summary-chev.on { transform: rotate(90deg); }
+  .app.is-phone .m-summary-more {
+    display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin: 0 0 12px; padding: 12px 14px;
+    border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); font-size: 14.5px;
+  }
+  .app.is-phone .m-summary-more dt { color: var(--m-muted); }
+  .app.is-phone .m-summary-more dd { margin: 0; text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  /* группа договоров одного клиента */
+  .app.is-phone .m-cgroup { margin-bottom: 10px; padding: 10px 8px 2px; border-radius: 20px; border: 1px dashed var(--m-line-2); }
+  .app.is-phone .m-cgroup-hd { display: flex; align-items: center; gap: 8px; padding: 0 6px 8px; color: var(--m-muted); min-width: 0; }
+  .app.is-phone .m-cgroup-hd b { color: var(--m-text); font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .app.is-phone .m-cgroup-hd small { margin-left: auto; font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* карточка договора */
+  .app.is-phone .m-ccard {
+    margin-bottom: 10px; border-radius: 18px; overflow: hidden;
+    background: var(--m-tile); border: 1px solid var(--m-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-ccard.overdue { border-color: rgba(255, 122, 134, .32); }
+  .app.is-phone .m-ccard.selected { border-color: var(--m-accent); box-shadow: 0 0 0 1px var(--m-accent) inset; background: rgba(138, 108, 241, .1); }
+  .app.is-phone .m-ccard-main { display: block; width: 100%; padding: 14px 14px 10px; border: 0; background: none; text-align: left; }
+  .app.is-phone .m-ccard-main:active { background: var(--m-tile-press); }
+  .app.is-phone .m-ccard-top { display: flex; align-items: flex-start; gap: 12px; }
+  .app.is-phone .m-ccard-who { flex: 1; min-width: 0; }
+  .app.is-phone .m-ccard-who b { display: block; font-size: 16.5px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+  .app.is-phone .m-ccard-who small { display: block; margin-top: 2px; font-size: 13.5px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-ccard-sum { flex-shrink: 0; text-align: right; }
+  .app.is-phone .m-ccard-sum b { display: block; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .app.is-phone .m-ccard-sum small { display: block; font-size: 12px; color: var(--m-muted); }
+  .app.is-phone .m-ccard.done .m-ccard-sum b { color: var(--m-muted); }
+  .app.is-phone .m-ccard .m-ribbon.thin { margin: 12px 0 10px; }
+  .app.is-phone .m-ccard-status { display: block; font-size: 14px; }
+  .app.is-phone .m-state { display: inline-flex; align-items: center; gap: 6px; color: var(--m-muted); }
+  .app.is-phone .m-state b { color: var(--m-text); font-variant-numeric: tabular-nums; }
+  .app.is-phone .m-state.bad, .app.is-phone .m-state.bad b { color: var(--m-bad); }
+  .app.is-phone .m-state.ok { color: var(--m-ok); }
+  .app.is-phone .m-state.warn { color: var(--m-warn); }
+  .app.is-phone .m-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .app.is-phone .m-tag { display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: var(--m-tile-2); color: var(--m-muted); }
+  .app.is-phone .m-tag.bad { background: var(--m-bad-soft); color: var(--m-bad); }
+  .app.is-phone .m-tag.warn { background: rgba(242, 191, 94, .13); color: var(--m-warn); }
+  .app.is-phone .m-tag.ok { background: var(--m-ok-soft); color: var(--m-ok); }
+  .app.is-phone .m-ccard-note {
+    display: flex; gap: 6px; align-items: flex-start; margin-top: 8px; font-size: 13px; color: var(--m-muted);
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .app.is-phone .m-ccard-note svg { vertical-align: -2px; margin-right: 5px; }
+  .app.is-phone .m-check {
+    width: 24px; height: 24px; flex-shrink: 0; margin-top: 1px; border-radius: 7px; display: grid; place-items: center;
+    border: 2px solid var(--m-line-2); background: rgba(0, 0, 0, .2); color: #fff;
+  }
+  .app.is-phone .m-check.on { background: var(--m-accent); border-color: var(--m-accent); }
+
+  /* последняя отметка оператора */
+  .app.is-phone .m-mark {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 14px; padding: 8px 0 4px;
+    border-top: 1px solid var(--m-line); font-size: 13px; color: var(--m-muted);
+  }
+  .app.is-phone .m-mark-tag { padding: 2px 8px; border-radius: 7px; background: var(--m-tile-2); color: var(--m-text); font-weight: 600; font-size: 12.5px; }
+  .app.is-phone .m-mark-tag.ok { background: var(--m-ok-soft); color: var(--m-ok); }
+  .app.is-phone .m-mark-tag.warn { background: rgba(242, 191, 94, .13); color: var(--m-warn); }
+  .app.is-phone .m-mark-tag.bad { background: var(--m-bad-soft); color: var(--m-bad); }
+  .app.is-phone .m-mark-by { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone .m-mark-history {
+    min-width: 44px; height: 44px; margin: -6px -6px -6px 0; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: none; color: var(--m-accent-text); font-size: 13px; font-weight: 650;
+  }
+  .app.is-phone .m-mark-note { width: 100%; color: var(--m-text); opacity: .85; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+  .app.is-phone .m-ccard-actions { display: flex; gap: 8px; padding: 8px 14px 14px; }
+
+  /* пустые состояния */
+  .app.is-phone .m-empty-card {
+    margin-top: 16px; padding: 28px 18px; text-align: center; border-radius: 18px;
+    background: var(--m-tile); border: 1px solid var(--m-line); color: var(--m-muted);
+  }
+  .app.is-phone .m-empty-card b { display: block; color: var(--m-text); font-size: 17px; margin-bottom: 6px; }
+  .app.is-phone .m-empty-card .m-btn { margin-top: 14px; }
+
+  /* панель выбора — над нижней навигацией */
+  .app.is-phone .m-contracts.selecting { padding-bottom: 96px; }
+  .app.is-phone .m-select-bar {
+    position: fixed; left: 0; right: 0; bottom: calc(70px + var(--m-safe-b)); z-index: 25;
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px;
+    background: rgba(28, 38, 60, .96); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--m-line-2); box-shadow: 0 -10px 30px rgba(0, 0, 0, .35);
+  }
+  .app.is-phone .m-select-info { flex: 1; min-width: 0; }
+  .app.is-phone .m-select-info b { display: block; font-size: 15px; }
+  .app.is-phone .m-select-info small { display: block; font-size: 12px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* поля в шторке фильтров */
+  .app.is-phone .m-field { display: block; margin: 6px 0 18px; }
+  .app.is-phone .m-field-label { display: block; margin-bottom: 8px; font-size: 13.5px; font-weight: 600; color: var(--m-muted); }
+  .app.is-phone .m-field-hint { display: block; margin-top: 8px; font-size: 12.5px; color: var(--m-muted); }
+  html body .app.is-phone .m-select {
+    width: 100%; min-height: 48px; padding: 0 40px 0 13px; border-radius: 13px; font-size: 16px; font-family: inherit;
+    border: 1px solid var(--m-line-2); color: var(--m-text); -webkit-appearance: none; appearance: none;
+    background: var(--m-tile-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%239aa8bd' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 15px center;
+  }
+  .app.is-phone .m-sheet-actions { display: grid; gap: 8px; margin: 4px 0 8px; }
+  .app.is-phone .m-sheet-foot { padding: 10px 16px calc(12px + var(--m-safe-b)); border-top: 1px solid var(--m-line); }
+  .app.is-phone .m-sheet .m-segmented { background: rgba(0, 0, 0, .22); }
+}
+
+/* ============ Карточка клиента и договор (график, оплата, отсрочка) на телефоне ============
+   Только внешний вид: обе карточки открываются на весь экран, как отдельная страница.
+   Разметка и поведение форм не меняются. */
+@media (max-width: 760px) {
+  html body .app.is-phone .overlay:has(> .client-sheet, > .contract-sheet) {
+    padding: 0; align-items: stretch; background: var(--m-bg); backdrop-filter: none; -webkit-backdrop-filter: none;
+    overscroll-behavior: contain;
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) {
+    max-width: none; width: 100%; min-height: 100dvh; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible;
+    color: var(--m-text); font-size: 15px;
+    background:
+      radial-gradient(120% 50% at 0% 0%, rgba(138, 108, 241, .18), transparent 60%),
+      var(--m-bg);
+    animation: m-page .22s cubic-bezier(.2, .8, .2, 1);
+  }
+  @keyframes m-page { from { transform: translateX(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* шапка: закреплена, крупные кнопки; «крестик» не нужен — есть «назад» */
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-hd {
+    position: sticky; top: 0; z-index: 6; gap: 8px; min-height: calc(61px + var(--m-safe-t));
+    padding: calc(8px + var(--m-safe-t)) 10px 8px 8px;
+    background: rgba(13, 21, 36, .86); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-hd > div { flex: 1; min-width: 0; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .sheet-name { font-size: 18px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-hd .client-muted { font-size: 12.5px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body .app.is-phone .contract-sheet .sheet-phone { display: inline-flex; align-items: center; gap: 5px; min-height: 44px; margin: -10px 0 -12px; font-size: 13px; color: var(--m-accent-text); white-space: nowrap; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-hd .icon-btn {
+    width: 44px; height: 44px; min-width: 44px; padding: 0; display: grid; place-items: center; flex-shrink: 0;
+    border-radius: 13px; background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-hd .icon-btn.wa-green { color: var(--m-ok); }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-hd .icon-btn.wa-green.notified { background: var(--m-ok-soft); border-color: rgba(60, 207, 159, .4); }
+  html body .app.is-phone .client-sheet > .sheet-hd .client-close,
+  html body .app.is-phone .contract-sheet > .sheet-hd > .icon-btn:last-child { display: none; }
+
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) > .sheet-body { padding: 14px 16px calc(36px + var(--m-safe-b)); }
+
+  /* плитки — полупрозрачные, как на главной */
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(
+    .client-total, .client-facts > div, .client-promise, .client-contract, .client-history, .client-picker,
+    .det-item, .det-grid > div, .comment-block, .contact-history, .lrow, .pay-inline, .defer-inline, .contact-form, .deferral-history
+  ) {
+    background: var(--m-tile); border: 1px solid var(--m-line); border-radius: 16px; box-shadow: none; color: var(--m-text);
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(.client-muted, .client-total small, .client-facts span, .client-facts small, .det-grid span, .client-promise span, .client-promise small) { color: var(--m-muted); }
+
+  /* карточка клиента */
+  html body .app.is-phone .client-sheet .client-total { padding: 18px 16px; border-color: rgba(160, 135, 255, .3);
+    background: linear-gradient(160deg, rgba(138, 108, 241, .3), rgba(138, 108, 241, .06) 60%, rgba(255, 255, 255, .04)); }
+  html body .app.is-phone .client-sheet .client-total > strong { font-size: 36px; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; }
+  html body .app.is-phone .client-sheet .client-overdue { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--m-bad-soft); border: 1px solid rgba(255, 122, 134, .3); color: var(--m-bad); }
+  html body .app.is-phone .client-sheet .client-clear { margin-top: 10px; color: var(--m-ok); font-weight: 600; }
+  html body .app.is-phone .client-sheet .client-facts { gap: 8px; }
+  html body .app.is-phone .client-sheet .client-facts > div { padding: 12px 13px; }
+  html body .app.is-phone .client-sheet .client-facts b { font-size: 17px; }
+  html body .app.is-phone .client-sheet .client-promise { padding: 12px 14px; border-left: 3px solid var(--m-accent); }
+  html body .app.is-phone .client-sheet .client-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  html body .app.is-phone .client-sheet .client-actions > .btn:first-child { grid-column: 1 / -1; }
+  html body .app.is-phone .client-sheet .client-actions .btn { width: 100%; justify-content: center; }
+  html body .app.is-phone .client-sheet .client-section-title { font-size: 17px; font-weight: 700; margin: 22px 2px 10px; color: var(--m-text); }
+  html body .app.is-phone .client-sheet .client-contract summary b { font-size: 15px; }
+  html body .app.is-phone .client-sheet .client-contract-right b { font-size: 16px; }
+  html body .app.is-phone .client-sheet .client-danger { color: var(--m-bad); }
+
+  /* договор: товар, показатели, действия */
+  html body .app.is-phone .contract-sheet .client-return { width: 100%; justify-content: flex-start; margin-bottom: 12px; color: var(--m-accent-text); }
+  html body .app.is-phone .contract-sheet .det-item { padding: 14px; font-size: 17px; font-weight: 650; margin-bottom: 10px; }
+  html body .app.is-phone .contract-sheet .det-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  html body .app.is-phone .contract-sheet .det-grid > div { padding: 10px 12px; min-width: 0; }
+  html body .app.is-phone .contract-sheet .det-grid span { font-size: 12.5px; margin-bottom: 3px; }
+  html body .app.is-phone .contract-sheet .det-grid b { font-size: 16px; overflow-wrap: anywhere; }
+  html body .app.is-phone .contract-sheet .det-actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  html body .app.is-phone .contract-sheet .det-actions-row .btn { width: 100%; justify-content: center; }
+  html body .app.is-phone .contract-sheet :is(.comment-block, .contact-history) { padding: 14px; margin-bottom: 14px; }
+
+  /* график платежей */
+  html body .app.is-phone .contract-sheet .ledger-hd-row { flex-wrap: wrap; margin: 20px 2px 10px; }
+  html body .app.is-phone .contract-sheet .ledger-hd { font-size: 17px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--m-text); }
+  html body .app.is-phone .contract-sheet .lrow {
+    grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: none; gap: 6px 10px;
+    padding: 14px; margin-bottom: 10px; align-items: center;
+  }
+  html body .app.is-phone .contract-sheet .lrow > * { grid-column: 1 / -1; min-width: 0; }
+  html body .app.is-phone .contract-sheet .lrow > .lnum { grid-column: 1; grid-row: 1; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--m-tile-2); color: var(--m-muted); font-size: 13px; font-weight: 700; }
+  html body .app.is-phone .contract-sheet .lrow > .ldate { grid-column: 2; grid-row: 1; font-size: 15.5px; font-weight: 600; }
+  html body .app.is-phone .contract-sheet .lrow > .lsum { grid-column: 3; grid-row: 1; font-size: 16.5px; font-weight: 700; text-align: right; white-space: nowrap; }
+  html body .app.is-phone .contract-sheet .lrow > .lstatus { grid-column: 2 / -1; grid-row: 2; }
+  html body .app.is-phone .contract-sheet .lrow > .lbtn-group { grid-row: 3; display: flex; flex-wrap: wrap; gap: 8px; max-width: none; margin-top: 4px; }
+  html body .app.is-phone .contract-sheet .lrow.overdue { border-color: rgba(255, 122, 134, .4); border-left: 3px solid var(--m-bad); background: rgba(255, 122, 134, .07); }
+  html body .app.is-phone .contract-sheet .lrow.paid { opacity: .92; }
+  html body .app.is-phone .contract-sheet .lrow.paid > .lsum { color: var(--m-muted); }
+
+  html body .app.is-phone .contract-sheet .lbtn {
+    min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 12px; justify-content: center; gap: 6px; font-size: 14.5px; font-weight: 600;
+  }
+  html body .app.is-phone .contract-sheet .lbtn[hidden] { display: none; }
+  html body .app.is-phone .contract-sheet .lbtn.pay { flex: 1; background: var(--m-ok); color: #06291f; }
+  html body .app.is-phone .contract-sheet .lbtn.undo { background: var(--m-tile-2); color: var(--m-text); border: 1px solid var(--m-line-2); }
+  html body .app.is-phone .contract-sheet .lbtn.defer { background: rgba(242, 191, 94, .12); color: var(--m-warn); border: 1px solid rgba(242, 191, 94, .3); }
+
+  /* раскрывающиеся блоки: история платежей, чеки, уведомление */
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) details > summary {
+    min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14.5px; list-style-position: inside;
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) details > summary::-webkit-details-marker { display: none; }
+  html body .app.is-phone .contract-sheet .payment-details > summary::before {
+    content: ""; width: 7px; height: 7px; flex-shrink: 0; margin: 0 4px 0 2px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s;
+  }
+  html body .app.is-phone .contract-sheet .payment-details[open] > summary::before { transform: rotate(45deg); }
+  html body .app.is-phone .contract-sheet .payment-details > summary { color: var(--m-muted); }
+  html body .app.is-phone .contract-sheet .payment-details[open] > summary { color: var(--m-text); }
+
+  /* формы: оплата, отсрочка, контакт, комментарий */
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(.pay-inline, .defer-inline, .contact-form) { padding: 14px; gap: 12px; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.date-segment), select, textarea) {
+    min-height: 48px; font-size: 16px; border-radius: 12px; font-family: inherit;
+    background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) textarea { min-height: 84px; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .date-fields { min-height: 48px; padding: 0 6px 0 12px; border-radius: 12px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .date-fields input.date-segment,
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .date-fields .date-segment { min-height: 44px; border: 0; background: transparent; padding: 0; font-size: 16px; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .date-picker-button { min-width: 44px; min-height: 44px; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(.pay-form-actions, .deferral-actions) { display: flex; flex-wrap: wrap; gap: 8px; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(.pay-form-actions, .deferral-actions, .defer-inline) .btn { flex: 1 1 auto; justify-content: center; }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .pay-inline .btn.primary { background: var(--m-ok); border-color: var(--m-ok); color: #06291f; }
+
+  /* все прочие кнопки в карточках — не меньше 44px */
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) :is(.btn, .client-choice, .client-history-row, .notification-undo, .op-mark-history, .op-mark-more) {
+    min-height: 44px; border-radius: 12px; font-size: 14.5px;
+  }
+  html body .app.is-phone :is(.client-sheet, .contract-sheet) .btn.primary { background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
+}
+
+/* Окно подтверждения на телефоне: крупные кнопки, опасное действие — красное. */
+@media (max-width: 760px) {
+  html body .app.is-phone .nested-overlay { align-items: center; padding: 16px; }
+  html body .app.is-phone .confirm-card { width: 100%; max-width: 420px; border-radius: 20px; padding: 20px; background: #182338; border: 1px solid var(--m-line-2); }
+  html body .app.is-phone .confirm-card h3 { font-size: 19px; margin: 0 0 8px; }
+  html body .app.is-phone .confirm-card p { font-size: 15px; line-height: 1.45; color: var(--m-muted); }
+  html body .app.is-phone .confirm-card .sheet-actions { display: flex; gap: 8px; margin-top: 18px; }
+  html body .app.is-phone .confirm-card .sheet-actions .btn { flex: 1; min-height: 48px; justify-content: center; white-space: normal; line-height: 1.15; border-radius: 13px; font-size: 15px; }
+  html body .app.is-phone .confirm-card .btn.danger { background: var(--m-bad); border-color: var(--m-bad); color: #2a0a10; font-weight: 700; }
+  html body .app.is-phone .confirm-card .btn.primary { background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
+}
+
+/* ======================= «Касса» на телефоне ======================= */
+@media (max-width: 760px) {
+  html body .app.is-phone .cash-desk { margin: 0; padding: 12px 16px 24px; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 15px; }
+  html body .app.is-phone .cash-desk > h2 { display: none; } /* заголовок уже в шапке */
+  html body .app.is-phone .cash-desk > p { font-size: 13px; color: var(--m-muted); margin: 0 2px 12px; }
+  html body .app.is-phone .cash-quick { margin-top: 0; margin-bottom: 10px; }
+  html body .app.is-phone .cash-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  html body .app.is-phone .cash-filters label { min-width: 0; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .cash-filters > select { grid-column: 1 / -1; }
+  html body .app.is-phone .cash-desk :is(input, select) {
+    width: 100%; height: auto; min-height: 48px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .cash-desk h3 {
+    margin: 14px 0 10px; padding: 16px; border-radius: 20px; font-size: 32px; font-weight: 750; letter-spacing: -.02em; line-height: 1.15;
+    background: linear-gradient(160deg, rgba(138, 108, 241, .3), rgba(138, 108, 241, .06) 60%, rgba(255, 255, 255, .04));
+    border: 1px solid rgba(160, 135, 255, .3);
+  }
+  html body .app.is-phone .cash-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  html body .app.is-phone .cash-summary > p { margin: 0; padding: 12px 13px; border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); font-size: 13px; color: var(--m-muted); overflow-wrap: anywhere; }
+  html body .app.is-phone .cash-summary b { font-size: 18px; color: var(--m-text); }
+  html body .app.is-phone .cash-desk details { border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); padding: 0 14px; margin: 0 0 12px; }
+  html body .app.is-phone .cash-desk details > summary { min-height: 48px; display: flex; align-items: center; font-size: 15px; }
+  html body .app.is-phone .cash-desk details form { display: grid; gap: 8px; margin: 4px 0 14px; }
+  html body .app.is-phone .cash-desk details .btn { min-height: 48px; }
+
+  /* таблица поступлений — карточками */
+  html body .app.is-phone .cash-table-wrap { overflow: visible; margin-top: 4px; }
+  html body .app.is-phone .cash-desk table { min-width: 0; table-layout: auto; border-spacing: 0; display: block; }
+  html body .app.is-phone .cash-desk thead { display: none; }
+  html body .app.is-phone .cash-desk tbody { display: block; }
+  html body .app.is-phone .cash-desk tr {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; margin-bottom: 8px; padding: 12px 14px;
+    border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .cash-desk td { display: block; padding: 0; border: 0; background: none; width: auto; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .cash-desk td:nth-child(2) { order: 1; flex: 0 1 62%; min-width: 0; }
+  html body .app.is-phone .cash-desk td:nth-child(5) { order: 2; flex: 1 0 auto; text-align: right; font-size: 17px; font-weight: 700; color: var(--m-text); }
+  html body .app.is-phone .cash-desk td:nth-child(1) { order: 3; }
+  html body .app.is-phone .cash-desk td:nth-child(3) { order: 4; }
+  html body .app.is-phone .cash-desk td:nth-child(4) { order: 5; }
+  html body .app.is-phone .cash-desk :is(td:nth-child(1), td:nth-child(3), td:nth-child(4)) { padding: 2px 8px; border-radius: 7px; background: var(--m-tile-2); font-size: 12.5px; white-space: nowrap; }
+  html body .app.is-phone .cash-desk td:nth-child(6) { order: 6; flex: 1 1 100%; font-size: 13px; }
+  html body .app.is-phone .cash-desk td:nth-child(6)[data-empty] { display: none; }
+  html body .app.is-phone .cash-client { min-height: 44px; margin: -10px 0 -8px; font-size: 16px; color: var(--m-text); text-align: left; }
+  html body .app.is-phone .cash-item { font-size: 13px; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ======================= «Капитал» на телефоне ======================= */
+@media (max-width: 760px) {
+  .app.is-phone .m-cap-hero { padding-top: 16px; padding-bottom: 14px; }
+  .app.is-phone .m-cap-hero .m-today-label { margin-top: 0; }
+  .app.is-phone .m-cap-hero .m-ribbon { margin: 12px 0 10px; }
+  .app.is-phone .m-cap-legend { margin-bottom: 0; }
+  .app.is-phone .m-ribbon .over, .app.is-phone .m-legend i.over { background: var(--m-bad); }
+  .app.is-phone .m-cap-hero .m-today-caption { margin: 10px 0 0; }
+  .app.is-phone .m-section-h > span { display: inline-flex; align-items: center; gap: 8px; }
+  .app.is-phone .m-section-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 2px 10px; }
+  .app.is-phone .m-section-row .m-section-h { margin: 0; }
+  .app.is-phone .m-strong { color: var(--m-text) !important; font-weight: 700; }
+  .app.is-phone .m-note { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; background: var(--m-tile-2); }
+  .app.is-phone .m-note.bad { background: var(--m-bad-soft); color: var(--m-bad); }
+
+  .app.is-phone .m-cap-card {
+    display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 14px;
+    border-radius: 18px; background: var(--m-tile); border: 1px solid var(--m-line);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .app.is-phone .m-cap-btn:active { background: var(--m-tile-press); }
+  .app.is-phone .m-cap-card-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-width: 0; }
+  .app.is-phone .m-cap-card-hd b { font-size: 16.5px; font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
+  .app.is-phone .m-cap-card-hd small { flex: 1; color: var(--m-muted); font-size: 13px; white-space: nowrap; }
+  .app.is-phone .m-cap-card-hd > svg { color: var(--m-muted); flex-shrink: 0; }
+  .app.is-phone .m-kv { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 0; font-size: 14.5px; }
+  .app.is-phone .m-kv dt { color: var(--m-muted); }
+  .app.is-phone .m-kv dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  html body .app.is-phone .m-act.danger { color: var(--m-bad); }
+
+  .app.is-phone .m-accrual { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--m-line); display: grid; gap: 10px; }
+  .app.is-phone .m-accrual-hd b { display: block; font-size: 15px; }
+  .app.is-phone .m-accrual-hd small { display: block; font-size: 13px; color: var(--m-muted); }
+
+  .app.is-phone .m-wd-row { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--m-line); min-height: 60px; }
+  .app.is-phone .m-wd-row:last-child { border-bottom: 0; }
+  .app.is-phone .m-wd-sum { font-weight: 700; font-size: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* финансовый отчёт за период */
+  .app.is-phone .m-report { margin-top: 18px; border-radius: 18px; background: var(--m-tile); border: 1px solid var(--m-line); overflow: hidden; }
+  .app.is-phone .m-report > summary { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-weight: 650; font-size: 16px; cursor: pointer; list-style: none; }
+  .app.is-phone .m-report > summary::-webkit-details-marker { display: none; }
+  .app.is-phone .m-report > summary span { flex: 1; }
+  .app.is-phone .m-report-chev { color: var(--m-muted); transition: transform .15s; }
+  .app.is-phone .m-report[open] .m-report-chev { transform: rotate(90deg); }
+  html body .app.is-phone .m-report .investor-profit-panel { margin: 0; padding: 0 14px 14px !important; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 14px; }
+  html body .app.is-phone .m-report .investor-profit-panel > .panel-hd { display: none !important; }
+  html body .app.is-phone .m-report .investor-profit-panel > div:first-of-type { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px !important; }
+  html body .app.is-phone .m-report label { min-width: 0; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .m-report label:first-child, html body .app.is-phone .m-report .btn { grid-column: 1 / -1; }
+  html body .app.is-phone .m-report :is(input, select) {
+    width: 100%; min-height: 48px; margin-top: 4px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-report .btn { min-height: 48px; width: 100%; justify-content: center; }
+  html body .app.is-phone .m-report .profit-table-wrap { overflow: visible; }
+  html body .app.is-phone .m-report .profit-table { width: 100%; min-width: 0; font-size: 14px; }
+  html body .app.is-phone .m-report .profit-table td { padding: 9px 0; background: none; border-color: var(--m-line); }
+  html body .app.is-phone .m-report .profit-table td.num { text-align: right; white-space: nowrap; padding-left: 10px; font-weight: 600; }
+}
+
+/* ============ Формы «Новый / Изменить договор», «Вкладчик», «Вывод» на телефоне ============ */
+@media (max-width: 760px) {
+  html body .app.is-phone .overlay:has(> .m-form-sheet) {
+    padding: 0; align-items: stretch; background: var(--m-bg); backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain;
+  }
+  html body .app.is-phone .m-form-sheet {
+    max-width: none; width: 100%; min-height: 100dvh; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible;
+    display: flex; flex-direction: column; color: var(--m-text); font-size: 15px;
+    background: radial-gradient(120% 50% at 0% 0%, rgba(138, 108, 241, .18), transparent 60%), var(--m-bg);
+    animation: m-rise .22s cubic-bezier(.2, .8, .2, 1);
+  }
+  html body .app.is-phone .m-form-sheet > .sheet-hd {
+    position: sticky; top: 0; z-index: 6; min-height: calc(61px + var(--m-safe-t)); gap: 10px;
+    padding: calc(8px + var(--m-safe-t)) 10px 8px 16px;
+    background: rgba(13, 21, 36, .88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .m-form-sheet > .sheet-hd .sheet-name { flex: 1; font-size: 19px; font-weight: 700; }
+  html body .app.is-phone .m-form-sheet > .sheet-hd .icon-btn {
+    width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 13px;
+    background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-form-sheet > .sheet-body { flex: 1; padding: 14px 16px 0; display: flex; flex-direction: column; }
+  html body .app.is-phone .m-form-sheet > .sheet-body > .sheet-actions { margin-top: auto; }
+
+  /* поля */
+  html body .app.is-phone .m-form-sheet .field { display: block; margin-bottom: 14px; }
+  html body .app.is-phone .m-form-sheet .field > span:first-child,
+  html body .app.is-phone .m-form-sheet .field > label { font-size: 13.5px; font-weight: 600; color: var(--m-muted); }
+  html body .app.is-phone .m-form-sheet :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.date-segment), select, textarea) {
+    width: 100%; min-height: 48px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-form-sheet textarea { min-height: 84px; }
+  html body .app.is-phone .m-form-sheet :is(input, select, textarea):focus { border-color: var(--m-accent); box-shadow: 0 0 0 3px rgba(138, 108, 241, .25); outline: none; }
+  html body .app.is-phone .m-form-sheet .frow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  html body .app.is-phone .m-form-sheet .frow > :not(.field) { grid-column: 1 / -1; }
+  html body .app.is-phone .m-form-sheet .field-hint { display: block; margin-top: 6px; font-size: 12.5px; color: var(--m-muted); }
+  html body .app.is-phone .m-form-sheet .date-fields { min-height: 48px; padding: 0 4px 0 10px; border-radius: 12px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); }
+  html body .app.is-phone .m-form-sheet .date-fields .date-segment { min-height: 44px; padding: 0; border: 0; background: transparent; font-size: 16px; color: var(--m-text); }
+  html body .app.is-phone .m-form-sheet .date-picker-button { min-width: 40px; min-height: 44px; }
+
+  /* подсказки из базы (клиент, товар) */
+  html body .app.is-phone .m-form-sheet .search-picker-list { border-radius: 14px; background: #1b2740; border: 1px solid var(--m-line-2); box-shadow: 0 14px 34px rgba(0, 0, 0, .45); }
+  html body .app.is-phone .m-form-sheet .search-picker-list button { min-height: 52px; padding: 8px 12px; font-size: 15px; }
+  html body .app.is-phone .m-form-sheet .search-picker-empty { font-size: 12.5px; color: var(--m-muted); }
+
+  /* переключатели и кнопки внутри формы */
+  html body .app.is-phone .m-form-sheet .seg-toggle { display: flex; padding: 3px; gap: 3px; border-radius: 14px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line); }
+  html body .app.is-phone .m-form-sheet .seg-toggle button { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: var(--m-muted); font-weight: 600; font-size: 14.5px; }
+  html body .app.is-phone .m-form-sheet .seg-toggle button.on { background: var(--m-accent); color: #fff; }
+  html body .app.is-phone .m-form-sheet .btn { min-height: 44px; border-radius: 12px; font-size: 15px; justify-content: center; }
+  html body .app.is-phone .m-form-sheet .guarantor-toggle { width: 100%; margin-bottom: 12px; justify-content: flex-start; color: var(--m-accent-text); background: var(--m-tile); border: 1px dashed var(--m-line-2); }
+  html body .app.is-phone .m-form-sheet :is(.guarantor-block, .passport-block) { margin-bottom: 14px; padding: 12px; border-radius: 16px; background: var(--m-tile); border: 1px solid var(--m-line); }
+
+  /* итог расчёта: тёмные плитки (раньше были белыми с бледным текстом) */
+  html body .app.is-phone .m-form-sheet .calc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 14px; }
+  html body .app.is-phone .m-form-sheet .calc > div {
+    padding: 12px 13px; border-radius: 16px; color: var(--m-text); box-shadow: none;
+    background: linear-gradient(160deg, rgba(138, 108, 241, .28), rgba(138, 108, 241, .06)); border: 1px solid rgba(160, 135, 255, .3);
+  }
+  html body .app.is-phone .m-form-sheet .calc span { color: var(--m-muted); font-size: 12.5px; }
+  html body .app.is-phone .m-form-sheet .calc b { font-size: 20px; font-weight: 750; color: var(--m-text); }
+
+  /* кнопки сохранения — закреплены внизу экрана */
+  html body .app.is-phone .m-form-sheet .sheet-actions {
+    position: sticky; bottom: 0; z-index: 5; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin: 8px -16px 0; padding: 10px 16px calc(12px + var(--m-safe-b));
+    background: rgba(13, 21, 36, .92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .m-form-sheet .sheet-actions .btn { width: 100%; min-height: 48px; white-space: normal; line-height: 1.15; }
+  html body .app.is-phone .m-form-sheet .sheet-actions .btn.primary { grid-column: 1 / -1; order: -1; min-height: 52px; font-size: 16px; font-weight: 700; background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
+  html body .app.is-phone .m-form-sheet .sheet-actions .btn.primary:disabled { opacity: .5; }
+  html body .app.is-phone .m-form-sheet .sheet-actions:not(:has(> .btn:nth-of-type(3))) > .btn { grid-column: 1 / -1; }
+  html body .app.is-phone .m-form-sheet :is(.mini-block, [role="alert"]) { overflow-wrap: anywhere; }
+}
+
+/* ======================= «Справочники» на телефоне ======================= */
+@media (max-width: 760px) {
+  html body .app.is-phone .directories { padding: 12px 16px 24px; max-width: none; }
+  html body .app.is-phone .directories > h1 { display: none; } /* заголовок уже в шапке */
+  html body .app.is-phone .directories > p.muted:first-of-type { margin: 0 2px 12px; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .directory-tabs { display: flex; gap: 3px; padding: 3px; margin: 0 0 12px; border-radius: 14px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line); }
+  html body .app.is-phone .directory-tabs .btn { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: var(--m-muted); font-weight: 600; font-size: 14.5px; justify-content: center; }
+  html body .app.is-phone .directory-tabs .btn.primary { background: rgba(255, 255, 255, .14); color: var(--m-text); }
+  html body .app.is-phone .directory-search { margin: 0 0 10px; gap: 6px; font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .directories input {
+    min-height: 48px; padding: 0 13px; font-size: 16px; font-family: inherit; border-radius: 13px;
+    background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .directories > p.muted { font-size: 13px; color: var(--m-muted); margin: 0 2px 8px; }
+  html body .app.is-phone .directory-list { border-radius: 18px; overflow: hidden; background: var(--m-tile); border: 1px solid var(--m-line); }
+  html body .app.is-phone .directory-row {
+    flex-direction: row; align-items: center; gap: 12px; margin: 0; padding: 12px 10px 12px 14px;
+    border-radius: 0; border: 0; border-bottom: 1px solid var(--m-line); background: transparent;
+  }
+  html body .app.is-phone .directory-row:last-child { border-bottom: 0; }
+  html body .app.is-phone .directory-row > div { flex: 1; min-width: 0; }
+  html body .app.is-phone .directory-row strong { display: block; font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+  html body .app.is-phone .directory-row p { margin: 2px 0 0; font-size: 14px; color: var(--m-text); }
+  html body .app.is-phone .directory-row small { font-size: 12.5px; color: var(--m-muted); }
+  html body .app.is-phone .directory-row .btn { align-self: center; flex-shrink: 0; min-height: 44px; padding: 0 14px; border-radius: 12px; font-size: 14px; }
+  html body .app.is-phone .directory-editor { margin-bottom: 12px; padding: 16px; border-radius: 18px; background: var(--m-tile); border: 1px solid rgba(160, 135, 255, .35); }
+  html body .app.is-phone .directory-editor h2 { font-size: 18px; margin: 0 0 6px; }
+  html body .app.is-phone .directory-editor p { font-size: 13.5px; color: var(--m-muted); margin: 0 0 6px; }
+  html body .app.is-phone .directory-editor label { margin: 12px 0 0; font-size: 13.5px; color: var(--m-muted); }
+  html body .app.is-phone .directory-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 0; }
+  html body .app.is-phone .directory-actions .btn { min-height: 48px; justify-content: center; }
+}
+
+/* ===== Окна из плиток главной (Общая прибыль, Получено, Должники и др.) на телефоне ===== */
+@media (max-width: 760px) {
+  html body .app.is-phone .overlay:has(> .m-detail-sheet) {
+    padding: 0; align-items: stretch; background: var(--m-bg); backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain;
+  }
+  html body .app.is-phone .m-detail-sheet {
+    max-width: none; width: 100%; min-height: 100dvh; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible;
+    color: var(--m-text); font-size: 15px;
+    background: radial-gradient(120% 50% at 0% 0%, rgba(138, 108, 241, .18), transparent 60%), var(--m-bg);
+    animation: m-page .22s cubic-bezier(.2, .8, .2, 1);
+  }
+  html body .app.is-phone .m-detail-sheet > .sheet-hd {
+    position: sticky; top: 0; z-index: 6; min-height: calc(61px + var(--m-safe-t)); gap: 10px;
+    padding: calc(8px + var(--m-safe-t)) 10px 8px 16px;
+    background: rgba(13, 21, 36, .88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .m-detail-sheet > .sheet-hd .sheet-name { flex: 1; min-width: 0; font-size: 18px; font-weight: 700; line-height: 1.2; }
+  html body .app.is-phone .m-detail-sheet > .sheet-hd .icon-btn {
+    width: 44px; height: 44px; padding: 0; display: grid; place-items: center; flex-shrink: 0; border-radius: 13px;
+    background: var(--m-tile-2); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-detail-sheet > .sheet-body { padding: 14px 16px calc(32px + var(--m-safe-b)); }
+
+  /* период */
+  html body .app.is-phone .m-detail-sheet .received-period { display: grid; grid-template-columns: 1fr; gap: 6px; margin-bottom: 12px; }
+  html body .app.is-phone .m-detail-sheet .received-period label { font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .m-detail-sheet .received-range { grid-template-columns: 1fr 1fr; gap: 8px; }
+  html body .app.is-phone .m-detail-sheet :is(select, input:not([type="checkbox"])) {
+    width: 100%; min-height: 48px; font-size: 16px; font-family: inherit; border-radius: 12px;
+    background-color: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text);
+  }
+  html body .app.is-phone .m-detail-sheet .date-picker-button.date-picker-value { min-height: 48px; width: 100%; border-radius: 12px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line-2); color: var(--m-text); font-size: 16px; }
+  html body .app.is-phone .m-detail-sheet .seg-toggle { display: flex; padding: 3px; gap: 3px; border-radius: 14px; background: rgba(0, 0, 0, .22); border: 1px solid var(--m-line); margin-bottom: 12px; }
+  html body .app.is-phone .m-detail-sheet .seg-toggle button { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: var(--m-muted); font-weight: 600; font-size: 14px; }
+  html body .app.is-phone .m-detail-sheet .seg-toggle button.on { background: var(--m-accent); color: #fff; }
+
+  /* итоги — плитки по две */
+  html body .app.is-phone .m-detail-sheet .received-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  html body .app.is-phone .m-detail-sheet .received-totals > div {
+    min-width: 0; margin: 0; padding: 12px 13px; border-radius: 16px; box-shadow: none;
+    background: var(--m-tile); border: 1px solid var(--m-line);
+  }
+  html body .app.is-phone .m-detail-sheet .received-totals > div:first-child { grid-column: 1 / -1;
+    background: linear-gradient(160deg, rgba(138, 108, 241, .3), rgba(138, 108, 241, .06) 60%, rgba(255, 255, 255, .04)); border-color: rgba(160, 135, 255, .3); }
+  html body .app.is-phone .m-detail-sheet .received-totals span { display: block; font-size: 12.5px; color: var(--m-muted); }
+  html body .app.is-phone .m-detail-sheet .received-totals b { display: block; margin-top: 3px; font-size: 19px; font-weight: 700; color: var(--m-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body .app.is-phone .m-detail-sheet .received-totals > div:first-child b { font-size: 28px; font-weight: 750; }
+  html body .app.is-phone .m-detail-sheet .section-total {
+    margin-bottom: 12px; padding: 16px; border-radius: 18px; color: var(--m-text);
+    background: linear-gradient(160deg, rgba(138, 108, 241, .3), rgba(138, 108, 241, .06) 60%, rgba(255, 255, 255, .04)); border: 1px solid rgba(160, 135, 255, .3);
+  }
+  html body .app.is-phone .m-detail-sheet .section-total b { font-size: 24px; font-weight: 750; }
+  html body .app.is-phone .m-detail-sheet .field-hint { display: block; margin: 0 2px 12px; font-size: 12.5px; color: var(--m-muted); line-height: 1.45; }
+
+  /* помесячная таблица */
+  html body .app.is-phone .m-detail-sheet .monthly-profit-register { border-radius: 16px; border: 1px solid var(--m-line); background: var(--m-tile); overflow: hidden; }
+  html body .app.is-phone .m-detail-sheet .monthly-profit-register-hd { min-height: 40px; background: rgba(255, 255, 255, .06); color: var(--m-muted); font-size: 12.5px; }
+  html body .app.is-phone .m-detail-sheet :is(.monthly-profit-register-hd, .monthly-profit-register button) { grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; padding-left: 12px; padding-right: 12px; }
+  html body .app.is-phone .m-detail-sheet .monthly-profit-register button > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body .app.is-phone .m-detail-sheet .monthly-profit-register button { min-height: 48px; font-size: 14.5px; color: var(--m-text); background: transparent; border-bottom: 1px solid var(--m-line); }
+  html body .app.is-phone .m-detail-sheet .monthly-profit-register button:last-child { border-bottom: 0; }
+  html body .app.is-phone .m-detail-sheet .monthly-profit-register button:active { background: var(--m-tile-press); }
+
+  /* списки договоров и платежей */
+  html body .app.is-phone .m-detail-sheet .data-list { border: 0; overflow: visible; }
+  html body .app.is-phone .m-detail-sheet :is(.data-row, .prow) {
+    width: 100%; min-height: 56px; margin: 0 0 8px; padding: 12px 14px; border-radius: 16px; text-align: left;
+    background: var(--m-tile); border: 1px solid var(--m-line); box-shadow: none; color: var(--m-text);
+  }
+  html body .app.is-phone .m-detail-sheet .data-row { flex-direction: row; align-items: center; gap: 12px; }
+  html body .app.is-phone .m-detail-sheet .data-row > div:first-child { flex: 1; min-width: 0; }
+  html body .app.is-phone .m-detail-sheet .data-row > div:last-child { flex-shrink: 0; align-items: flex-end; text-align: right; }
+  html body .app.is-phone .m-detail-sheet .data-row b { font-size: 16px; }
+  html body .app.is-phone .m-detail-sheet .data-row :is(span, small) { font-size: 13px; color: var(--m-muted); }
+  html body .app.is-phone .m-detail-sheet .data-row:active { background: var(--m-tile-press); }
+  html body .app.is-phone .m-detail-sheet .badge { display: inline-flex; width: auto; max-width: max-content; margin-top: 4px; padding: 2px 8px; border-radius: 7px; font-size: 12px; }
+  html body .app.is-phone .m-detail-sheet :is(.icon-btn-ghost, .btn) { min-width: 44px; min-height: 44px; border-radius: 12px; }
+}

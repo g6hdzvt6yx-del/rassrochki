@@ -1,0 +1,16 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
+// Стенд «Сводка на телефоне»: настоящий вход src/main.jsx, но клиент базы подменён вымышленными данными.
+// Запуск: node node_modules/vite/bin/vite.js --config qa/mobile/vite.config.js → http://127.0.0.1:4190/qa/mobile/
+export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify("QA"), __BUILD_DATE__: JSON.stringify("2026-11-02") },
+  plugins: [{
+    name: "qa-mobile-mock",
+    enforce: "pre",
+    resolveId(id) {
+      if (["./dataClient", "./supabaseClient", "./guardedCloudClient"].includes(id)) return fileURLToPath(new URL("./mock.js", import.meta.url));
+    },
+  }, react()],
+  server: { host: "127.0.0.1", port: 4190, strictPort: true },
+});

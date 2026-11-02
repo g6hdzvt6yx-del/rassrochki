@@ -36,6 +36,10 @@ import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
+import usePhoneLayout from "./usePhoneLayout";
+import { MobileTopBar, MobileTabBar, MobileMoreSheet, MobileHome, moreIcons, weekdayLabel } from "./MobileShell";
+import MobileContracts from "./MobileContracts";
+import MobileCapital from "./MobileCapital";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -329,7 +333,7 @@ const parseImportWorkbook = async (file, existingInvestors, existingContracts) =
       if (!markup && markupPercent) markup = Math.round((principal * markupPercent) / 100);
       else if (!markupPercent && markup && principal > 0) markupPercent = Math.round((markup / principal) * 1000) / 10;
 
-      const startDate = excelDateToIso(row["Дата 1-го платежа"], XLSX) || new Date().toISOString().slice(0, 10);
+      const startDate = excelDateToIso(row["Дата 1-го платежа"], XLSX) || toIsoDate(new Date());
 
       // пропускаем дубли — как с уже существующими договорами, так и между строками файла
       const key = dupKey(clientName, item, startDate);
@@ -559,7 +563,9 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 /*  Приложение                                                         */
 /* ------------------------------------------------------------------ */
 
-export default function App() {
+export default function App({ onOpenTeam, onOpenMacImport } = {}) {
+  const isPhone = usePhoneLayout(); // ширина до 760px — телефонная раскладка
+  const [moreOpen, setMoreOpen] = useState(false);
   const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
   const {logs:operatorLogs,people:operatorPeople,error:operatorLogsError}=useCallLogs(!isDesktopApp ? session?.user?.id : null);
   const [authError, setAuthError] = useState("");
@@ -857,7 +863,7 @@ export default function App() {
 
   const payInvestorAccrual = async (investor, amount) => {
     await addWithdrawal({
-      amount, date: new Date().toISOString().slice(0, 10), investorId: investor.id,
+      amount, date: toIsoDate(new Date()), investorId: investor.id,
       purpose: "investor_payout", note: `Ежемесячное начисление вкладчику ${investor.name}`,
     });
   };
@@ -959,6 +965,14 @@ export default function App() {
     const payments = { ...(c.payments || {}) };
     const cur = payments[idx];
     if (cur && cur.paidDate) {
+      const row = buildSchedule(c).find((item) => item.index === idx);
+      const paidNow = actualPaid(cur, row?.amountDue || 0);
+      if (!await requestConfirm({
+        title: "Сбросить оплату?",
+        message: `Клиент «${c.clientName}», платёж №${idx + 1}${paidNow > 0 ? ` — внесено ${money(paidNow)}` : ""}${cur.paidDate ? ` от ${fmtDate(cur.paidDate)}` : ""}. Оплата будет удалена, платёж снова станет неоплаченным.`,
+        confirmLabel: "Да, сбросить оплату",
+        danger: true,
+      })) return;
       const { paidDate: _paidDate, paidAmount: _paidAmount, paymentEvents: _paymentEvents, ...metadata } = cur;
       if (Object.keys(metadata).length) payments[idx] = metadata;
       else delete payments[idx];
@@ -1202,7 +1216,7 @@ export default function App() {
     const unpaidRows = buildSchedule(c).filter((row) => !row.paid);
     if (!unpaidRows.length) return;
     const payoffTotal = unpaidRows.reduce((sum, row) => sum + row.remainingDue, 0);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toIsoDate(new Date());
     if (!await requestConfirm({
       title: "Подтвердить досрочное погашение?",
       message: `Клиент «${c.clientName}». Будут отмечены оплаченными ${unpaidRows.length} платежей на общую сумму ${money(payoffTotal)} датой ${fmtDate(today)}. После подтверждения договор будет закрыт.`,
@@ -1516,7 +1530,7 @@ export default function App() {
   const exportFilteredContracts = async () => {
     const XLSX = await import("xlsx");
     const names = { all: "vse", active: "aktivnye", overdue: "prosrochka", done: "zakrytye" };
-    const fileName = `rassrochki_${names[statusFilter] || "spisok"}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const fileName = `rassrochki_${names[statusFilter] || "spisok"}_${toIsoDate(new Date())}.xlsx`;
     XLSX.writeFile(buildFilteredContractsWorkbook(XLSX, filteredContracts, investors), fileName);
     await localData.log({
       actionType: "export_excel", entityType: "export", entityName: fileName,
@@ -1622,11 +1636,34 @@ export default function App() {
       </div>
     );
 
+  const resetContractFilters = () => {
+    setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
+  };
+  const chooseWorkView = (key) => {
+    setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");setSortDir("desc");
+  };
+  const contractFiltersActive = Boolean(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created");
+  const exportExcel = async () => {
+    const XLSX = await import("xlsx");
+    XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${toIsoDate(new Date())}.xlsx`);
+    await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
+  };
+  const syncStatus = !isDesktopApp && <WebSyncStatus
+        rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
+        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
+        onRefresh={() => setReloadTick(t => t + 1)}
+      />;
+  const goTab = (next) => { setMoreOpen(false); setTab(next); window.scrollTo?.(0, 0); };
+
   return (
-    <div className="app">
+    <div className={isPhone ? "app is-phone" : "app"}>
       <style>{css}</style>
 
-      <header className="hd">
+      {isPhone && <MobileTopBar
+        title={{ contracts: "Договоры", cash: "Касса", capital: "Капитал", directories: "Справочники" }[tab] || "Рассрочки"}
+        subtitle={tab === "contracts" ? `Всего договоров: ${contracts.length}` : weekdayLabel(toIsoDate(new Date()))}
+      >{syncStatus}</MobileTopBar>}
+      {!isPhone && <header className="hd">
         <div className="brand">
           <span className="mark"><Wallet size={18} /></span>
           <div>
@@ -1640,11 +1677,7 @@ export default function App() {
           </button>
           <button
             className="btn on-dark"
-            onClick={async () => {
-              const XLSX = await import("xlsx");
-              XLSX.writeFile(buildExportWorkbook(XLSX, contracts, investors), `rassrochki_${new Date().toISOString().slice(0, 10)}.xlsx`);
-              await localData.log({ actionType: "export_excel", entityType: "export", entityName: "Полный экспорт", after: { contracts: contracts.length } });
-            }}
+            onClick={exportExcel}
           >
             <Download size={16} /> Экспорт
           </button>
@@ -1658,12 +1691,8 @@ export default function App() {
             <LogOut size={16} />
           </button>
         </div>
-      </header>
-      {!isDesktopApp && <WebSyncStatus
-        rows={{ contracts: contracts.map(contractToRow), investors: investors.map(investorToRow), withdrawals: withdrawals.map(withdrawalToRow) }}
-        paused={Boolean(reminderQueue || adding || editingContract || addingInvestor || editingInvestor || addingWithdrawal || importing || dataCenterOpen || openId || expandedId || receivedOpen || profitGroupOpen || profitTotalOpen || tab === 'directories' || confirmDialog || sectionModal)}
-        onRefresh={() => setReloadTick(t => t + 1)}
-      />}
+      </header>}
+      {!isPhone && syncStatus}
       {isDesktopApp && <div role="status" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', padding: '10px 0', fontSize: 13 }}>
         <span>{saveState.pending ? "Сохраняем…" : saveState.error ? `Ошибка сохранения: ${saveState.error}` : saveState.lastSavedAt ? `Сохранено · ${fmtDateTime(saveState.lastSavedAt)}` : "Данные загружены с Mac"}</span>
         <button className="btn ghost btn-sm" onClick={() => setDataCenterOpen(true)}>Последняя успешная копия: {lastBackupAt ? fmtDateTime(lastBackupAt) : "ещё не создана"}</button>
@@ -1671,7 +1700,7 @@ export default function App() {
       </div>}
 
       {operatorLogsError && <p role="alert">{operatorLogsError}</p>}
-      <nav className="tabs">
+      {!isPhone && <nav className="tabs">
         <button className={tab === "dashboard" ? "on" : ""} onClick={() => setTab("dashboard")}>
           <LayoutGrid size={16} /> Сводка
         </button>
@@ -1686,7 +1715,7 @@ export default function App() {
         <button onClick={() => setDataCenterOpen(true)}>
           {isDesktopApp ? <Database size={16} /> : <History size={16} />} {isDesktopApp ? "Данные" : "История"}
         </button>
-      </nav>
+      </nav>}
 
       {storageError && (
         <div className="storage-warn-wrap">
@@ -1704,10 +1733,18 @@ export default function App() {
       )}
       {appMessage && <button type="button" className={`app-toast ${appMessage.tone || "error"}`} onClick={() => setAppMessage(null)}>{appMessage.message}<X size={14}/></button>}
 
-      {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId}/> }
+      {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId} phone={isPhone}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
 
-      {tab === "dashboard" && (
+      {tab === "dashboard" && isPhone && (
+        <MobileHome
+          contracts={contracts} getStats={contractStats} totals={totals} capital={capital} received={received} monthlyStats={monthlyStats}
+          onOpenContract={setOpenId} onPay={openQuickPay} onRemind={notifyPayment} onSection={setSectionModal}
+          onReceived={(view) => { setReceivedView(view); setReceivedOpen(true); }}
+          onProfitTotal={() => setProfitTotalOpen(true)}
+        />
+      )}
+      {tab === "dashboard" && !isPhone && (
         <main className="wrap dashboard-wrap">
           <button type="button" className="hero hero-btn" onClick={() => setSectionModal("remaining")}>
             <div className="hero-label">Остаток к получению</div>
@@ -1849,7 +1886,21 @@ export default function App() {
         </main>
       )}
 
-      {tab === "contracts" && (
+      {tab === "contracts" && isPhone && (
+        <MobileContracts
+          total={contracts.length} list={filteredContracts} groups={groupedContracts} getStats={contractStats} investors={investors}
+          counts={filterCounts} summary={filteredSummary} marks={contractMarks} onMarksHistory={setMarksHistoryId}
+          f={{
+            search, setSearch, statusFilter, setStatusFilter, workView, chooseWorkView, sortBy, setSortBy, sortDir, setSortDir,
+            investorFilter, setInvestorFilter, contactFilter, setContactFilter, notificationFilter, setNotificationFilter,
+            deferralFilter, setDeferralFilter, markStatuses, setMarkStatuses, markAuthor, setMarkAuthor, markAuthorOptions,
+            reset: resetContractFilters, anyActive: contractFiltersActive,
+          }}
+          selection={{ selectedIds, toggleSelected, setSelectedIds, visibleSelected, reminderFor, beginReminders }}
+          onOpen={setOpenId} onPay={openQuickPay} onRemind={notifyPayment} onExport={exportFilteredContracts} onAdd={() => setAdding(true)}
+        />
+      )}
+      {tab === "contracts" && !isPhone && (
         <main className={`wrap ${listMode === "table" ? "wrap-table" : ""}`}>
           {contracts.length === 0 ? (
             <div className="panel"><div className="empty">Договоров пока нет — добавьте первый кнопкой «Новый договор».</div></div>
@@ -1929,13 +1980,11 @@ export default function App() {
             <button className="btn ghost btn-sm export-filtered" disabled={!filteredContracts.length} onClick={exportFilteredContracts}>
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
-            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
-            }}><RotateCcw size={14} /> Сбросить фильтры</button>}
+            {contractFiltersActive && <button className="btn ghost btn-sm" onClick={resetContractFilters}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
           <div className="workbench-controls">
-            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>{setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");setSortDir("desc");}}>{label}</button>)}</div>
+            <div className="workbench-views" aria-label="Сохранённые виды">{[["calls","Сегодня звонить"],["large","Крупные долги"],["promised","Обещали оплатить"]].map(([key,label])=><button key={key} className={`btn btn-sm ${workView===key?"primary":"ghost"}`} aria-pressed={workView===key} onClick={()=>chooseWorkView(key)}>{label}</button>)}</div>
             <div className="seg-toggle" aria-label="Вид списка"><button className={listMode==="cards"?"on":""} onClick={()=>setListMode("cards")}>Карточки</button><button className={listMode==="table"?"on":""} onClick={()=>setListMode("table")}>Таблица</button></div>
             {workView && <small className="workbench-hint">{workView==="large"?"Просрочка от 100 000 ₽, по убыванию остатка долга":workView==="promised"?"Незакрытые договоры с обещанием на сегодня или будущую дату":"Контакты и обещания на сегодня или раньше; просрочки без уведомления за 72 часа"}</small>}
             <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>
@@ -2121,7 +2170,17 @@ export default function App() {
         </main>
       )}
 
-      {tab === "capital" && (
+      {tab === "capital" && isPhone && (
+        <MobileCapital
+          capital={capital} investors={investors} withdrawals={withdrawals} investorProfits={investorProfits}
+          getAccrual={investorAccrual} purposes={WITHDRAWAL_PURPOSES}
+          report={<FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} getStats={contractStats} />}
+          onProfitGroup={setProfitGroupOpen} onAddInvestor={() => setAddingInvestor(true)} onEditInvestor={setEditingInvestor}
+          onRemoveInvestor={removeInvestor} onPayAccrual={payInvestorAccrual}
+          onAddWithdrawal={() => setAddingWithdrawal(true)} onRemoveWithdrawal={removeWithdrawal}
+        />
+      )}
+      {tab === "capital" && !isPhone && (
         <main className="wrap">
           <FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} getStats={contractStats} />
           <section className="hero">
@@ -2361,7 +2420,31 @@ export default function App() {
       {receivedOpen && <ReceivedDetail contracts={contracts} summary={received} view={receivedView} onClose={() => setReceivedOpen(false)} onOpenContract={(id) => { setReceivedOpen(false); setOpenId(id); }} />}
       {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
       {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
-      <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>
+      {!isPhone && <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>}
+      {isPhone && <MobileTabBar tab={tab} onTab={goTab} onAdd={() => setAdding(true)} onMore={() => setMoreOpen(true)} moreActive={moreOpen || ["capital", "directories"].includes(tab)} />}
+      {isPhone && moreOpen && <MobileMoreSheet
+        onClose={() => setMoreOpen(false)}
+        footer={`Версия ${APP_VERSION} · сборка ${fmtDate(`${BUILD_DATE}T00:00:00`)}`}
+        groups={[
+          { title: "Разделы", items: [
+            { key: "capital", icon: <moreIcons.Landmark size={19} />, label: "Капитал", hint: "Вкладчики, выплаты, прибыль", onClick: () => goTab("capital") },
+            !isDesktopApp && { key: "directories", icon: <moreIcons.Users size={19} />, label: "Справочники", hint: "Клиенты и товары", onClick: () => goTab("directories") },
+            { key: "history", icon: <moreIcons.History size={19} />, label: isDesktopApp ? "Данные" : "История", hint: "Журнал действий", onClick: () => setDataCenterOpen(true) },
+          ] },
+          { title: "Данные", items: [
+            { key: "import", icon: <moreIcons.Upload size={19} />, label: "Импорт из Excel", onClick: () => setImporting(true) },
+            { key: "export", icon: <moreIcons.Download size={19} />, label: "Экспорт в Excel", hint: "Скачать все договоры", onClick: exportExcel },
+            !isDesktopApp && cloudDrafts.length > 0 && { key: "drafts", icon: <moreIcons.FileText size={19} />, label: `Черновики · ${cloudDrafts.length}`, onClick: () => setDraftsOpen(true) },
+          ] },
+          { title: "Администрирование", items: [
+            onOpenTeam && { key: "team", icon: <moreIcons.UserCog size={19} />, label: "Операторы и назначения", onClick: onOpenTeam },
+            onOpenMacImport && { key: "mac", icon: <moreIcons.Laptop size={19} />, label: "Перенести копию с Mac", onClick: onOpenMacImport },
+          ] },
+          { title: "Аккаунт", items: [
+            { key: "logout", icon: <moreIcons.LogOut size={19} />, label: "Выйти", tone: "bad", onClick: logout },
+          ] },
+        ]}
+      />}
     </div>
   );
 }
@@ -2483,7 +2566,7 @@ function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
   const badges = useMemo(() => new Map(contracts.map((c) => [c.id, contractBadge(c)])), [contracts]);
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">Общая прибыль</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
           <ReportPeriodPicker id="profit-total-month" period={period} months={months} />
@@ -2518,7 +2601,7 @@ function ProfitTotalDetail({ contracts, onClose, onOpenContract }) {
 function SectionDetail({ title, rows, onClose, onOpenContract }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">{title}</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -2564,7 +2647,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
   );
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">{view === "profit" ? "Плановая и фактическая прибыль" : "Получено всего"}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
           <ReportPeriodPicker id="received-month" period={period} months={months} />
@@ -2614,7 +2697,7 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
 function ProfitGroupDetail({ group, onClose, onOpenContract }) {
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-detail-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd"><div className="sheet-name">{group.name}</div><button className="icon-btn" onClick={onClose} aria-label="Закрыть"><X size={18}/></button></div>
         <div className="sheet-body">
           <div className="received-totals"><div><span>Прибыль получена</span><b>{money(group.profitReceived)}</b></div><div><span>Прибыль ожидается</span><b>{money(group.profitExpected)}</b></div><div><span>К выплате</span><b>{money(group.profitToPay)}</b></div></div>
@@ -2671,7 +2754,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   const [editEventIndex,setEditEventIndex] = useState(0);
   const [editRecord,setEditRecord] = useState(null);
   const [payMode, setPayMode] = useState("new"); // "new" | "edit"
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(toIsoDate(new Date()));
   const [payAmount, setPayAmount] = useState(initialAction === "pay" && st.next ? String(st.next.remainingDue) : "");
   const [payComment, setPayComment] = useState("");
   const [payMethod,setPayMethod] = useState("");
@@ -2712,7 +2795,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
     setDeferringIdx(null);
     setPayingIdx(idx);
     setPayMode("new");
-    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayDate(toIsoDate(new Date()));
     setPayAmount(String(remainingDue));
     setPayComment("");
   };
@@ -3177,7 +3260,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
       (+source.totalPrice || 0) - (+source.downPayment || 0) + (+(source.markupAmount ?? source.markup) || 0))) : "0",
     monthlyPayment: source ? String(source.monthlyPayment || 0) : "0",
     termMonths: source ? String(source.termMonths || 1) : "6",
-    startDate: source?.startDate || new Date().toISOString().slice(0, 10),
+    startDate: source?.startDate || toIsoDate(new Date()),
     contractDate: source ? (source.contractDate || "") : toIsoDate(new Date()),
     investorId: source?.investorId || "",
     guarantorName: source?.guarantorName || "", guarantorPhone: source?.guarantorPhone || "",
@@ -3345,7 +3428,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
 
   return (
     <div className="overlay" onClick={closeForm}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-form-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">{editing ? "Изменить договор" : "Новый договор рассрочки"}</div>
           <button className="icon-btn" disabled={saving} onClick={closeForm}><X size={18} /></button>
@@ -3634,14 +3717,14 @@ function AddInvestorForm({ onClose, onSave, editing }) {
   const [f, setF] = useState({
     name: editing?.name || "", amount: editing ? String(editing.amount || "") : "",
     monthlyPayment: editing ? String(editing.monthlyPayment || "") : "",
-    accrualStartDate: editing?.accrualStartDate || new Date().toISOString().slice(0, 10),
+    accrualStartDate: editing?.accrualStartDate || toIsoDate(new Date()),
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const valid = f.name.trim() && +f.amount > 0;
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-form-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">{editing ? "Изменить вкладчика" : "Новый вкладчик"}</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
@@ -3677,7 +3760,7 @@ function AddInvestorForm({ onClose, onSave, editing }) {
 
 function AddWithdrawalForm({ investors, onClose, onSave }) {
   const [f, setF] = useState({
-    amount: "", date: new Date().toISOString().slice(0, 10),
+    amount: "", date: toIsoDate(new Date()),
     investorId: "", purpose: "owner", note: "",
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -3685,7 +3768,7 @@ function AddWithdrawalForm({ investors, onClose, onSave }) {
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet m-form-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-hd">
           <div className="sheet-name">Новый вывод средств</div>
           <button className="icon-btn" onClick={onClose}><X size={18} /></button>
