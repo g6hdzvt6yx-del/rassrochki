@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
 import {cashEntries,destinationLabel} from './cash';
 const money = n => Number(n).toLocaleString('ru-RU',{style:'currency',currency:'RUB'});
-export function PaymentDestination({method,card,onMethod,onCard,cards=[]}) {
- return <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><label>Способ оплаты <select aria-label="Способ оплаты" value={method} onChange={e=>onMethod(e.target.value)}><option value="">Выберите способ</option><option value="cash">Наличные</option><option value="bank">Безнал</option></select></label>{method === 'bank' && <label>Карта поступления <input aria-label="Карта поступления" list="cash-cards" value={card} onChange={e=>onCard(e.target.value)} placeholder="Банк · владелец · последние 4 цифры" maxLength={100}/><datalist id="cash-cards">{cards.map(c=><option key={c} value={c}/>)}</datalist></label>}</div>;
+export function PaymentDestination({method,card,onMethod,onCard,cards=[],emptyLabel='Выберите способ'}) {
+ return <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><label>Способ оплаты <select aria-label="Способ оплаты" value={method} onChange={e=>onMethod(e.target.value)}><option value="">{emptyLabel}</option><option value="cash">Наличные</option><option value="bank">Безнал</option></select></label>{method === 'bank' && <label>Карта поступления <input aria-label="Карта поступления" list="cash-cards" value={card} onChange={e=>onCard(e.target.value)} placeholder="Банк · владелец · последние 4 цифры" maxLength={100}/><datalist id="cash-cards">{cards.map(c=><option key={c} value={c}/>)}</datalist></label>}</div>;
 }
 export default function CashDesk({contracts,cards,onAddCard,onOpen}) {
  const [from,setFrom]=useState(''),[to,setTo]=useState(''),[filter,setFilter]=useState(''),[name,setName]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
