@@ -25,6 +25,13 @@ export function expectedPayments(contracts, getStats, from, to = from) {
     remaining: rows.reduce((sum, row) => sum + row.remaining, 0) };
 }
 
+// Доля наценки (прибыли) в каждом рубле рассрочки — так же, как в finance.splitReceived.
+export function profitShare(contract) {
+  const principal = Math.max(0, (+contract?.totalPrice || 0) - (+contract?.downPayment || 0));
+  const markup = Math.max(0, +contract?.markup || 0);
+  return principal + markup > 0 ? markup / (principal + markup) : 0;
+}
+
 // Кто должен был заплатить за период по графику — включая тех, кто уже оплатил.
 // Клиент считается «оплатившим», если все его платежи со сроком в периоде закрыты полностью.
 export function duePeriodSummary(contracts, getStats, from, to = from) {
@@ -35,6 +42,7 @@ export function duePeriodSummary(contracts, getStats, from, to = from) {
   contracts.forEach(contract => {
     let contractDue = 0, contractLeft = 0;
     const contractRows = [];
+    const share = profitShare(contract);
     getStats(contract).rows.forEach(payment => {
       if (!dateInPeriod(payment.dueDate, from, to)) return;
       const amount = Math.max(0, +payment.amountDue || 0);
@@ -46,7 +54,7 @@ export function duePeriodSummary(contracts, getStats, from, to = from) {
       contractRows.push({
         contractId: contract.id, clientName: contract.clientName || "", phone: contract.phone || "", item: contract.item || "",
         investorId: contract.investorId || "", paymentNo: payment.n, dueDate: dateKey(payment.dueDate),
-        amount, paid: amount - left, remaining: left, lastPaidDate: amount - left > 0 ? lastPaid : "",
+        amount, paid: amount - left, remaining: left, profitShare: share, lastPaidDate: amount - left > 0 ? lastPaid : "",
         state: left <= 0 ? "paid" : amount - left > 0 ? "partial" : "unpaid", overdue: left > 0 && payment.status === "overdue",
       });
     });
