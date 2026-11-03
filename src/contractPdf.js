@@ -19,7 +19,7 @@ export function createContractPdf(contract, stats, fontBase64) {
   doc.addFileToVFS('DejaVuSans.ttf', fontBase64);
   doc.addFont('DejaVuSans.ttf', 'Contract', 'normal');
   doc.setFont('Contract');
-  doc.setProperties({ title: `Договор рассрочки - ${contract.clientName || ''}`, creator: 'Рассрочки' });
+  doc.setProperties({ title: `Договор рассрочки - ${contract.clientName || ''}`, creator: 'Eppaz' });
   doc.setTextColor('#16332E');
   doc.setFontSize(20);
   doc.text('Договор рассрочки', 16, 22);

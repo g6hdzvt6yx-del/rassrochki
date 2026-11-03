@@ -1660,14 +1660,14 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       <style>{css}</style>
 
       {isPhone && <MobileTopBar
-        title={{ contracts: "Договоры", cash: "Касса", capital: "Капитал", directories: "Справочники" }[tab] || "Рассрочки"}
+        title={{ contracts: "Договоры", cash: "Касса", capital: "Капитал", directories: "Справочники" }[tab] || "Eppaz"}
         subtitle={tab === "contracts" ? `Всего договоров: ${contracts.length}` : weekdayLabel(toIsoDate(new Date()))}
       >{syncStatus}</MobileTopBar>}
       {!isPhone && <header className="hd">
         <div className="brand">
           <span className="mark"><Wallet size={18} /></span>
           <div>
-            <div className="bname">Рассрочки</div>
+            <div className="bname">Eppaz</div>
             <div className="btag">учёт договоров и платежей · v{APP_VERSION}</div>
           </div>
         </div>
@@ -2467,7 +2467,7 @@ function Login({ onLogin, busy, error }) {
       <div className="login-wrap">
         <form className="login-card" onSubmit={submit}>
           <div className="login-mark"><Wallet size={20} /></div>
-          <div className="login-title">Рассрочки</div>
+          <div className="login-title">Eppaz</div>
           <div className="login-sub">Войдите, чтобы продолжить</div>
           <Field label="Email">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoFocus />
