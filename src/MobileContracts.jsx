@@ -34,7 +34,7 @@ const markDate = (iso) => {
 };
 
 export default function MobileContracts({
-  total, list, groups, getStats, investors, counts, summary, f, marks, onMarksHistory,
+  total, list, groups, getStats, investors, counts, summary, periodPanel, f, marks, onMarksHistory,
   selection, onOpen, onPay, onRemind, onExport, onAdd,
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -93,6 +93,7 @@ export default function MobileContracts({
 
       {f.workView && <p className="m-hint">{VIEW_HINTS[f.workView]}</p>}
 
+      {periodPanel}
       <button type="button" className="m-summary" aria-expanded={summaryOpen} onClick={() => setSummaryOpen(!summaryOpen)}>
         <span><b>{list.length}</b> {plural(list.length, "договор", "договора", "договоров")}</span>
         <span>Остаток <b>{money(summary.remaining)}</b></span>
