@@ -36,7 +36,7 @@ const PERIODS = [["today", "Сегодня"], ["tomorrow", "Завтра"], ["we
 
 /* ---------------- шапка ---------------- */
 
-export function MobileTopBar({ title = "Рассрочки", subtitle, children }) {
+export function MobileTopBar({ title = "Eppaz", subtitle, children }) {
   return (
     <header className="m-topbar">
       <span className="m-brand" aria-hidden="true">Р</span>
