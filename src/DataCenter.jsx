@@ -14,7 +14,7 @@ const ACTION_LABELS = {
   create_contact: "Контакт с клиентом", delete_contact: "Удаление записи о контакте",
   attach_receipt: "Прикрепление чека", remove_receipt: "Удаление чека", restore_receipt: "Восстановление чека", permanent_delete_receipt: "Удаление чека навсегда",
   move_to_trash: "Перемещение в корзину", restore: "Восстановление",
-  permanent_delete: "Удаление навсегда", import: "Импорт", export_excel: "Экспорт Excel", backup: "Резервная копия",
+  permanent_delete: "Удаление навсегда", import: "Импорт", export_excel: "Экспорт Excel", export_pdf: "Справка PDF", backup: "Резервная копия",
   export_backup: "Экспорт резервной копии", excel_backup: "Ежедневная Excel-копия",
   stage_restore: "Подготовка восстановления копии", restore_backup: "Восстановление копии", delete_old_drafts: "Удаление старых черновиков",
 };

@@ -650,6 +650,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
   const [periodTo, setPeriodTo] = useState(() => monthBounds(toIsoDate(new Date()).slice(0, 7))[1]);
   const [periodList, setPeriodList] = useState(""); // "" — список не фильтруется; all / paid / unpaid
   const [duePeriodExporting, setDuePeriodExporting] = useState(false);
+  const [duePeriodReporting, setDuePeriodReporting] = useState(false);
   const [duePeriodFrom, duePeriodTo] = periodMode === "month" ? monthBounds(periodMonth) : [periodFrom, periodTo];
   const duePeriodError = !duePeriodFrom || !duePeriodTo ? "Укажите даты периода." : duePeriodFrom > duePeriodTo ? "Начало периода не может быть позже окончания." : "";
   const duePeriodLabel = periodMode === "month" ? monthTitle(periodMonth) : `${fmtDate(duePeriodFrom)} — ${fmtDate(duePeriodTo)}`;
@@ -1688,6 +1689,45 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       setDuePeriodExporting(false);
     }
   };
+  // Справка для руководителя: всегда по всем клиентам периода, без учёта выбранной плитки
+  const downloadDuePeriodReport = async () => {
+    if (duePeriodReporting) return;
+    setDuePeriodReporting(true);
+    try {
+      const { duePeriodReportData, createDuePeriodReportPdf, duePeriodReportFileName } = await import("./duePeriodReport");
+      const filename = duePeriodReportFileName(duePeriodFrom, duePeriodTo);
+      let path;
+      if (isDesktopApp) {
+        const { save } = await import("@tauri-apps/plugin-dialog");
+        path = await save({ title: "Сохранить справку PDF", defaultPath: filename, filters: [{ name: "PDF", extensions: ["pdf"] }] });
+        if (!path) return;
+        if (!path.toLowerCase().endsWith(".pdf")) path += ".pdf";
+      }
+      const { default: fontUrl } = await import("./assets/DejaVuSans.ttf?url");
+      const response = await fetch(fontUrl);
+      if (!response.ok) throw new Error("Не удалось загрузить шрифт PDF");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      const report = duePeriodReportData(duePeriod);
+      const pdf = createDuePeriodReportPdf(report, { periodLabel: duePeriodLabel, from: duePeriodFrom, to: duePeriodTo, formatPhone: fmtPhone, fontBase64: btoa(binary) });
+      if (isDesktopApp) {
+        const { writeFile } = await import("@tauri-apps/plugin-fs");
+        await writeFile(path, pdf);
+        showAppMessage(`Справка сохранена: ${path}`, "success");
+      } else {
+        const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+        const link = document.createElement("a"); link.href = url; link.download = filename;
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+      await localData.log({ actionType: "export_pdf", entityType: "export", entityName: filename, after: { from: duePeriodFrom, to: duePeriodTo, clients: report.due.clients } });
+    } catch (error) {
+      showAppMessage(`Не удалось сформировать справку: ${error?.message || error}`);
+    } finally {
+      setDuePeriodReporting(false);
+    }
+  };
   // Блок «Должны были оплатить за период» — общий для широкого экрана и телефона
   const duePeriodPanel = (
   <section className={`panel due-period ${periodOpen ? "open" : ""}`} aria-label="Должны были оплатить за период">
@@ -1725,7 +1765,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
               <small><strong className="num">{sum}</strong> {sumLabel}</small>
             </button>))}
         </div>
-        <small className="due-period-note">Платежей по графику: {duePeriod.payments}. Нажмите на плитку — список ниже покажет только эти договоры, а Excel скачается по ним. Оплата учитывается на сегодня, даже если внесена позже срока.</small>
+        <small className="due-period-note">Платежей по графику: {duePeriod.payments}. Нажмите на плитку — список ниже покажет только эти договоры, а Excel скачается по ним. Справка для руководителя всегда по всем клиентам периода. Оплата учитывается на сегодня, даже если внесена позже срока.</small>
       </>}
     </div>}
     {(periodOpen || periodList) && !duePeriodError && <div className={`due-period-actions ${periodList ? "filtered" : ""}`}>
@@ -1736,6 +1776,10 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
         <button type="button" className="btn primary btn-sm" disabled={!duePeriodExportCount || duePeriodExporting} onClick={exportDuePeriod}
           title={`Скачать Excel: ${DUE_FILTER_NAMES[periodList || "all"]}, ${duePeriodLabel}`}>
           <Download size={14} /> {duePeriodExporting ? "Готовлю файл…" : `Скачать Excel · ${duePeriodExportCount} ${duePeriodExportCount % 10 === 1 && duePeriodExportCount % 100 !== 11 ? "платёж" : [2, 3, 4].includes(duePeriodExportCount % 10) && ![12, 13, 14].includes(duePeriodExportCount % 100) ? "платежа" : "платежей"}`}
+        </button>
+        <button type="button" className="btn ghost btn-sm due-report-btn" disabled={!duePeriod.clients || duePeriodReporting} onClick={downloadDuePeriodReport}
+          title={`Справка для руководителя за ${duePeriodLabel}: должны оплатить, оплатили, остаток — по всем клиентам периода`}>
+          <FileText size={14} /> {duePeriodReporting ? "Готовлю справку…" : "Справка для руководителя (PDF)"}
         </button>
         {periodList && <button type="button" className="btn ghost btn-sm" onClick={() => setPeriodList("")}><X size={14} /> Сбросить фильтр</button>}
       </div>
