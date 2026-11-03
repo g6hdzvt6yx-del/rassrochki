@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   Search, X, SlidersHorizontal, CheckSquare, Phone, MessageCircle, Check, Users,
-  AlertTriangle, CalendarDays, CheckCircle2, History, ScrollText, Download, RotateCcw, ChevronRight,
+  AlertTriangle, CalendarDays, CheckCircle2, History, ScrollText, Download, RotateCcw, ChevronRight, Table2, Wallet,
 } from "lucide-react";
 import { MSheet, MRibbon, mMoney as money, mPlural as plural, mDayLabel as dayLabel, mIsoDay as isoDay } from "./MobileShell";
 import { waReminderLink } from "./whatsapp";
@@ -27,6 +27,11 @@ const CONTACT_OPTIONS = [["all", "Все"], ["has", "Есть история"], 
 const NOTIFY_OPTIONS = [["all", "Все уведомления"], ["notified", "Текущий платёж уведомлён"], ["unnotified", "Текущий платёж не уведомлён"], ["stale", "Не уведомлены за 3 дня"]];
 const DEFERRAL_OPTIONS = [["all", "Все"], ["active", "Действует"], ["expired", "Срок прошёл"], ["none", "Без отсрочки"]];
 
+// Вид списка на телефоне: «cards» — карточки, «table» — компактная таблица. Запоминается в этом браузере.
+const VIEW_KEY = "eppaz.mobileContractsView";
+const readView = () => { try { return localStorage.getItem(VIEW_KEY) === "table" ? "table" : "cards"; } catch { return "cards"; } };
+const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* браузер без хранилища — вид просто не запомнится */ } };
+
 const markDate = (iso) => {
   if (!iso) return "";
   const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00` : iso);
@@ -35,8 +40,11 @@ const markDate = (iso) => {
 
 export default function MobileContracts({
   total, list, groups, getStats, investors, counts, summary, periodPanel, f, marks, onMarksHistory,
-  selection, onOpen, onPay, onRemind, onExport, onAdd,
+  selection, onOpen, onPay, onRemind, onExport, onAdd, initialView,
 }) {
+  const [view, setView] = useState(() => initialView || readView());
+  const isTable = view === "table";
+  const toggleView = () => { const next = isTable ? "cards" : "table"; setView(next); saveView(next); };
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -70,6 +78,10 @@ export default function MobileContracts({
           </label>
           <button type="button" className={`m-tool-btn ${extraFilters ? "on" : ""}`} aria-label={`Сортировка и фильтры${extraFilters ? `, включено: ${extraFilters}` : ""}`} onClick={() => setFiltersOpen(true)}>
             <SlidersHorizontal size={20} />{extraFilters > 0 && <span className="m-dot-count">{extraFilters}</span>}
+          </button>
+          <button type="button" className={`m-tool-btn ${isTable ? "on" : ""}`} aria-pressed={isTable}
+            aria-label={isTable ? "Табличный вид включён. Показать карточками" : "Показать таблицей"} title={isTable ? "Показать карточками" : "Показать таблицей"} onClick={toggleView}>
+            <Table2 size={20} />
           </button>
           <button type="button" className={`m-tool-btn ${selecting ? "on" : ""}`} aria-pressed={selecting} aria-label={selecting ? "Закончить выбор" : "Выбрать договоры для напоминания"} onClick={() => (selecting ? stopSelecting() : setSelecting(true))}>
             {selecting ? <X size={20} /> : <CheckSquare size={20} />}
@@ -116,6 +128,13 @@ export default function MobileContracts({
           <p>Измените поиск или фильтры.</p>
           {f.anyActive && <button type="button" className="m-btn" onClick={f.reset}><RotateCcw size={16} /> Сбросить фильтры</button>}
         </div>
+      ) : isTable ? (
+        <ContractRows list={list} getStats={getStats} selecting={selecting} selectedIds={selection.selectedIds}
+          onToggle={selection.toggleSelected} onOpen={onOpen} onPay={onPay} sortBy={f.sortBy} sortDir={f.sortDir}
+          onSort={(key) => {
+            if (f.sortBy === key && DIRECTIONAL_SORTS.has(key)) f.setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+            else { f.setSortBy(key); f.setSortDir(key === "name" ? "asc" : "desc"); }
+          }} />
       ) : groups.map((g) => {
         const cards = g.list.map((c) => (
           <ContractCard key={c.id} contract={c} stats={getStats(c)} investors={investors} marks={marks[c.id]}
@@ -217,6 +236,75 @@ function ChipField({ label, options, value, onChange }) {
           <button type="button" key={key} className={`m-chip ${value === key ? "on" : ""}`} aria-pressed={value === key} onClick={() => onChange(key)}>{text}</button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SortTh({ id, label, title, sortBy, sortDir, onSort, className = "" }) {
+  const active = sortBy === id;
+  const mark = active ? (DIRECTIONAL_SORTS.has(id) ? (sortDir === "asc" ? "↑" : "↓") : "↓") : "";
+  return (
+    <th className={className} aria-sort={active ? (DIRECTIONAL_SORTS.has(id) && sortDir === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => onSort(id)} title={title}>{label}{mark && <span aria-hidden="true">{mark}</span>}</button>
+    </th>
+  );
+}
+
+// Табличный вид: одна строка на договор — клиент, состояние (просрочка или ближайший платёж), остаток.
+// Нажатие на строку открывает договор (в режиме выбора — отмечает его), кнопка справа — «Принять платёж».
+function ContractRows({ list, getStats, selecting, selectedIds, onToggle, onOpen, onPay, sortBy, sortDir, onSort }) {
+  const today = isoDay(new Date());
+  const sort = { sortBy, sortDir, onSort };
+  return (
+    <div className="m-ctable-wrap">
+      <table className={`m-ctable ${selecting ? "selecting" : ""}`}>
+        <thead>
+          <tr>
+            <SortTh id="name" label="Клиент" title="Сортировать по имени" className="m-ct-who" {...sort} />
+            <SortTh id="overdue" label="Статус" title="Сортировать по просрочке" className="m-ct-state" {...sort} />
+            <SortTh id="remaining" label="Остаток" title="Сортировать по остатку" className="m-ct-sum" {...sort} />
+            {!selecting && <th className="m-ct-act"><span className="sr-only">Платёж</span></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((c) => {
+            const st = getStats(c);
+            const selected = selectedIds.has(c.id);
+            const overdue = st.overdueSum > 0;
+            const nextDay = st.next ? isoDay(st.next.dueDate) : "";
+            const main = () => (selecting ? onToggle(c.id) : onOpen(c.id));
+            return (
+              <tr key={c.id} className={`${overdue ? "overdue" : ""} ${st.done ? "done" : ""} ${selected ? "selected" : ""}`} onClick={main}>
+                <td className="m-ct-who">
+                  <button type="button" className="m-ct-open" onClick={(e) => { e.stopPropagation(); main(); }}
+                    aria-pressed={selecting ? selected : undefined} aria-label={selecting ? `${selected ? "Убрать из выбора" : "Выбрать"}: ${c.clientName}` : `Открыть договор: ${c.clientName}`}>
+                    {selecting && <span className={`m-check ${selected ? "on" : ""}`} aria-hidden="true">{selected && <Check size={14} />}</span>}
+                    <span className="m-ct-name"><b>{c.clientName}</b><small>{c.item || "Без товара"}</small></span>
+                  </button>
+                </td>
+                <td className="m-ct-state">
+                  {overdue ? (
+                    <span className="bad"><b>{daysLabel(overdueDays(st.rows))}</b><small>{money(st.overdueSum)}</small></span>
+                  ) : st.done ? (
+                    <span className="ok"><b>Закрыт</b></span>
+                  ) : st.next ? (
+                    <span className={nextDay === today ? "warn" : ""}><b>{nextDay === today ? "Сегодня" : markDate(nextDay)}</b><small>{money(st.next.remainingDue)}</small></span>
+                  ) : <span><b>—</b></span>}
+                </td>
+                <td className="m-ct-sum">{money(st.remaining)}</td>
+                {!selecting && (
+                  <td className="m-ct-act">
+                    {!st.done && st.next && (
+                      <button type="button" className="m-ct-pay" aria-label={`Принять платёж: ${c.clientName}`} title="Принять платёж"
+                        onClick={(e) => { e.stopPropagation(); onPay(c.id); }}><Wallet size={17} /></button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
