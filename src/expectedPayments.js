@@ -24,3 +24,45 @@ export function expectedPayments(contracts, getStats, from, to = from) {
   return { rows, clients: new Set(rows.map(row => row.clientName.trim().toLocaleLowerCase("ru"))).size,
     remaining: rows.reduce((sum, row) => sum + row.remaining, 0) };
 }
+
+// Кто должен был заплатить за период по графику — включая тех, кто уже оплатил.
+// Клиент считается «оплатившим», если все его платежи со сроком в периоде закрыты полностью.
+export function duePeriodSummary(contracts, getStats, from, to = from) {
+  const clients = new Map();
+  const contractIds = { all: new Set(), paid: new Set(), unpaid: new Set() };
+  let scheduled = 0, paid = 0, payments = 0;
+  contracts.forEach(contract => {
+    let contractDue = 0, contractLeft = 0;
+    getStats(contract).rows.forEach(payment => {
+      if (!dateInPeriod(payment.dueDate, from, to)) return;
+      const amount = Math.max(0, +payment.amountDue || 0);
+      const left = Math.max(0, Math.min(amount, +payment.remainingDue || 0));
+      payments += 1; scheduled += amount; paid += amount - left;
+      contractDue += 1; contractLeft += left;
+    });
+    if (!contractDue) return;
+    const key = String(contract.clientName || "").trim().toLocaleLowerCase("ru") || `#${contract.id}`;
+    clients.set(key, (clients.get(key) || 0) + contractLeft);
+    contractIds.all.add(contract.id);
+    contractIds[contractLeft > 0 ? "unpaid" : "paid"].add(contract.id);
+  });
+  const left = [...clients.values()];
+  return {
+    clients: left.length, paidClients: left.filter(sum => sum <= 0).length, unpaidClients: left.filter(sum => sum > 0).length,
+    payments, scheduled, paid, remaining: scheduled - paid, contractIds,
+  };
+}
+
+// Границы календарного месяца "YYYY-MM" → ["YYYY-MM-01", "YYYY-MM-последний день"].
+export function monthBounds(month) {
+  if (!/^\d{4}-\d{2}$/.test(month || "")) return ["", ""];
+  const [year, m] = month.split("-").map(Number);
+  const last = new Date(year, m, 0).getDate();
+  return [`${month}-01`, `${month}-${String(last).padStart(2, "0")}`];
+}
+
+export function shiftMonth(month, delta) {
+  const [year, m] = String(month).split("-").map(Number);
+  const date = new Date(year, m - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
