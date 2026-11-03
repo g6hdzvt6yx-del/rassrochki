@@ -29,27 +29,39 @@ export function expectedPayments(contracts, getStats, from, to = from) {
 // Клиент считается «оплатившим», если все его платежи со сроком в периоде закрыты полностью.
 export function duePeriodSummary(contracts, getStats, from, to = from) {
   const clients = new Map();
+  const rows = [];
   const contractIds = { all: new Set(), paid: new Set(), unpaid: new Set() };
   let scheduled = 0, paid = 0, payments = 0;
   contracts.forEach(contract => {
     let contractDue = 0, contractLeft = 0;
+    const contractRows = [];
     getStats(contract).rows.forEach(payment => {
       if (!dateInPeriod(payment.dueDate, from, to)) return;
       const amount = Math.max(0, +payment.amountDue || 0);
       const left = Math.max(0, Math.min(amount, +payment.remainingDue || 0));
       payments += 1; scheduled += amount; paid += amount - left;
       contractDue += 1; contractLeft += left;
+      const events = Array.isArray(payment.paymentEvents) ? payment.paymentEvents : [];
+      const lastPaid = events.map(e => String(e?.date || "").slice(0, 10)).filter(Boolean).sort().pop() || (payment.paidDate ? String(payment.paidDate).slice(0, 10) : "");
+      contractRows.push({
+        contractId: contract.id, clientName: contract.clientName || "", phone: contract.phone || "", item: contract.item || "",
+        investorId: contract.investorId || "", paymentNo: payment.n, dueDate: dateKey(payment.dueDate),
+        amount, paid: amount - left, remaining: left, lastPaidDate: amount - left > 0 ? lastPaid : "",
+        state: left <= 0 ? "paid" : amount - left > 0 ? "partial" : "unpaid", overdue: left > 0 && payment.status === "overdue",
+      });
     });
     if (!contractDue) return;
     const key = String(contract.clientName || "").trim().toLocaleLowerCase("ru") || `#${contract.id}`;
     clients.set(key, (clients.get(key) || 0) + contractLeft);
     contractIds.all.add(contract.id);
     contractIds[contractLeft > 0 ? "unpaid" : "paid"].add(contract.id);
+    rows.push(...contractRows);
   });
+  rows.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.clientName.localeCompare(b.clientName, "ru") || a.paymentNo - b.paymentNo);
   const left = [...clients.values()];
   return {
     clients: left.length, paidClients: left.filter(sum => sum <= 0).length, unpaidClients: left.filter(sum => sum > 0).length,
-    payments, scheduled, paid, remaining: scheduled - paid, contractIds,
+    payments, scheduled, paid, remaining: scheduled - paid, contractIds, rows,
   };
 }
 

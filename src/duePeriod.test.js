@@ -25,3 +25,31 @@ describe("кто должен был заплатить за период", () =
     expect(shiftMonth("2026-12", 1)).toBe("2027-01"); expect(shiftMonth("2026-01", -1)).toBe("2025-12");
   });
 });
+
+import * as XLSX from "xlsx";
+import { buildDuePeriodWorkbook, duePeriodExportRows, duePeriodFileName } from "./duePeriodExcel";
+describe("выгрузка в Excel за период", () => {
+  const [from, to] = monthBounds("2026-10");
+  const s = duePeriodSummary(contracts, c => c.stats, from, to);
+  it("строки по платежам с учётом выбранной плитки", () => {
+    expect(s.rows).toHaveLength(4);
+    expect(duePeriodExportRows(s, "unpaid").map(r => [r.contractId, r.remaining, r.state])).toEqual([["b", 200, "partial"]]);
+    expect(duePeriodExportRows(s, "paid")).toHaveLength(3);
+    expect(duePeriodExportRows(s, "")).toHaveLength(4);
+  });
+  it("файл: заголовок, таблица, итог и лист «Итоги»", () => {
+    const { wb, rows } = buildDuePeriodWorkbook(XLSX, { summary: s, list: "unpaid", periodLabel: "Октябрь 2026", from, to });
+    expect(rows).toBe(1);
+    expect(wb.SheetNames).toEqual(["Платежи за период", "Итоги"]);
+    const data = XLSX.utils.sheet_to_json(wb.Sheets["Платежи за период"], { header: 1 });
+    expect(data[0][0]).toContain("Не оплатили или частично · Октябрь 2026 (01.10.2026 — 31.10.2026)");
+    expect(data[3].slice(1, 2)).toEqual(["иван "]);
+    expect(data[3].slice(5, 11)).toEqual(["10.10.2026", 500, 300, 200, "", "Оплачен частично"]);
+    expect(data[5].slice(6, 9)).toEqual([500, 300, 200]);
+  });
+  it("понятное имя файла", () => {
+    expect(duePeriodFileName("2026-10-01", "2026-10-31", "unpaid")).toBe("dolzhny_oplatit_2026-10_ne_oplatili.xlsx");
+    expect(duePeriodFileName("2026-02-01", "2026-02-28", "paid")).toBe("dolzhny_oplatit_2026-02_oplatili.xlsx");
+    expect(duePeriodFileName("2026-10-01", "2026-10-15")).toBe("dolzhny_oplatit_2026-10-01_2026-10-15.xlsx");
+  });
+});

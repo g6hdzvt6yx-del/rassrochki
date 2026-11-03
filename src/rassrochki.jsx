@@ -3,6 +3,7 @@ import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contrac
 import CashDesk, { PaymentDestination } from "./CashDesk";
 import { cashCards, paymentDestination } from "./cash";
 import { expectedPayments, dateInPeriod, duePeriodSummary, monthBounds, shiftMonth } from "./expectedPayments";
+import { buildDuePeriodWorkbook, duePeriodExportRows, duePeriodFileName } from "./duePeriodExcel";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
 import { saveDirectoryClient } from "./directories";
@@ -96,6 +97,8 @@ const toIsoDate = (date) => {
 
 const MONTH_TITLES = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const monthTitle = (month) => { const [y, m] = String(month).split("-").map(Number); return MONTH_TITLES[m - 1] ? `${MONTH_TITLES[m - 1]} ${y}` : month; };
+
+const DUE_FILTER_NAMES = { all: "должны были оплатить", paid: "оплатили полностью", unpaid: "не оплатили или частично" };
 
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
@@ -646,6 +649,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
   const [periodFrom, setPeriodFrom] = useState(() => monthBounds(toIsoDate(new Date()).slice(0, 7))[0]);
   const [periodTo, setPeriodTo] = useState(() => monthBounds(toIsoDate(new Date()).slice(0, 7))[1]);
   const [periodList, setPeriodList] = useState(""); // "" — список не фильтруется; all / paid / unpaid
+  const [duePeriodExporting, setDuePeriodExporting] = useState(false);
   const [duePeriodFrom, duePeriodTo] = periodMode === "month" ? monthBounds(periodMonth) : [periodFrom, periodTo];
   const duePeriodError = !duePeriodFrom || !duePeriodTo ? "Укажите даты периода." : duePeriodFrom > duePeriodTo ? "Начало периода не может быть позже окончания." : "";
   const duePeriodLabel = periodMode === "month" ? monthTitle(periodMonth) : `${fmtDate(duePeriodFrom)} — ${fmtDate(duePeriodTo)}`;
@@ -1667,6 +1671,23 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
     setWorkView(workView===key?"":key);setSearch("");setStatusFilter("all");setInvestorFilter("all");setContactFilter("all");setNotificationFilter("all");setDeferralFilter("all");setMarkStatuses([]);setMarkAuthor("all");setSortBy(key==="large"?"remaining":"dueDate");setSortDir("desc");
   };
   const contractFiltersActive = Boolean(periodList || workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created");
+  const duePeriodExportCount = duePeriodExportRows(duePeriod, periodList).length;
+  const exportDuePeriod = async () => {
+    if (duePeriodExporting) return;
+    setDuePeriodExporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const investorName = (id) => id ? investors.find((item) => item.id === id)?.name || "Не найден" : "Общий пул";
+      const { wb, rows } = buildDuePeriodWorkbook(XLSX, { summary: duePeriod, list: periodList, periodLabel: duePeriodLabel, from: duePeriodFrom, to: duePeriodTo, investorName });
+      const fileName = duePeriodFileName(duePeriodFrom, duePeriodTo, periodList);
+      XLSX.writeFile(wb, fileName);
+      await localData.log({ actionType: "export_excel", entityType: "export", entityName: fileName, after: { from: duePeriodFrom, to: duePeriodTo, list: periodList || "all", payments: rows } });
+    } catch (error) {
+      setAppMessage({ tone: "error", message: `Не удалось скачать Excel: ${error?.message || error}` });
+    } finally {
+      setDuePeriodExporting(false);
+    }
+  };
   // Блок «Должны были оплатить за период» — общий для широкого экрана и телефона
   const duePeriodPanel = (
   <section className={`panel due-period ${periodOpen ? "open" : ""}`} aria-label="Должны были оплатить за период">
@@ -1704,12 +1725,20 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
               <small><strong className="num">{sum}</strong> {sumLabel}</small>
             </button>))}
         </div>
-        <small className="due-period-note">Платежей по графику: {duePeriod.payments}. Нажмите на плитку — список ниже покажет только эти договоры. Оплата учитывается на сегодня, даже если внесена позже срока.</small>
+        <small className="due-period-note">Платежей по графику: {duePeriod.payments}. Нажмите на плитку — список ниже покажет только эти договоры, а Excel скачается по ним. Оплата учитывается на сегодня, даже если внесена позже срока.</small>
       </>}
     </div>}
-    {periodList && <div className="due-period-active">
-      <span>Список: {periodList === "all" ? "должны были оплатить" : periodList === "paid" ? "оплатили полностью" : "не оплатили"} · {duePeriodLabel}</span>
-      <button type="button" className="btn ghost btn-sm" onClick={() => setPeriodList("")}><X size={13} /> Показать все</button>
+    {(periodOpen || periodList) && !duePeriodError && <div className={`due-period-actions ${periodList ? "filtered" : ""}`}>
+      <span className="due-period-filter">{periodList
+        ? <>Фильтр: <b>{DUE_FILTER_NAMES[periodList]}</b> · {duePeriodLabel} · в списке {duePeriod.contractIds[periodList].size} дог.</>
+        : <>Фильтр не выбран — нажмите на плитку, чтобы оставить в списке нужных клиентов</>}</span>
+      <div className="due-period-buttons">
+        <button type="button" className="btn primary btn-sm" disabled={!duePeriodExportCount || duePeriodExporting} onClick={exportDuePeriod}
+          title={`Скачать Excel: ${DUE_FILTER_NAMES[periodList || "all"]}, ${duePeriodLabel}`}>
+          <Download size={14} /> {duePeriodExporting ? "Готовлю файл…" : `Скачать Excel · ${duePeriodExportCount} ${duePeriodExportCount % 10 === 1 && duePeriodExportCount % 100 !== 11 ? "платёж" : [2, 3, 4].includes(duePeriodExportCount % 10) && ![12, 13, 14].includes(duePeriodExportCount % 100) ? "платежа" : "платежей"}`}
+        </button>
+        {periodList && <button type="button" className="btn ghost btn-sm" onClick={() => setPeriodList("")}><X size={14} /> Сбросить фильтр</button>}
+      </div>
     </div>}
   </section>
   );
@@ -4180,8 +4209,10 @@ body:has(.dashboard-wrap){background:#0f172a}
 .due-period-tile.tone-paid b{color:var(--emerald)}.due-period-tile.tone-unpaid b{color:var(--clay)}
 .due-period-tile.on{border-color:var(--brass);box-shadow:0 0 0 2px var(--brass) inset}
 .due-period-note{display:block;margin-top:10px;font-size:11px;color:var(--ink-soft)}
-.due-period-active{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--brass)}
-@media(max-width:560px){.due-period-brief{flex-basis:100%;text-align:left;order:3}.due-period-tiles{grid-template-columns:1fr}.due-period-tile{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:10px}.due-period-tile span{flex-basis:100%}.due-period-month{flex:1}.due-period-month select{flex:1;min-width:0;font-size:16px}.due-period-controls{flex-direction:column;align-items:stretch}}
+.due-period-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft)}
+.due-period-actions.filtered{background:color-mix(in srgb,var(--brass) 10%,transparent);color:var(--ink)}.due-period-actions.filtered b{color:var(--brass)}
+.due-period-buttons{display:flex;gap:8px;flex-wrap:wrap}.due-period-buttons .btn{display:inline-flex;align-items:center;gap:6px;min-height:36px}
+@media(max-width:560px){.due-period-brief{flex-basis:100%;text-align:left;order:3}.due-period-tiles{grid-template-columns:1fr}.due-period-tile{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:10px}.due-period-tile span{flex-basis:100%}.due-period-month{flex:1}.due-period-month select{flex:1;min-width:0;font-size:16px}.due-period-controls{flex-direction:column;align-items:stretch}.due-period-actions{padding:12px}.due-period-buttons{width:100%;flex-direction:column}.due-period-buttons .btn{width:100%;justify-content:center;min-height:44px}}
 .daily-total-debt strong{color:var(--ink)}.daily-overdue-debt,.daily-overdue-debt strong{color:var(--clay)}
 .monthly-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
 .monthly-col{padding:14px 18px}
