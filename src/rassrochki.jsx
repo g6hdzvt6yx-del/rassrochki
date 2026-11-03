@@ -2,7 +2,7 @@ import ContractTable from "./ContractTable";
 import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contractWorkbench";
 import CashDesk, { PaymentDestination } from "./CashDesk";
 import { cashCards, paymentDestination } from "./cash";
-import { expectedPayments, dateInPeriod } from "./expectedPayments";
+import { expectedPayments, dateInPeriod, duePeriodSummary, monthBounds, shiftMonth } from "./expectedPayments";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
 import { saveDirectoryClient } from "./directories";
@@ -13,7 +13,7 @@ import {
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
   Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
-  Database, RotateCcw, History, ClipboardList,
+  Database, RotateCcw, History, ClipboardList, ChevronRight,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
@@ -89,6 +89,9 @@ const toIsoDate = (date) => {
   const d = new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+
+const MONTH_TITLES = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const monthTitle = (month) => { const [y, m] = String(month).split("-").map(Number); return MONTH_TITLES[m - 1] ? `${MONTH_TITLES[m - 1]} ${y}` : month; };
 
 const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
 
@@ -629,6 +632,16 @@ export default function App() {
   const [dailyRange, setDailyRange] = useState(false);
   const [dailyTo, setDailyTo] = useState(() => toIsoDate(new Date()));
   const dailyEnd = dailyRange ? dailyTo : dailyDate;
+  // «Должны были оплатить за период» во вкладке «Договоры»: месяц или произвольные даты
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [periodMode, setPeriodMode] = useState("month");
+  const [periodMonth, setPeriodMonth] = useState(() => toIsoDate(new Date()).slice(0, 7));
+  const [periodFrom, setPeriodFrom] = useState(() => monthBounds(toIsoDate(new Date()).slice(0, 7))[0]);
+  const [periodTo, setPeriodTo] = useState(() => monthBounds(toIsoDate(new Date()).slice(0, 7))[1]);
+  const [periodList, setPeriodList] = useState(""); // "" — список не фильтруется; all / paid / unpaid
+  const [duePeriodFrom, duePeriodTo] = periodMode === "month" ? monthBounds(periodMonth) : [periodFrom, periodTo];
+  const duePeriodError = !duePeriodFrom || !duePeriodTo ? "Укажите даты периода." : duePeriodFrom > duePeriodTo ? "Начало периода не может быть позже окончания." : "";
+  const duePeriodLabel = periodMode === "month" ? monthTitle(periodMonth) : `${fmtDate(duePeriodFrom)} — ${fmtDate(duePeriodTo)}`;
   const dailyError = !dailyDate || !dailyEnd ? "Укажите даты периода." : dailyDate > dailyEnd ? "Начало периода не может быть позже окончания." : "";
   const [showAllUpcoming, setShowAllUpcoming] = useState(false);
   const [appMessage, setAppMessage] = useState(null);
@@ -806,6 +819,16 @@ export default function App() {
 
   const received = useMemo(() => receivedSummary(contracts, contractStats), [contracts]);
   const dailyPayments = useMemo(() => expectedPayments(contracts, contractStats, dailyDate, dailyEnd), [contracts, dailyDate, dailyEnd]);
+  const duePeriod = useMemo(() => duePeriodSummary(contracts, contractStats, duePeriodFrom, duePeriodTo), [contracts, duePeriodFrom, duePeriodTo]);
+  // месяцы для выбора: от самого раннего до самого позднего срока платежа по графику
+  const periodMonths = useMemo(() => {
+    const keys = new Set([toIsoDate(new Date()).slice(0, 7), periodMonth]);
+    contracts.forEach((c) => contractStats(c).rows.forEach((r) => { if (r.dueDate instanceof Date && !Number.isNaN(r.dueDate.getTime())) keys.add(toIsoDate(r.dueDate).slice(0, 7)); }));
+    const sorted = [...keys].sort();
+    const list = [];
+    for (let m = sorted[0]; m <= sorted[sorted.length - 1] && list.length < 600; m = shiftMonth(m, 1)) list.push(m);
+    return list.reverse();
+  }, [contracts, periodMonth]);
   const dailyContacts = useMemo(() => {
     const rows = [];
     contracts.forEach((contract) => {
@@ -1440,6 +1463,7 @@ export default function App() {
   const markFilterActive = markStatuses.length > 0 || markAuthor !== "all";
 
   const matchesContactFilters = (contract) => {
+    if (periodList && !duePeriod.contractIds[periodList]?.has(contract.id)) return false;
     if (!matchesMarkFilter(contractMarks[contract.id], { statuses: markStatuses, author: markAuthor })) return false;
     const contacts = clientContacts(contracts, contract, operatorLogs);
     if (!matchesWorkView(workView, contractStats(contract), contacts, contract.payments)) return false;
@@ -1475,7 +1499,7 @@ export default function App() {
       result[status] += 1;
     });
     return result;
-  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, investors, workView, operatorLogs, contractMarks]);
+  }, [contracts, search, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, investors, workView, operatorLogs, contractMarks, periodList, duePeriod]);
 
   const filteredContracts = useMemo(() => {
     const list = contracts.filter((c) => {
@@ -1491,7 +1515,7 @@ export default function App() {
 
     // "created" — без пересортировки: список уже идёт по дате создания (новые сверху)
     return sortContracts(list, sortBy, sortDir, contractStats, contractMarks);
-  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, sortBy, sortDir, investors, workView, operatorLogs, contractMarks]);
+  }, [contracts, search, statusFilter, investorFilter, contactFilter, notificationFilter, deferralFilter, markStatuses, markAuthor, sortBy, sortDir, investors, workView, operatorLogs, contractMarks, periodList, duePeriod]);
   // Клик по заголовку столбца: первый — по убыванию, повторный — меняет направление.
   const sortByColumn = (key) => {
     if (sortBy === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
@@ -1930,8 +1954,8 @@ export default function App() {
             <button className="btn ghost btn-sm export-filtered" disabled={!filteredContracts.length} onClick={exportFilteredContracts}>
               <Download size={14} /> Экспорт списка ({filteredContracts.length})
             </button>
-            {(workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
-              setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
+            {(periodList || workView || search || statusFilter !== "all" || investorFilter !== "all" || contactFilter !== "all" || notificationFilter !== "all" || deferralFilter !== "all" || markFilterActive || sortBy !== "created") && <button className="btn ghost btn-sm" onClick={() => {
+              setPeriodList(""); setWorkView(""); setSearch(""); setStatusFilter("all"); setInvestorFilter("all"); setContactFilter("all"); setNotificationFilter("all"); setDeferralFilter("all"); setMarkStatuses([]); setMarkAuthor("all"); setSortBy("created"); setSortDir("desc");
             }}><RotateCcw size={14} /> Сбросить фильтры</button>}
           </div>
 
@@ -1942,6 +1966,49 @@ export default function App() {
             <label className="select-visible"><input type="checkbox" checked={filteredContracts.length>0 && visibleSelected.length===filteredContracts.length} onChange={e=>setSelectedIds(e.target.checked?new Set(filteredContracts.map(c=>c.id)):new Set())}/> Выбрать все в списке</label>
             {visibleSelected.length>0 && <><button className="btn primary btn-sm" disabled={!visibleSelected.some(reminderFor)} onClick={beginReminders}>Напомнить выбранным в WhatsApp ({visibleSelected.filter(reminderFor).length})</button><button className="btn ghost btn-sm" onClick={()=>setSelectedIds(new Set())}>Снять выбор ({visibleSelected.length})</button>{visibleSelected.filter(c=>!reminderFor(c)).length>0 && <small>Без номера или открытого платежа: {visibleSelected.filter(c=>!reminderFor(c)).length}</small>}</>}
           </div>
+          <section className={`panel due-period ${periodOpen ? "open" : ""}`} aria-label="Должны были оплатить за период">
+            <button type="button" className="due-period-hd" aria-expanded={periodOpen} onClick={() => setPeriodOpen((v) => !v)}>
+              <span className="due-period-title"><CalendarDays size={15} /> Должны были оплатить за период</span>
+              <span className="due-period-brief">{duePeriodError ? duePeriodLabel : <>{duePeriodLabel}: <b className="num">{duePeriod.clients}</b> · оплатили <b className="num">{duePeriod.paidClients}</b> · нет <b className="num">{duePeriod.unpaidClients}</b></>}</span>
+              <ChevronDown size={16} className="due-period-chevron" />
+            </button>
+            {periodOpen && <div className="due-period-body">
+              <div className="due-period-controls">
+                <div className="seg-toggle" aria-label="Как выбрать период">
+                  <button type="button" className={periodMode === "month" ? "on" : ""} onClick={() => setPeriodMode("month")}>По месяцам</button>
+                  <button type="button" className={periodMode === "range" ? "on" : ""} onClick={() => { if (periodMode === "month") { const [f, t] = monthBounds(periodMonth); setPeriodFrom(f); setPeriodTo(t); } setPeriodMode("range"); }}>Произвольно</button>
+                </div>
+                {periodMode === "month" ? <div className="due-period-month">
+                  <button type="button" className="btn ghost btn-sm" aria-label="Предыдущий месяц" onClick={() => setPeriodMonth((m) => shiftMonth(m, -1))}><ChevronLeft size={16} /></button>
+                  <select aria-label="Месяц" value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)}>
+                    {periodMonths.map((m) => <option key={m} value={m}>{monthTitle(m)}</option>)}
+                  </select>
+                  <button type="button" className="btn ghost btn-sm" aria-label="Следующий месяц" onClick={() => setPeriodMonth((m) => shiftMonth(m, 1))}><ChevronRight size={16} /></button>
+                </div> : <div className="daily-date-controls">
+                  <label>С даты<DateCalendar showValue value={periodFrom} max={periodTo || undefined} onChange={setPeriodFrom} label="С даты" /></label>
+                  <label>По дату включительно<DateCalendar showValue value={periodTo} min={periodFrom || undefined} onChange={setPeriodTo} label="По дату включительно" /></label>
+                </div>}
+              </div>
+              {duePeriodError ? <div className="empty" role="alert">{duePeriodError}</div> : <>
+                <div className="due-period-tiles">
+                  {[["all", "Должны были оплатить", duePeriod.clients, money(duePeriod.scheduled), "по графику"],
+                    ["paid", "Оплатили полностью", duePeriod.paidClients, money(duePeriod.paid), "внесено"],
+                    ["unpaid", "Не оплатили / частично", duePeriod.unpaidClients, money(duePeriod.remaining), "осталось"]].map(([key, label, count, sum, sumLabel]) => (
+                    <button type="button" key={key} className={`due-period-tile tone-${key} ${periodList === key ? "on" : ""}`} aria-pressed={periodList === key}
+                      onClick={() => setPeriodList(periodList === key ? "" : key)} title={periodList === key ? "Показать все договоры" : "Показать эти договоры в списке ниже"}>
+                      <span>{label}</span>
+                      <b className="num">{count} {count % 10 === 1 && count % 100 !== 11 ? "клиент" : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? "клиента" : "клиентов"}</b>
+                      <small><strong className="num">{sum}</strong> {sumLabel}</small>
+                    </button>))}
+                </div>
+                <small className="due-period-note">Платежей по графику: {duePeriod.payments}. Нажмите на плитку — список ниже покажет только эти договоры. Оплата учитывается на сегодня, даже если внесена позже срока.</small>
+              </>}
+            </div>}
+            {periodList && <div className="due-period-active">
+              <span>Список: {periodList === "all" ? "должны были оплатить" : periodList === "paid" ? "оплатили полностью" : "не оплатили"} · {duePeriodLabel}</span>
+              <button type="button" className="btn ghost btn-sm" onClick={() => setPeriodList("")}><X size={13} /> Показать все</button>
+            </div>}
+          </section>
           <div className={`filtered-summary ${listMode === "table" ? "compact" : ""}`} aria-label="Итоги отфильтрованных договоров">
             <b>Итого по выборке</b>
             <span>Договоров <strong className="num">{filteredContracts.length}</strong></span>
@@ -3949,6 +4016,23 @@ body:has(.dashboard-wrap){background:#0f172a}
 .daily-date-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px}.daily-date-controls label{display:flex;flex-direction:column;gap:5px;font-size:11px}.daily-date-controls input,.daily-date-controls select{border:1px solid var(--line);border-radius:8px;
   background:var(--surface);padding:7px 9px;font:inherit;font-size:12.5px;color:var(--ink)}
 .daily-totals{margin:14px 18px}.daily-payment-list{margin:0 18px 16px}.daily-empty{padding-top:12px}
+.due-period{margin:0 0 12px;overflow:hidden}
+.due-period-hd{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:none;background:none;color:var(--ink);font:inherit;cursor:pointer;text-align:left;flex-wrap:wrap}
+.due-period-title{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px;color:var(--brass)}
+.due-period-brief{flex:1;font-size:12px;color:var(--ink-soft);text-align:right}.due-period-brief b{color:var(--ink)}
+.due-period-chevron{color:var(--ink-soft);transition:transform .15s}.due-period.open .due-period-chevron{transform:rotate(180deg)}
+.due-period-body{padding:0 16px 14px}
+.due-period-controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.due-period-controls .seg-toggle button{padding:7px 14px}
+.due-period-month{display:flex;align-items:center;gap:6px}.due-period-month select{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:7px 9px;font:inherit;font-size:13px;color:var(--ink);min-width:150px}
+.due-period-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.due-period-tile{display:flex;flex-direction:column;gap:4px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.due-period-tile span{font-size:11px;color:var(--ink-soft)}.due-period-tile b{font-size:18px}.due-period-tile small{font-size:11.5px;color:var(--ink-soft)}.due-period-tile small strong{color:var(--ink)}
+.due-period-tile.tone-paid b{color:var(--emerald)}.due-period-tile.tone-unpaid b{color:var(--clay)}
+.due-period-tile.on{border-color:var(--brass);box-shadow:0 0 0 2px var(--brass) inset}
+.due-period-note{display:block;margin-top:10px;font-size:11px;color:var(--ink-soft)}
+.due-period-active{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--brass)}
+@media(max-width:560px){.due-period-brief{flex-basis:100%;text-align:left;order:3}.due-period-tiles{grid-template-columns:1fr}.due-period-tile{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:10px}.due-period-tile span{flex-basis:100%}.due-period-month{flex:1}.due-period-month select{flex:1;min-width:0;font-size:16px}.due-period-controls{flex-direction:column;align-items:stretch}}
 .daily-total-debt strong{color:var(--ink)}.daily-overdue-debt,.daily-overdue-debt strong{color:var(--clay)}
 .monthly-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
 .monthly-col{padding:14px 18px}
