@@ -436,6 +436,56 @@
 
   .app.is-phone .m-ccard-actions { display: flex; gap: 8px; padding: 8px 14px 14px; }
 
+  /* табличный вид договоров: строка на договор, заголовок прилипает под верхней панелью */
+  .app.is-phone .m-ctable-wrap {
+    margin-bottom: 10px; border-radius: 18px; overflow: clip;
+    background: var(--m-tile); border: 1px solid var(--m-line);
+  }
+  .app.is-phone .m-ctable { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+  .app.is-phone .m-ctable th {
+    position: sticky; top: calc(61px + var(--m-safe-t)); z-index: 2; padding: 0; text-align: left;
+    background: #172033; border-bottom: 1px solid var(--m-line-2); font-size: 12.5px; font-weight: 600; color: var(--m-muted);
+  }
+  .app.is-phone .m-ctable th button {
+    display: flex; align-items: center; gap: 3px; width: 100%; min-height: 40px; padding: 0 8px;
+    border: 0; background: none; color: inherit; font: inherit; text-align: inherit;
+  }
+  .app.is-phone .m-ctable th[aria-sort="ascending"], .app.is-phone .m-ctable th[aria-sort="descending"] { color: var(--m-accent-text); }
+  .app.is-phone .m-ctable th.m-ct-sum button { justify-content: flex-end; }
+  .app.is-phone .m-ctable td { padding: 0; vertical-align: middle; border-bottom: 1px solid var(--m-line); }
+  .app.is-phone .m-ctable tbody tr:last-child td { border-bottom: 0; }
+  .app.is-phone .m-ctable tbody tr:active { background: var(--m-tile-press); }
+  .app.is-phone .m-ctable tr.overdue td:first-child { box-shadow: 3px 0 0 var(--m-bad) inset; }
+  .app.is-phone .m-ctable tr.selected td { background: rgba(138, 108, 241, .14); }
+  .app.is-phone .m-ct-state { width: 80px; }
+  .app.is-phone .m-ct-sum { width: 96px; }
+  .app.is-phone .m-ct-act { width: 44px; }
+  .app.is-phone .m-ct-open {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 52px; padding: 7px 4px 7px 10px;
+    border: 0; background: none; color: var(--m-text); text-align: left; min-width: 0;
+  }
+  .app.is-phone .m-ct-open .m-check { margin-top: 0; width: 22px; height: 22px; }
+  .app.is-phone .m-ct-name { flex: 1; min-width: 0; }
+  .app.is-phone .m-ct-name b {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 14.5px; font-weight: 650; line-height: 1.22; overflow-wrap: anywhere;
+  }
+  .app.is-phone .m-ct-name small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--m-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone td.m-ct-state { padding: 0 6px; color: var(--m-muted); }
+  .app.is-phone td.m-ct-state b { display: block; font-size: 13.5px; font-weight: 650; color: var(--m-text); white-space: nowrap; }
+  .app.is-phone td.m-ct-state small { display: block; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app.is-phone td.m-ct-state .bad, .app.is-phone td.m-ct-state .bad b { color: var(--m-bad); }
+  .app.is-phone td.m-ct-state .warn b { color: var(--m-warn); }
+  .app.is-phone td.m-ct-state .ok b { color: var(--m-ok); }
+  .app.is-phone td.m-ct-sum { padding: 0 8px 0 2px; text-align: right; font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .app.is-phone .m-ctable tr.done td.m-ct-sum { color: var(--m-muted); font-weight: 600; }
+  .app.is-phone td.m-ct-act { padding-right: 6px; }
+  .app.is-phone .m-ct-pay {
+    width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px;
+    border: 1px solid rgba(160, 135, 255, .45); background: var(--m-accent-soft); color: var(--m-accent-text);
+  }
+  .app.is-phone .m-ct-pay:active { background: var(--m-accent); color: #fff; }
+
   /* пустые состояния */
   .app.is-phone .m-empty-card {
     margin-top: 16px; padding: 28px 18px; text-align: center; border-radius: 18px;
