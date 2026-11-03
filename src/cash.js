@@ -11,6 +11,13 @@ export function paymentDestination(method, card = '') {
   if (method === 'bank' && !name) throw new Error('Укажите карту для безналичной оплаты');
   return { method, ...(method === 'bank' ? {card:name} : {}) };
 }
+// Для первоначального взноса в договоре способ можно не выбирать:
+// тогда остаются оба варианта (наличные и безнал), а безнал без карты сохраняется без карты.
+export function optionalDestination(method, card = '') {
+  if (!method) return null;
+  if (method === 'bank' && !String(card).trim()) return { method: 'bank' };
+  return paymentDestination(method, card);
+}
 export function cashEntries(contracts) {
   return contracts.flatMap(c => {
     const amounts = splitScheduleAmount(Math.max(0,+c.totalPrice - (+c.downPayment || 0) + (+c.markup || 0)), c.termMonths);

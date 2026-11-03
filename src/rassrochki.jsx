@@ -1,7 +1,7 @@
 import ContractTable from "./ContractTable";
 import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contractWorkbench";
 import CashDesk, { PaymentDestination } from "./CashDesk";
-import { cashCards, paymentDestination } from "./cash";
+import { cashCards, paymentDestination, optionalDestination } from "./cash";
 import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
@@ -1256,7 +1256,7 @@ export default function App() {
 
   const addContract = async (data) => {
     const { newContractId, ...fields } = data;
-    const initialDestination = +data.downPayment > 0 ? paymentDestination(data.downPaymentMethod,data.downPaymentCard) : null;
+    const initialDestination = +data.downPayment > 0 ? optionalDestination(data.downPaymentMethod,data.downPaymentCard) : null;
     const { passport, guarantorPassport, ...contractFields } = fields;
     const c = { ...contractFields, id: newContractId || `c${crypto.randomUUID()}`, payments: withPassport(withPassport(initialDestination ? {__downPaymentDestination:initialDestination} : {}, passport), guarantorPassport, "__guarantorPassport") };
     const { error } = isDesktopApp ? await localData.saveContract(contractToRow(c), true)
@@ -1273,7 +1273,7 @@ export default function App() {
     const { passport, guarantorPassport, ...contractData } = data;
     try { updated = prepareContractEdit(original, contractData);
       updated.payments = withPassport(withPassport(updated.payments, passport), guarantorPassport, "__guarantorPassport");
-      if (+data.downPayment > 0 && data.downPaymentMethod) updated.payments.__downPaymentDestination = paymentDestination(data.downPaymentMethod,data.downPaymentCard);
+      if (+data.downPayment > 0 && data.downPaymentMethod) updated.payments.__downPaymentDestination = optionalDestination(data.downPaymentMethod,data.downPaymentCard);
     }
     catch (error) { showAppMessage(error.message); return false; }
     const cid = original.id;
@@ -3352,7 +3352,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
           <div className="frow">
             <Field label="Цена товара"><input type="number" value={f.totalPrice} onChange={set("totalPrice")} placeholder="0" /></Field>
             <Field label="Первонач. взнос"><input type="number" value={f.downPayment} onChange={set("downPayment")} placeholder="0" /></Field>
-            {+f.downPayment > 0 && <PaymentDestination method={f.downPaymentMethod} card={f.downPaymentCard} onMethod={v=>setF(prev=>({...prev,downPaymentMethod:v}))} onCard={v=>setF(prev=>({...prev,downPaymentCard:v}))} cards={cards}/>}
+            {+f.downPayment > 0 && <PaymentDestination method={f.downPaymentMethod} card={f.downPaymentCard} onMethod={v=>setF(prev=>({...prev,downPaymentMethod:v}))} onCard={v=>setF(prev=>({...prev,downPaymentCard:v}))} cards={cards} emptyLabel="Нал. или безнал (не выбран)"/>}
           </div>
           <Field label="Считать процент наценки от">
             <div className="seg-toggle">
@@ -3417,7 +3417,6 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
               saveInProgress.current = true; setSaving(true); setFormError("");
               try {
               await draftWrite.current;
-              if (+f.downPayment > 0 && (!editing || f.downPaymentMethod)) paymentDestination(f.downPaymentMethod,f.downPaymentCard);
               const { markupAmount: _markupAmount, totalPayable: _totalPayable, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
               const success = await onSave({
                 ...rest, newContractId: newContractId.current, phone: fmtPhone(f.phone.trim()), guarantorPhone: fmtPhone(f.guarantorPhone.trim()), totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,

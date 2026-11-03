@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {cashEntries,cashCards,paymentDestination,destinationLabel} from './cash';
+import {cashEntries,cashCards,paymentDestination,optionalDestination,destinationLabel} from './cash';
 import {allocateContractPayment} from './payments';
 const base={id:'c',clientName:'Клиент',totalPrice:1200,downPayment:200,markup:0,termMonths:2,startDate:'2026-10-01'};
 describe('касса',()=>{
@@ -25,6 +25,12 @@ describe('касса',()=>{
   expect(cashCards([c])).toEqual(['Банк 1234']);
   expect(cashEntries([c])).toHaveLength(1);
   expect(cashEntries([c])[0]).toMatchObject({amount:200,card:'Банк 1234'});
+ });
+ it('взнос в договоре: без способа — оба варианта, безнал без карты допустим',()=>{
+  expect(optionalDestination('')).toBeNull();
+  expect(optionalDestination('bank',' ')).toEqual({method:'bank'});
+  expect(optionalDestination('bank','Банк 1')).toEqual({method:'bank',card:'Банк 1'});
+  expect(optionalDestination('cash','x')).toEqual({method:'cash'});
  });
  it('отмена платежа убирает поступление',()=>{
   expect(cashEntries([{...base,downPayment:0,payments:{0:{receipt:{name:'чек'}}}}])).toEqual([]);
