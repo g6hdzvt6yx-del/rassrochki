@@ -44,8 +44,8 @@ describe("выгрузка в Excel за период", () => {
     const data = XLSX.utils.sheet_to_json(wb.Sheets["Платежи за период"], { header: 1 });
     expect(data[0][0]).toContain("Не оплатили или частично · Октябрь 2026 (01.10.2026 — 31.10.2026)");
     expect(data[3].slice(1, 2)).toEqual(["иван "]);
-    expect(data[3].slice(5, 11)).toEqual(["10.10.2026", 500, 300, 200, "", "Оплачен частично"]);
-    expect(data[5].slice(6, 9)).toEqual([500, 300, 200]);
+    expect(data[3].slice(5, 12)).toEqual(["10.10.2026", 500, 300, 0, 200, "", "Оплачен частично"]);
+    expect(data[5].slice(6, 10)).toEqual([500, 300, 0, 200]);
   });
   it("понятное имя файла", () => {
     expect(duePeriodFileName("2026-10-01", "2026-10-31", "unpaid")).toBe("dolzhny_oplatit_2026-10_ne_oplatili.xlsx");
