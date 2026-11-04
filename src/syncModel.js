@@ -70,8 +70,14 @@ export function planSync(local, remote, bases) {
   return plan;
 }
 
-// PostgreSQL rechecks these predicates while taking the row lock. Include every
-// originally read column, including JSON, rather than trusting a timestamp.
+export const CONFLICT_MESSAGE = 'Эту запись уже изменили на другом устройстве или в другой вкладке. Ваше изменение не сохранено, чтобы не затереть чужие данные. Нажмите «↻» (обновить), проверьте запись и повторите действие.';
+
+// Запись только «поверх» той версии, которую видел пользователь (аудит, находка 8).
+// Если в базе есть updated_at (миграция 006), условие — номер версии: его ставит сама база
+// триггером touch_row при каждом изменении, поэтому любая чужая запись (другое устройство,
+// вкладка, восстановление из копии) сдвигает версию, и устаревшее сохранение не проходит.
+// Без updated_at (база до 006) — как раньше: сравниваем все прочитанные поля, включая JSON.
+// PostgreSQL проверяет условие под блокировкой строки, так что гонки нет.
 export async function checkedWrite(client, table, id, before, next) {
   if (!syncTables.includes(table)) throw new Error('Недопустимая таблица');
   let query;
@@ -79,15 +85,17 @@ export async function checkedWrite(client, table, id, before, next) {
     if (!next) return;
     query = client.from(table).insert(next);
   } else {
+    if (next && Object.hasOwn(next, 'updated_at')) { const { updated_at: _version, ...rest } = next; next = rest; }
     query = next ? client.from(table).update(next) : client.from(table).delete();
     query = query.eq('id', id);
-    for (const [key, value] of Object.entries(before)) {
+    if (before.updated_at) query = query.eq('updated_at', before.updated_at);
+    else for (const [key, value] of Object.entries(before)) {
       if (key === 'id') continue;
       query = value == null ? query.is(key, null) : query.eq(key, typeof value === 'object' ? JSON.stringify(value) : value);
     }
   }
   const { data, error } = await query.select('*');
   if (error) throw new Error(error.message);
-  if (data?.length !== 1) throw new Error('Запись уже изменена на другом устройстве. Обновите данные и повторите действие.');
+  if (data?.length !== 1) throw new Error(CONFLICT_MESSAGE);
   return data[0];
 }

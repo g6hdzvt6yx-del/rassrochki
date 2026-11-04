@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase, supabaseConfigured } from './supabaseClient';
 import { accessFor } from './access';
+import { takeInviteCode, forgetInviteCode } from './operatorInvite';
 import OperatorDesk from './OperatorDesk';
 import TeamPanel from './TeamPanel';
 import './webAccess.css';
@@ -10,6 +11,10 @@ export default function WebAccess() {
   const [session,setSession]=useState(undefined), [profile,setProfile]=useState(null), [checked,setChecked]=useState(false);
   const [error,setError]=useState(''), [busy,setBusy]=useState(false), [team,setTeam]=useState(false), [importOpen,setImportOpen]=useState(false), [importBusy,setImportBusy]=useState(false), [appVersion,setAppVersion]=useState(0), [tick,setTick]=useState(0);
   const sessionUser = useRef(null);
+  // Ссылка-приглашение оператора (#invite=…): подтверждает сам владелец почты после входа.
+  const [invite,setInvite]=useState(()=>takeInviteCode()), [inviteError,setInviteError]=useState('');
+  const acceptInvite=async()=>{setBusy(true);setInviteError('');try{const {error}=await supabase.rpc('accept_operator_invite',{invite_code:invite});if(error)throw error;forgetInviteCode();setInvite(null);setChecked(false);setTick(t=>t+1);}catch(e){setInviteError(e.message||'Не удалось принять приглашение.');}finally{setBusy(false);}};
+  const skipInvite=()=>{forgetInviteCode();setInvite(null);setInviteError('');};
   useEffect(()=>{
     if (!supabaseConfigured) {setSession(null); return;}
     supabase.auth.getSession().then(({data,error})=>{if(error)setError(error.message);setSession(data.session);});
@@ -29,8 +34,9 @@ export default function WebAccess() {
   const logout=()=>supabase.auth.signOut();
   if(!supabaseConfigured) return <main className="web-card"><h1>Настройка подключения</h1><p>База данных ещё не подключена.</p></main>;
   if(session===undefined) return <main className="web-card">Проверка входа…</main>;
-  if(!session) return <main className="web-card"><h1>Eppaz</h1><p>Вход в рабочий кабинет</p><form onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{const f=new FormData(e.currentTarget);const {error}=await supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)setError('Не удалось войти. Проверьте почту и пароль.');}catch{setError('Нет связи с сервером.');}finally{setBusy(false);}}}><label>Почта<input name="email" type="email" autoComplete="username" required/></label><label>Пароль<input name="password" type="password" autoComplete="current-password" required/></label><button disabled={busy}>{busy?'Входим…':'Войти'}</button></form>{error&&<p role="alert">{error}</p>}</main>;
+  if(!session) return <main className="web-card"><h1>Eppaz</h1><p>Вход в рабочий кабинет</p>{invite&&<p role="status">Вас пригласили работать оператором. Войдите под почтой, на которую пришло приглашение, — затем подтвердите его.</p>}<form onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{const f=new FormData(e.currentTarget);const {error}=await supabase.auth.signInWithPassword({email:f.get('email'),password:f.get('password')});if(error)setError('Не удалось войти. Проверьте почту и пароль.');}catch{setError('Нет связи с сервером.');}finally{setBusy(false);}}}><label>Почта<input name="email" type="email" autoComplete="username" required/></label><label>Пароль<input name="password" type="password" autoComplete="current-password" required/></label><button disabled={busy}>{busy?'Входим…':'Войти'}</button></form>{error&&<p role="alert">{error}</p>}</main>;
   if(!checked) return <main className="web-card">Проверка прав…</main>;
+  if(invite) return <main className="web-card"><h1>Приглашение оператора</h1><p>Вы вошли как <b>{session.user.email}</b>. Принять приглашение и работать оператором в этом кабинете?</p><button disabled={busy} onClick={acceptInvite}>{busy?'Подтверждаем…':'Принять приглашение'}</button> <button disabled={busy} onClick={skipInvite}>Не сейчас</button> <button disabled={busy} onClick={()=>{logout();}}>Войти под другой почтой</button>{inviteError&&<p role="alert">{inviteError}</p>}</main>;
   const role=accessFor(profile);
   if(role==='blocked') return <main className="web-card"><h1>Доступ не предоставлен</h1><p>{error||'Учётная запись не активирована администратором.'}</p><button onClick={()=>setTick(t=>t+1)}>Проверить снова</button> <button onClick={logout}>Выйти</button></main>;
   if(role==='operator') return <OperatorDesk onLogout={logout}/>;
