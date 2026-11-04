@@ -2,6 +2,16 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Защита сайта (аудит безопасности от 03.11.2026, находки 1 и 6). GitHub Pages не умеет
+      отдавать заголовки, поэтому политика задана здесь. Скрипты — только файлы этого сайта:
+      ссылки «javascript:» и вставленный чужой код не выполнятся (в том числе в окнах чека и печати).
+      Запросы — только к этому сайту и к нашему облаку Supabase. Адрес облака подставляет
+      сборка из VITE_SUPABASE_URL (vite.config.js, cspPlugin); при `npm run dev` политика не ставится.
+      'wasm-unsafe-eval' нужен для чтения копии с Mac (sql.js).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: %CSP_SUPABASE_HTTP%; font-src 'self' data:; connect-src 'self' %CSP_SUPABASE_HTTP% %CSP_SUPABASE_WS%; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta name="referrer" content="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0d1524" media="(max-width: 760px)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
