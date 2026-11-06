@@ -19,13 +19,16 @@ it('переплата при изменении поступления умен
  expect(r.payments[1].paymentEvents[0]).toMatchObject({amount:30,date:'2026-01-06',method:'bank',card:'Сбербанк',carriedFrom:0,comment:'Переплата по платежу №1'});
  expect(r.payments[2]).toBeUndefined();
 });
-it('большая переплата закрывает следующий и переходит дальше; сверх остатка договора — ошибка',()=>{
+it('большая переплата закрывает следующий и переходит дальше; сверх остатка договора — записывается переплата',()=>{
  const p0={0:{paymentEvents:[{date:'2026-01-05',amount:100}]}};
  const rows=sched(p0);
  const r=editPaymentEventWithCarry({payments:p0,row:rows[0],rows,eventIndex:0,expectedRecord:p0[0],amount:250,date:'2026-01-05',comment:'',destination:{method:'cash'}});
  expect(r.payments[1].paidAmount).toBeUndefined();expect(r.payments[1].paymentEvents[0].amount).toBe(100);
  expect(r.payments[2].paidAmount).toBe(50);
- expect(()=>editPaymentEventWithCarry({payments:p0,row:rows[0],rows,eventIndex:0,expectedRecord:p0[0],amount:301,date:'2026-01-05',comment:'',destination:{method:'cash'}})).toThrow(/больше, чем осталось/);
+ const over=editPaymentEventWithCarry({payments:p0,row:rows[0],rows,eventIndex:0,expectedRecord:p0[0],amount:301,date:'2026-01-05',comment:'',destination:{method:'cash'}});
+ expect(over.overpaid).toBe(1);
+ expect(over.payments.__overpayments).toEqual([expect.objectContaining({date:'2026-01-05',amount:1,method:'cash'})]);
+ expect(over.payments[2].paidAmount).toBeUndefined();
 });
 it('сумма в пределах платежа сохраняется как раньше',()=>{
  const p0={0:{paymentEvents:[{date:'2026-01-05',amount:100}]}};const rows=sched(p0);

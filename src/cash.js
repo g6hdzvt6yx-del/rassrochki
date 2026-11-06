@@ -1,9 +1,11 @@
 import { splitScheduleAmount } from './finance';
 import { actualPaid } from './contractSafety';
+import { overpaymentsOf } from './payments';
 export const cashCards = contracts => [...new Set(contracts.flatMap(c => [
   ...(c.payments?.__cashCards || []),
   ...(c.payments?.__downPaymentDestination?.card ? [c.payments.__downPaymentDestination.card] : []),
   ...Object.values(c.payments || {}).flatMap(r => (r?.paymentEvents || []).map(e => e.card).filter(Boolean)),
+  ...overpaymentsOf(c.payments).map(e => e.card).filter(Boolean),
 ]))].sort((a,b) => a.localeCompare(b,'ru'));
 export function paymentDestination(method, card = '') {
   if (!['cash','bank'].includes(method)) throw new Error('Выберите способ оплаты');
@@ -18,6 +20,7 @@ export function cashEntries(contracts) {
       const events = r.paymentEvents?.length ? r.paymentEvents : r.paidDate ? [{date:r.paidDate,amount:actualPaid(r,amounts[+key] || 0)}] : [];
       return events.filter(e => +e.amount > 0).map((e,i) => ({...e,id:`${c.id}:${key}:${i}`,client:c.clientName,item:c.item,contractId:c.id,purpose:`Платёж №${+key+1}`}));
     });
+    overpaymentsOf(c.payments).forEach((e,i) => rows.push({...e,id:`${c.id}:over:${i}`,client:c.clientName,item:c.item,contractId:c.id,purpose:'Переплата (сверх графика)'}));
     if (+c.downPayment > 0) rows.push({id:`${c.id}:down`,client:c.clientName,item:c.item,contractId:c.id,purpose:'Первоначальный взнос',date:c.startDate,amount:+c.downPayment,...c.payments?.__downPaymentDestination});
     return rows;
   }).sort((a,b) => String(b.date).localeCompare(String(a.date)));

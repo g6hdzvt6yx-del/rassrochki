@@ -1,7 +1,7 @@
 import ContractTable from "./ContractTable";
 import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contractWorkbench";
 import CashDesk, { PaymentDestination } from "./CashDesk";
-import { cashCards, paymentDestination } from "./cash";
+import { cashCards, paymentDestination, destinationLabel } from "./cash";
 import { expectedPayments, dateInPeriod, duePeriodSummary, monthBounds, shiftMonth } from "./expectedPayments";
 import Directories from "./Directories.jsx";
 import WebSyncStatus from "./WebSyncStatus";
@@ -18,7 +18,7 @@ import {
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 import { formatPhone as fmtPhone, formatPhoneForExcel, normalizePhone } from "./phone";
-import { allocateContractPayment, editPaymentEventWithCarry, deletePaymentEvent } from "./payments";
+import { allocateContractPayment, editPaymentEventWithCarry, deletePaymentEvent, addOverpayment, deleteOverpayment, overpaidSum, overpaymentsOf, OVERPAYMENTS_KEY } from "./payments";
 import { actualPaid, prepareContractEdit, draftContractId } from "./contractSafety";
 import { flushLocalTasks } from "./localTasks";
 import DateCalendar from "./DateCalendar";
@@ -142,7 +142,8 @@ const contractStats = (c) => {
   const next = rows.find((r) => !r.paid) || null;
   const deferrals = rows.filter((r) => !r.paid && r.deferredUntil);
   const done = rows.every((r) => r.paid);
-  return { rows, financed, paidSum, remaining: financed - paidSum, overdueSum, next, deferrals, done };
+  const overpaid = overpaidSum(c.payments);
+  return { rows, financed, paidSum, remaining: financed - paidSum, overdueSum, next, deferrals, done, overpaid };
 };
 
 /* ------------------------------------------------------------------ */
@@ -1094,12 +1095,19 @@ export default function App() {
     const c = contracts.find((x) => x.id === cid);
     if (!c) return;
     const date = paidDate || toIsoDate(new Date());
+    const createdAt = new Date().toISOString();
     const result = allocateContractPayment({
       payments: c.payments || {}, rows: buildSchedule(c), selectedIndex: idx,
-      amount, date, createdAt: new Date().toISOString(), comment, destination: paymentDestination(destination.method, destination.card),
+      amount, date, createdAt, comment, destination: paymentDestination(destination.method, destination.card),
     });
-    if (!result.allocations.length) return false;
-    const { payments } = result;
+    const overpaid = result.remainder > 0.001 ? Math.round(result.remainder * 100) / 100 : 0;
+    if (!result.allocations.length && !overpaid) return false;
+    const overpayment = overpaid ? {
+      date, amount: overpaid, createdAt,
+      destination: paymentDestination(destination.method, destination.card),
+      comment: `Сверх графика${comment ? ` · ${comment}` : ""}`,
+    } : null;
+    const payments = overpayment ? addOverpayment(result.payments, overpayment) : result.payments;
     const prevContracts = contracts;
     setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
     suppressNextActionLog();
@@ -1116,9 +1124,35 @@ export default function App() {
         after: allocation.after,
       });
     }
-    if (result.remainder > 0) {
-      showAppMessage(`В договоре осталось к оплате только ${money(result.appliedAmount)}. Лишние ${money(result.remainder)} не внесены.`, "warning");
+    if (overpaid) {
+      try {
+        await localData.log({
+          actionType: "overpayment", entityType: "payments", entityId: `${cid}:${OVERPAYMENTS_KEY}`,
+          entityName: c.clientName, contractId: cid,
+          before: { overpaid: overpaidSum(c.payments) }, after: { overpaid: overpaidSum(payments), added: overpaid },
+        });
+      } catch (error) { showAppMessage(`Переплата сохранена, но журнал не записан: ${error.message}`); }
+      showAppMessage(`По графику зачтено ${money(result.appliedAmount)}. Лишние ${money(overpaid)} записаны в договор как переплата.`, "success");
     }
+    return true;
+  };
+
+  const removeOverpayment = async (cid, index, expected) => {
+    try { return await removeOverpaymentUnsafe(cid, index, expected); }
+    catch (error) { showAppMessage(error.message, "warning"); return false; }
+  };
+  const removeOverpaymentUnsafe = async (cid, index, expected) => {
+    const c = contracts.find((x) => x.id === cid);
+    if (!c) throw new Error("Договор не найден");
+    const payments = deleteOverpayment(c.payments || {}, index, expected);
+    if (!await requestConfirm({ title: "Удалить переплату?", message: `Будет удалена переплата ${money(expected.amount)} от ${fmtDate(expected.date)}. Касса пересчитается.`, confirmLabel: "Удалить переплату", danger: true })) return false;
+    suppressNextActionLog();
+    const { error } = await supabase.from("contracts").update({ payments }).eq("id", cid);
+    if (error) throw new Error(error.message);
+    setContracts((prev) => prev.map((x) => (x.id === cid ? { ...x, payments } : x)));
+    try {
+      await localData.log({ actionType: "delete_overpayment", entityType: "payments", entityId: `${cid}:${OVERPAYMENTS_KEY}`, contractId: cid, entityName: c.clientName, before: expected, after: null });
+    } catch (error) { showAppMessage(`Переплата удалена, но журнал не записан: ${error.message}`); }
     return true;
   };
 
@@ -1155,7 +1189,7 @@ export default function App() {
       }
     }
     catch(error) { showAppMessage(`Платёж сохранён, но журнал не записан: ${error.message}`); }
-    if (result.excess > 0) showAppMessage(`Переплата ${money(result.excess)} зачтена: ${result.allocations.map(a=>`платёж №${a.number} — ${money(a.amount)}${a.full?' (закрыт)':''}`).join(', ')}.`, "success");
+    if (result.excess > 0) showAppMessage(`Переплата ${money(result.excess)} зачтена: ${[...result.allocations.map(a=>`платёж №${a.number} — ${money(a.amount)}${a.full?' (закрыт)':''}`), ...(result.overpaid ? [`сверх графика — ${money(result.overpaid)} (записано как переплата)`] : [])].join(', ')}.`, "success");
     return true;
   };
 
@@ -2339,6 +2373,7 @@ export default function App() {
           onUpdatePaidDate={updatePaidDate}
           onEditPayment={editPaidPayment}
           onDeletePayment={deletePaidPayment}
+          onDeleteOverpayment={removeOverpayment}
           onPay={payPayment}
           cards={cards}
           onAttachReceipt={attachReceipts}
@@ -2661,7 +2696,7 @@ function Detail(props) {
     renderContacts={contacts => <ContactEntries contacts={contacts} onDelete={props.onDeleteContact} />} />;
 }
 
-function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, onHistory, initialAction }) {
+function ContractDetail({ onDeletePayment, onEditPayment, onDeleteOverpayment, cards = [], contract, clientContacts, investors, onClose, onToggle, onNotify, onUndoNotify, onDefer, onUpdatePaidDate, onPay, onAttachReceipt, onRemoveReceipt, onEarlyPayoff, onDelete, onUpdateComment, onAddContact, onDeleteContact, onEdit, onHistory, initialAction }) {
   const actionArea = useRef(null);
   useEffect(() => {
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
@@ -2925,6 +2960,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
             <div><span>Срок</span><b className="num">{contract.termMonths} мес</b></div>
             <div><span>К оплате</span><b className="num">{money(st.financed)}</b></div>
             <div><span>Остаток</span><b className="num strong">{money(st.remaining)}</b></div>
+            {st.overpaid > 0 && <div className="det-overpaid"><span>Переплата</span><b className="num strong">{money(st.overpaid)}</b></div>}
             <div><span>Источник</span><b className="num">{investorName}</b></div>
             <div>
               <span>Поручитель</span>
@@ -2935,6 +2971,21 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
             </div>
             {contractPassportLines(contract).map(([label, value]) => <div key={label} className="det-wide"><span>{label}</span><b>{value}</b></div>)}
           </div>
+
+          {st.overpaid > 0 && (
+            <div className="overpaid-block">
+              <div className="overpaid-hd"><b>Переплата по договору</b><b className="num">{money(st.overpaid)}</b></div>
+              <p className="overpaid-note">Деньги, внесённые сверх графика. В остаток не входят, в кассе учтены.</p>
+              {overpaymentsOf(contract.payments).map((event, index) => (
+                <div className="overpaid-row" key={`${event.createdAt || ''}-${index}`}>
+                  <span>{fmtDate(event.date)} · {destinationLabel(event)}{event.comment ? ` · ${event.comment}` : ""}</span>
+                  <b className="num">{money(event.amount)}</b>
+                  {onDeleteOverpayment && <button type="button" className="icon-btn-ghost" title="Удалить переплату" aria-label={`Удалить переплату ${money(event.amount)}`}
+                    onClick={() => onDeleteOverpayment(contract.id, index, event)}><Trash2 size={13} /></button>}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="det-actions-row">
             <button type="button" className="btn ghost btn-sm" onClick={() => onEdit(contract)}>
@@ -3122,7 +3173,9 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                     {payMode === 'edit' && <button type="button" className="btn ghost btn-sm" style={{color:'var(--clay)'}} disabled={payBusy} onClick={()=>deleteSelectedPayment(r.index)}><Trash2 size={13}/> Удалить поступление</button>}
                     <button className="btn ghost btn-sm" disabled={payBusy} onClick={() => setPayingIdx(null)}>Отмена</button></div>
                     {payMode === "new" && +payAmount > r.remainingDue && (
-                      <small className="payment-allocation-note">Сначала закроются старые просрочки, затем следующие платежи.</small>
+                      <small className="payment-allocation-note">{+payAmount > st.remaining + 0.001
+                        ? `Долг по договору ${money(st.remaining)}. Лишние ${money(Math.round((+payAmount - st.remaining) * 100) / 100)} запишутся в договор как переплата.`
+                        : "Сначала закроются старые просрочки, затем следующие платежи."}</small>
                     )}
                     {payMode === "edit" && (() => {
                       const others = r.paymentEvents.reduce((sum, event, i) => sum + (i === editEventIndex ? 0 : +event.amount || 0), 0);
@@ -4116,6 +4169,14 @@ body:has(.dashboard-wrap){background:#0f172a}
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
 .det-grid>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
 .det-grid span{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:2px}
+.det-grid>.det-overpaid{border-color:var(--brass)}
+.det-overpaid b{color:var(--brass)}
+.overpaid-block{border:1px solid var(--brass);border-radius:10px;padding:10px 12px;margin-bottom:16px;background:var(--surface)}
+.overpaid-hd{display:flex;justify-content:space-between;gap:10px;color:var(--brass)}
+.overpaid-note{font-size:11px;color:var(--ink-soft);margin:2px 0 6px}
+.overpaid-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0;border-top:1px solid var(--line)}
+.overpaid-row span{flex:1;min-width:0}
+.c-overpaid{display:block;font-size:10.5px;color:var(--brass);white-space:nowrap}
 .det-grid b{font-size:15px;font-weight:600}
 
 .ledger-hd{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--brass);

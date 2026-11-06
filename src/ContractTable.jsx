@@ -41,7 +41,7 @@ export default function ContractTable({contracts,getStats,selected,onSelect,onPa
     <td className="c-overdue" data-label="Просрочка">{s.overdueSum>0
      ?<span className={`od-pill od-${overdueLevel(days)}`} title={`Просрочка ${daysLabel(days)} · ${money(s.overdueSum)}`}><b>{daysLabel(days)}</b><span className="num">{money(s.overdueSum)}</span></span>
      :<span className="od-none">{s.done?'Закрыт':'Нет'}</span>}</td>
-    <td className="c-remaining num" data-label="Остаток">{money(s.remaining)}</td>
+    <td className="c-remaining num" data-label="Остаток">{money(s.remaining)}{s.overpaid > 0 && <small className="c-overpaid">переплата {money(s.overpaid)}</small>}</td>
     <td className="c-mark" data-label="Отметка"><OperatorMarkCell marks={contractMarks} onHistory={onMarksHistory?()=>onMarksHistory(c.id):undefined}/>{action&&<div className="mark-next"><NextActionCell action={action}/></div>}</td>
     <td className="c-next" data-label="След. действие"><NextActionCell action={action}/></td>
     <td className="c-action">{!s.done&&s.next

@@ -3,6 +3,38 @@ const byDueDate = (left, right) => {
   return dateDifference || left.index - right.index;
 };
 
+// Деньги сверх графика договора. Хранятся в договоре отдельно от платежей по графику,
+// чтобы излишек не терялся и был виден в договоре, у клиента и в кассе.
+export const OVERPAYMENTS_KEY = "__overpayments";
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+export const overpaymentsOf = (payments) =>
+  (Array.isArray(payments?.[OVERPAYMENTS_KEY]) ? payments[OVERPAYMENTS_KEY] : [])
+    .filter((event) => event && +event.amount > 0);
+
+export const overpaidSum = (payments) =>
+  roundMoney(overpaymentsOf(payments).reduce((sum, event) => sum + Number(event.amount), 0));
+
+export function addOverpayment(payments = {}, { amount, date, createdAt, destination = {}, comment = "", extra = null }) {
+  const value = roundMoney(amount);
+  if (!(value > 0)) return payments;
+  const event = { date, amount: value, createdAt, ...destination, ...(extra || {}) };
+  const text = String(comment || "").trim();
+  if (text) event.comment = text;
+  return { ...payments, [OVERPAYMENTS_KEY]: [...overpaymentsOf(payments), event] };
+}
+
+export function deleteOverpayment(payments = {}, index, expected) {
+  const list = overpaymentsOf(payments);
+  if (!list[index]) throw new Error("Переплата не найдена. Обновите страницу.");
+  if (expected && JSON.stringify(list[index]) !== JSON.stringify(expected)) throw new Error("Переплата изменилась. Обновите страницу.");
+  const rest = list.filter((_, i) => i !== index);
+  const next = { ...payments };
+  if (rest.length) next[OVERPAYMENTS_KEY] = rest;
+  else delete next[OVERPAYMENTS_KEY];
+  return next;
+}
+
 /**
  * Распределяет одно фактическое поступление по графику договора.
  * Порядок: старые просрочки -> выбранный платёж -> следующие платежи.
@@ -145,8 +177,11 @@ export function editPaymentEventWithCarry({ payments, row, rows = [], eventIndex
       ...eligible.filter((r) => r.index < row.index).sort((a, b) => a.index - b.index),
     ],
   });
-  if (carry.remainder > 0.001) {
-    throw new Error(`Переплата ${carry.remainder.toLocaleString('ru-RU')} ₽ больше, чем осталось оплатить по договору. Уменьшите сумму.`);
-  }
-  return { payments: carry.payments, excess, allocations: carry.allocations };
+  const overpaid = carry.remainder > 0.001 ? roundMoney(carry.remainder) : 0;
+  const finalPayments = overpaid
+    ? addOverpayment(carry.payments, { amount: overpaid, date, createdAt, destination,
+        comment: `Сверх графика (при изменении платежа №${row.index + 1})${userComment ? ` · ${userComment}` : ''}`,
+        extra: { carriedFrom: row.index } })
+    : carry.payments;
+  return { payments: finalPayments, excess, allocations: carry.allocations, overpaid };
 }
