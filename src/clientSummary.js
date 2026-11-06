@@ -1,4 +1,5 @@
 import { normalizePhone } from './phone';
+import { overpaymentsOf } from './payments';
 
 // A missing phone must not merge a namesake with a different known phone.
 export function contractsForClient(contracts, client) {
@@ -17,9 +18,19 @@ const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Da
 export function summarizeClient(contracts, getStats, today) {
   const items = contracts.map(contract => ({ contract, stats: getStats(contract) }));
   const paymentGroups = new Map(), upcoming = [], overdueDates = [];
-  let remaining = 0, overdue = 0, undated = 0;
+  let remaining = 0, overdue = 0, undated = 0, overpaid = 0;
   for (const { contract, stats } of items) {
     remaining += Math.max(0, stats.remaining);
+    for (const event of overpaymentsOf(contract.payments)) {
+      overpaid += +event.amount;
+      const date = dateKey(event.date);
+      if (!validDate(date)) { undated += +event.amount; continue; }
+      if (date > today) continue;
+      const key = event.createdAt ? `${contract.id}:${date}:${event.createdAt}` : `${contract.id}:over:${date}:${event.amount}`;
+      const previous = paymentGroups.get(key);
+      if (previous) { previous.amount += +event.amount; previous.overpaid = (previous.overpaid || 0) + +event.amount; }
+      else paymentGroups.set(key, { contract, date, amount: +event.amount, numbers: [], overpaid: +event.amount, createdAt: event.createdAt || '', key });
+    }
     overdue += Math.max(0, stats.overdueSum);
     for (const row of stats.rows) {
       const due = dateKey(row.dueDate);
@@ -42,12 +53,12 @@ export function summarizeClient(contracts, getStats, today) {
     }
   }
   upcoming.sort((a,b) => a.date.localeCompare(b.date) || String(a.contract.id).localeCompare(String(b.contract.id)));
-  const payments = [...paymentGroups.values()].map(p => ({ ...p, paymentNo: [...new Set(p.numbers)].join(', ') }));
+  const payments = [...paymentGroups.values()].map(p => ({ ...p, paymentNo: [[...new Set(p.numbers)].sort((a,b)=>a-b).join(', '), p.overpaid ? 'переплата' : ''].filter(Boolean).join(' + ') }));
   payments.sort((a,b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   overdueDates.sort();
   const nextDate = upcoming[0]?.date;
   const next = upcoming.filter(p => p.date === nextDate);
-  return { items, remaining, overdue, active: items.filter(i => i.stats.remaining > 0).length,
+  return { items, remaining, overdue, overpaid: Math.round(overpaid * 100) / 100, active: items.filter(i => i.stats.remaining > 0).length,
     overdueDays: overdueDates.length ? Math.max(0, Math.round((Date.parse(today)-Date.parse(overdueDates[0]))/86400000)) : 0,
     next, nextAmount: next.reduce((sum,p) => sum+p.amount,0), payments, lastPayment: payments[0] || null, undated };
 }

@@ -2,6 +2,7 @@ import { receiptsOf } from './receipts';
 import { addMonthsClamped, splitScheduleAmount } from "./finance";
 import { formatPhoneForExcel } from "./phone";
 import { actualPaid } from "./contractSafety";
+import { overpaymentsOf } from './payments';
 
 const localDate = (value) => {
   if (!value) return "";
@@ -117,6 +118,11 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
         receipt.name || "", receipt.path || "", "Активный", "",
       ]));
     });
+    overpaymentsOf(payments).forEach((event) => eventRows.push([
+      contract.id || contract.__id, contract.client_name || contract.clientName || "", formatPhoneForExcel(contract.phone),
+      contract.item || "", "Переплата", localDate(event.date), +event.amount || 0, event.comment || "Сверх графика",
+      "Нет", event.createdAt ? localDateTime(event.createdAt) : "", contract.__deletedAt ? "Да" : "Нет",
+    ]));
     (Array.isArray(payments.__contacts) ? payments.__contacts : []).forEach((contact) => contactRows.push([
       contract.id || contract.__id, contract.client_name || contract.clientName || "", formatPhoneForExcel(contract.phone),
       contact.type || "", localDateTime(contact.occurredAt), contact.note || "", localDate(contact.promisedDate),

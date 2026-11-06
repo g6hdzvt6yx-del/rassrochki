@@ -8,6 +8,7 @@ const TYPE_LABELS = { contracts: "Договор", payments: "Платёж", con
 const ACTION_LABELS = {
   create: "Создание", update: "Изменение", update_payment: "Изменение платежа",
   create_payment: "Оплата", full_payment: "Полная оплата", partial_payment: "Частичная оплата",
+  overpayment: "Переплата", delete_overpayment: "Удаление переплаты",
   cancel_payment: "Отмена оплаты", change_payment_date: "Изменение даты оплаты",
   defer_payment: "Отсрочка платежа", edit_deferral: "Изменение отсрочки", cancel_deferral: "Отмена отсрочки",
   whatsapp_notification: "Уведомление WhatsApp", cancel_whatsapp_notification: "Отмена уведомления WhatsApp", early_payoff: "Досрочное погашение",
@@ -129,6 +130,12 @@ const actionDescription = (action) => {
     const total = afterRaw.totalAmount;
     return `Досрочно закрыты платежи: ${numbers.length ? numbers.map((item) => `№${item}`).join(", ") : "не указаны"}${date ? `. Дата оплаты: ${displayValue("paidDate", date)}` : ""}${total != null ? `. Общая сумма: ${displayValue("amount", total)}` : ""}. Договор закрыт.`;
   }
+  if (action.action_type === "overpayment") {
+    return `Сверх графика записана переплата ${displayValue("amount", afterRaw.added)}. Всего переплата по договору: ${displayValue("amount", afterRaw.overpaid)}.`;
+  }
+  if (action.action_type === "delete_overpayment") {
+    return `Удалена переплата ${displayValue("amount", beforeRaw.amount)}${beforeRaw.date ? ` от ${displayValue("paidDate", beforeRaw.date)}` : ""}.`;
+  }
   if (action.action_type === "cancel_payment") {
     return `У платежа №${number || "—"} отменена отметка об оплате${beforeRaw.paidDate ? ` от ${displayValue("paidDate", beforeRaw.paidDate)}` : ""}. Сумма снова включена в задолженность.`;
   }
@@ -175,7 +182,7 @@ const actionDescription = (action) => {
 
 const SPECIALIZED_PAYMENT_ACTIONS = new Set([
   "create_payment", "full_payment", "partial_payment", "cancel_payment", "change_payment_date",
-  "early_payoff", "defer_payment", "edit_deferral", "cancel_deferral", "whatsapp_notification", "cancel_whatsapp_notification", "attach_receipt",
+  "overpayment", "delete_overpayment", "early_payoff", "defer_payment", "edit_deferral", "cancel_deferral", "whatsapp_notification", "cancel_whatsapp_notification", "attach_receipt",
 ]);
 const logTime = (value) => parseDataDate(value)?.getTime() ?? NaN;
 
