@@ -32,6 +32,7 @@ import {useCallLogs} from "./useCallLogs";
 import AutocompleteField from "./AutocompleteField";
 import {listCloudDrafts, saveCloudDraft, deleteCloudDraft, draftTitle, draftCompletion, draftHasContent} from "./cloudDrafts";
 import {receiptsOf, withAddedReceipts, withoutReceipt, receiptStoragePath} from "./receipts";
+import {UnsafeReceiptError, isSafeReceiptPath, isCloudReceiptUrl, isOpenableReceiptHref, receiptBlobUrl} from "./receiptSafety";
 import {emptyPassport, normalizePassport, passportOf, guarantorPassportOf, withPassport, contractPassportLines, passportSummary} from "./passport";
 import {callResults} from "./access";
 import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
@@ -3096,24 +3097,45 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
   <div>Подпись продавца</div>
   <div>Подпись клиента</div>
 </div>
-<script>window.onload = function(){ window.print(); };</script>
 </body></html>`;
     const win = window.open("", "_blank");
     if (!win) { showAppMessage("Разрешите всплывающие окна для печати"); return; }
     win.document.write(html);
     win.document.close();
+    // Печать запускаем отсюда: встроенный <script> в окне печати запрещён политикой безопасности (CSP).
+    const print = () => { try { win.focus(); win.print(); } catch { /* окно закрыто */ } };
+    if (win.document.readyState === "complete") setTimeout(print, 50);
+    else win.addEventListener("load", print, { once: true });
   };
 
+  // Чек открываем только по проверенному адресу (аудит безопасности, находка 1):
+  // встроенный — фото/PDF через Blob, файл — подписанная ссылка на бакет receipts нашего облака.
+  // Строка вида «javascript:…» из базы не попадёт в адрес окна. См. receiptSafety.js.
   const openReceipt = async (receipt) => {
-    if (receipt.path) {
-      // открываем вкладку сразу (по клику), иначе Safari заблокирует её после ожидания ссылки
-      const win = window.open("about:blank", "_blank");
-      const { data, error } = await supabase.storage.from("receipts").createSignedUrl(receipt.path, 60);
-      if (error || !data?.signedUrl) { win?.close(); showAppMessage(`Не удалось открыть чек: ${error?.message || "нет ссылки"}`); return; }
-      if (win) win.location.href = data.signedUrl;
-      else window.open(data.signedUrl, "_blank");
-    } else if (receipt.dataUrl) {
-      window.open(receipt.dataUrl, "_blank");
+    // открываем вкладку сразу (по клику), иначе Safari заблокирует её после ожидания ссылки
+    const win = window.open("about:blank", "_blank");
+    if (win) { try { win.opener = null; } catch { /* окно уже недоступно */ } }
+    try {
+      let url;
+      if (receipt?.path) {
+        if (!isSafeReceiptPath(receipt.path)) throw new UnsafeReceiptError();
+        const { data, error } = await supabase.storage.from("receipts").createSignedUrl(receipt.path, 60);
+        if (error || !data?.signedUrl) throw new Error(error?.message || "нет ссылки");
+        url = data.signedUrl;
+        // В программе на Mac ссылка ведёт на локальный файл — проверка облака к ней не относится.
+        if (!isDesktopApp && !isCloudReceiptUrl(url, import.meta.env.VITE_SUPABASE_URL)) throw new UnsafeReceiptError();
+      } else if (receipt?.dataUrl) {
+        url = receiptBlobUrl(receipt.dataUrl);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        throw new UnsafeReceiptError();
+      }
+      if (!isDesktopApp && !isOpenableReceiptHref(url, window.location.origin, import.meta.env.VITE_SUPABASE_URL)) throw new UnsafeReceiptError();
+      if (win) win.location.replace(url);
+      else window.open(url, "_blank", "noopener");
+    } catch (error) {
+      win?.close();
+      showAppMessage(error instanceof UnsafeReceiptError ? error.message : `Не удалось открыть чек: ${error?.message || error}`);
     }
   };
 

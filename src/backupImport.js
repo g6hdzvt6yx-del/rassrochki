@@ -1,5 +1,6 @@
 import { actualPaid } from './contractSafety';
 import { splitScheduleAmount } from './finance';
+import { isSafeReceipt } from './receiptSafety';
 
 export const TABLES = ['investors', 'contracts', 'withdrawals'];
 const fields = {
@@ -73,6 +74,10 @@ export function makePlan(backup, cloud) {
       if(counts.get(c.row.id)>1) c.problem='Несколько записей Mac соответствуют одной записи сайта. Требуется ручная сверка.';
       if(table==='investors' && c.problem) investorMap.delete(c.sourceId);
       if(table==='contracts') for(const [index,payment] of Object.entries(c.row.payments)) {
+        // Чек переносим, только если встроенная копия — фото или PDF, а путь к файлу безопасный:
+        // строка вида «javascript:…» выполнила бы чужой код при открытии чека (аудит, находка 1).
+        const listed=[payment?.receipt,...(Array.isArray(payment?.receipts)?payment.receipts:[])].filter(r=>r!==undefined&&r!==null);
+        if(listed.some(r=>!isSafeReceipt(r))) {c.problem=`Чек платежа №${Number(index)+1} повреждён или в недопустимом формате (не фото и не PDF). Перенос этой записи заблокирован.`;continue;}
         if(!payment?.receipt) continue;
         const receipt=payment.receipt;
         if(receipt.dataUrl && !receipt.path) continue; // Existing embedded receipt stays embedded.
@@ -114,7 +119,9 @@ export async function readCloud(client) {
 export function cloudFingerprint(cloud) {return stable(Object.fromEntries(TABLES.map(t=>[t,[...cloud[t]].sort((a,b)=>a.id.localeCompare(b.id))])));}
 async function updateChecked(client,table,row,before,ownerId) {
   let query=client.from(table).update(row).eq('id',row.id).eq('user_id',ownerId);
-  for(const field of fields[table].filter(f=>f!=='id')) {
+  // После миграции 006 версия строки — updated_at (её ставит база); до неё — сравнение всех полей.
+  if(before.updated_at) query=query.eq('updated_at',before.updated_at);
+  else for(const field of fields[table].filter(f=>f!=='id')) {
     const value=before[field];
     query=value==null?query.is(field,null):query.eq(field,typeof value==='object'?JSON.stringify(value):value);
   }
