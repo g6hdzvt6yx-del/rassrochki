@@ -36,6 +36,7 @@ import {SORT_OPTIONS, DIRECTIONAL_SORTS, sortContracts} from "./contractSort";
 import {CONTACT_TYPE_LABELS, MARK_FILTER_OPTIONS, marksByContract, markAuthors, matchesMarkFilter, toggleMarkStatus} from "./operatorMarks";
 import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
+import { contractReceipts, receiptPurpose, receiptMethod } from "./paymentHistory";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -2667,6 +2668,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
     if (initialAction) actionArea.current?.scrollIntoView({ block: "center" });
   }, [initialAction]);
   const st = contractStats(contract);
+  const receipts = contractReceipts(contract, st.rows);
   const investorName = contract.investorId
     ? (investors.find((i) => i.id === contract.investorId)?.name || "—")
     : "Общий пул";
@@ -2992,6 +2994,24 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
             )}
             <ContactEntries contacts={contacts} contractId={contract.id} onDelete={onDeleteContact} />
           </section>
+
+          {receipts.length > 0 && (
+            <details className="receipts-history">
+              <summary>
+                <b>Фактические оплаты</b>
+                <span>Оплат: {receipts.length} · всего <span className="money-nowrap">{money(receipts.reduce((s, r) => s + r.amount, 0))}</span></span>
+              </summary>
+              <div className="receipts-list">
+                {receipts.map((r, i) => (
+                  <div className="receipts-row" key={`${r.date}-${r.createdAt}-${i}`}>
+                    <span className="receipts-date">{r.date ? fmtDate(`${r.date}T12:00:00`) : "—"}</span>
+                    <span className="receipts-sum num">{money(r.amount)}</span>
+                    <span className="receipts-meta">{receiptPurpose(r)}{receiptMethod(r) ? ` · ${receiptMethod(r)}` : ''}{r.comment ? ` — ${r.comment}` : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
 
           <div className="ledger-hd-row">
             <div className="ledger-hd ledger-hd-inline">График платежей</div>
@@ -4245,6 +4265,16 @@ body:has(.dashboard-wrap){background:#0f172a}
 .comment-block{margin-bottom:18px}
 .comment-field{margin-bottom:8px}
 .comment-save{width:100%;justify-content:center}
+.receipts-history{margin-bottom:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.receipts-history>summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;padding:12px 14px;cursor:pointer;list-style:none}
+.receipts-history>summary::-webkit-details-marker{display:none}
+.receipts-history>summary::before{content:"▸";color:var(--ink-soft);font-size:11px;transition:transform .15s}
+.receipts-history[open]>summary::before{transform:rotate(90deg)}
+.receipts-history>summary b{font-size:13px;color:var(--ink)}.receipts-history>summary>span{font-size:10.5px;color:var(--ink-soft)}
+.receipts-list{border-top:1px solid var(--line)}
+.receipts-row{display:grid;grid-template-columns:86px 110px 1fr;gap:4px 12px;align-items:baseline;padding:8px 14px;font-size:12px}
+.receipts-row+.receipts-row{border-top:1px solid var(--line)}
+.receipts-date{color:var(--ink)}.receipts-sum{color:var(--ink);font-weight:600;white-space:nowrap}.receipts-meta{color:var(--ink-soft);font-size:11px;min-width:0;overflow-wrap:anywhere}
 .contact-history{margin-bottom:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
 .contact-history-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px}
 .contact-history-hd>div{display:flex;flex-direction:column;gap:2px}.contact-history-hd b{font-size:13px;color:var(--ink)}
@@ -4385,6 +4415,7 @@ body:has(.dashboard-wrap){background:#0f172a}
   .investor-accrual-hd{align-items:flex-start;flex-direction:column}
   .contact-form{grid-template-columns:1fr}.contact-note,.contact-submit{grid-column:1}
   .contact-history-hd{align-items:flex-start;flex-direction:column}
+  .receipts-row{grid-template-columns:auto 1fr}.receipts-sum{text-align:right}.receipts-meta{grid-column:1/-1}
   .data-row{align-items:flex-start;flex-direction:column}.data-row>div:last-child{align-items:flex-start}
 }
 `;
