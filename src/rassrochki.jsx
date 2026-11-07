@@ -42,7 +42,7 @@ import usePhoneLayout from "./usePhoneLayout";
 import { MobileTopBar, MobileTabBar, MobileMoreSheet, MobileHome, moreIcons, weekdayLabel } from "./MobileShell";
 import MobileContracts from "./MobileContracts";
 import MobileCapital from "./MobileCapital";
-import { contractReceipts, receiptPurpose, receiptMethod } from "./paymentHistory";
+import { contractReceipts, receiptPurpose, receiptNote } from "./paymentHistory";
 
 const APP_VERSION = __APP_VERSION__;
 const BUILD_DATE = __BUILD_DATE__;
@@ -3225,16 +3225,30 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
             <details className="receipts-history">
               <summary>
                 <b>Фактические оплаты</b>
-                <span>Оплат: {receipts.length} · всего <span className="money-nowrap">{money(receipts.reduce((s, r) => s + r.amount, 0))}</span></span>
+                <span>Оплат: {new Set(receipts.map((r) => r.key)).size} · всего <span className="money-nowrap">{money(receipts.reduce((s, r) => s + r.amount, 0))}</span></span>
               </summary>
-              <div className="receipts-list">
-                {receipts.map((r, i) => (
-                  <div className="receipts-row" key={`${r.date}-${r.createdAt}-${i}`}>
-                    <span className="receipts-date">{r.date ? fmtDate(`${r.date}T12:00:00`) : "—"}</span>
-                    <span className="receipts-sum num">{money(r.amount)}</span>
-                    <span className="receipts-meta">{receiptPurpose(r)}{receiptMethod(r) ? ` · ${receiptMethod(r)}` : ''}{r.comment ? ` — ${r.comment}` : ''}</span>
-                  </div>
-                ))}
+              <div className="receipts-table-wrap">
+                <table className="receipts-table">
+                  <thead><tr><th>Дата</th><th>Сумма</th><th>Фактическая сумма</th><th>Зачтено в</th><th>Остаток</th><th>Способ / коммент.</th></tr></thead>
+                  <tbody>
+                    {receipts.map((r, i) => (
+                      <tr key={`${r.key}-${r.numbers[0] || 0}-${i}`} className={r.remaining > 0 ? "has-rest" : ""}>
+                        <td data-label="Дата">{r.date ? fmtDate(`${r.date}T12:00:00`) : "—"}</td>
+                        <td data-label="Сумма" className="num">{money(r.due)}</td>
+                        <td data-label="Фактически" className="num receipts-paid">{money(r.amount)}</td>
+                        <td data-label="Зачтено в">{receiptPurpose(r)}</td>
+                        <td data-label="Остаток" className="num receipts-rest">{money(r.remaining)}</td>
+                        <td data-label="Способ" className="receipts-note">{receiptNote(r, money) || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr>
+                    <td>Итого</td><td></td>
+                    <td className="num receipts-paid">{money(receipts.reduce((s, r) => s + r.amount, 0))}</td>
+                    <td></td>
+                    <td className="num receipts-rest" data-label="Остаток по договору">{money(st.remaining)}</td><td></td>
+                  </tr></tfoot>
+                </table>
               </div>
             </details>
           )}
@@ -4499,10 +4513,14 @@ body:has(.dashboard-wrap){background:#0f172a}
 .receipts-history>summary::before{content:"▸";color:var(--ink-soft);font-size:11px;transition:transform .15s}
 .receipts-history[open]>summary::before{transform:rotate(90deg)}
 .receipts-history>summary b{font-size:13px;color:var(--ink)}.receipts-history>summary>span{font-size:10.5px;color:var(--ink-soft)}
-.receipts-list{border-top:1px solid var(--line)}
-.receipts-row{display:grid;grid-template-columns:86px 110px 1fr;gap:4px 12px;align-items:baseline;padding:8px 14px;font-size:12px}
-.receipts-row+.receipts-row{border-top:1px solid var(--line)}
-.receipts-date{color:var(--ink)}.receipts-sum{color:var(--ink);font-weight:600;white-space:nowrap}.receipts-meta{color:var(--ink-soft);font-size:11px;min-width:0;overflow-wrap:anywhere}
+.receipts-table-wrap{border-top:1px solid var(--line);overflow-x:auto}
+.receipts-table{width:100%;border-collapse:collapse;font-size:12px}
+.receipts-table th{padding:8px 10px;text-align:left;font-weight:500;font-size:10.5px;color:var(--ink-soft);background:var(--surface-2);white-space:nowrap}
+.receipts-table td{padding:8px 10px;color:var(--ink);border-top:1px solid var(--line);vertical-align:top}
+.receipts-table .num{white-space:nowrap}.receipts-table .receipts-paid{font-weight:600}
+.receipts-table tr.has-rest .receipts-rest{color:var(--brass)}
+.receipts-table .receipts-note{color:var(--ink-soft);font-size:11px;min-width:140px;overflow-wrap:anywhere}
+.receipts-table tfoot td{background:var(--surface-2);font-weight:600}
 .contact-history{margin-bottom:20px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
 .contact-history-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px}
 .contact-history-hd>div{display:flex;flex-direction:column;gap:2px}.contact-history-hd b{font-size:13px;color:var(--ink)}
@@ -4644,7 +4662,14 @@ body:has(.dashboard-wrap){background:#0f172a}
   .investor-accrual-hd{align-items:flex-start;flex-direction:column}
   .contact-form{grid-template-columns:1fr}.contact-note,.contact-submit{grid-column:1}
   .contact-history-hd{align-items:flex-start;flex-direction:column}
-  .receipts-row{grid-template-columns:auto 1fr}.receipts-sum{text-align:right}.receipts-meta{grid-column:1/-1}
+  .receipts-table thead{display:none}
+  .receipts-table,.receipts-table tbody,.receipts-table tfoot{display:block}
+  .receipts-table tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding:10px 14px;border-top:1px solid var(--line)}
+  .receipts-table td{padding:0;border:0;background:none}
+  .receipts-table tbody td::before{content:attr(data-label);display:block;font-size:10px;font-weight:400;color:var(--ink-soft)}
+  .receipts-table .receipts-note{grid-column:1/-1;min-width:0}
+  .receipts-table tfoot tr{background:var(--surface-2)}.receipts-table tfoot td:empty{display:none}
+  .receipts-table tfoot td[data-label]::before{content:attr(data-label);display:block;font-size:10px;font-weight:400;color:var(--ink-soft)}
   .data-row{align-items:flex-start;flex-direction:column}.data-row>div:last-child{align-items:flex-start}
 }
 `;
