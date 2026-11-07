@@ -1,6 +1,7 @@
 import { contractPassportLines } from './passport';
 import { jsPDF } from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
+import { contractReceipts, receiptPurpose, receiptMethod } from './paymentHistory';
 
 const money = (value) => `${Math.round(Number(value) || 0).toLocaleString('ru-RU').replace(/\s/g, ' ')} руб.`;
 const date = (value) => {
@@ -52,6 +53,24 @@ export function createContractPdf(contract, stats, fontBase64) {
     body: stats.rows.map((r) => [String(r.n), date(r.dueDate), money(r.amountDue), money(r.paidAmount), money(r.remainingDue)]),
     columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 32 } },
   });
+  const receipts = contractReceipts(contract, stats.rows);
+  if (receipts.length) {
+    y = doc.lastAutoTable.finalY + 10;
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFontSize(12); doc.text('Фактические оплаты', 16, y);
+    const total = receipts.reduce((s, r) => s + r.amount, 0);
+    autoTable(doc, {
+      startY: y + 5, margin: { top: 18, bottom: 20, left: 16, right: 16 }, styles,
+      headStyles: { fillColor: '#16332E', textColor: '#FFFFFF', fontStyle: 'normal' },
+      footStyles: { fillColor: '#F0F4EF', textColor: '#16332E', fontStyle: 'normal' },
+      alternateRowStyles: { fillColor: '#F0F4EF' }, rowPageBreak: 'avoid', showFoot: 'lastPage',
+      head: [['№', 'Дата оплаты', 'Сумма', 'Зачтено в', 'Способ / комментарий']],
+      body: receipts.map((r, i) => [String(i + 1), date(r.date), money(r.amount), receiptPurpose(r),
+        [receiptMethod(r), r.comment].filter(Boolean).join(' — ') || '-']),
+      foot: [['', 'Итого', money(total), `Оплат: ${receipts.length}`, '']],
+      columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 32 }, 2: { cellWidth: 32 } },
+    });
+  }
   y = doc.lastAutoTable.finalY + 18;
   if (y > 260) { doc.addPage(); y = 30; }
   doc.setFontSize(9);
