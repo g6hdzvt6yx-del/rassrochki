@@ -1930,7 +1930,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
 
       {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId} phone={isPhone}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
-      {tab === "expenses" && !isDesktopApp && <Expenses expenses={expenses} cards={cards} loadError={expensesError} onAdd={addExpense} onUpdate={updateExpense} onRemove={removeExpense}/> }
+      {tab === "expenses" && !isDesktopApp && <Expenses expenses={expenses} cards={cards} loadError={expensesError} onAdd={addExpense} onUpdate={updateExpense} onRemove={removeExpense} contracts={contracts} withdrawals={withdrawals} investors={investors} purposes={WITHDRAWAL_PURPOSES} onOpenContract={setOpenId}/> }
 
       {tab === "dashboard" && isPhone && (
         <MobileHome
