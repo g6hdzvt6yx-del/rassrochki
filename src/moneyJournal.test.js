@@ -39,3 +39,11 @@ describe("журнал денег", () => {
     expect(sheet.at(-1)).toEqual(expect.arrayContaining(["Разница (пришло − ушло)", 300]));
   });
 });
+
+describe("дата первоначального взноса", () => {
+  const base = { id: "d", clientName: "Бурана", item: "Товар", totalPrice: 28000, downPayment: 10000, markup: 8400, termMonths: 6, startDate: "2026-11-10", payments: {} };
+  const downDate = (c) => moneyJournal({ contracts: [c] }).find((r) => r.detail.startsWith("Первоначальный")).date;
+  it("берётся из даты составления договора", () => expect(downDate({ ...base, contractDate: "2026-10-17", createdAt: "2026-10-18T18:46:49Z" })).toBe("2026-10-17"));
+  it("иначе — день внесения договора в программу, а не первый платёж", () => expect(downDate({ ...base, createdAt: "2026-10-18T12:00:00Z" })).toBe("2026-10-18"));
+  it("в крайнем случае — дата первого платежа", () => expect(downDate(base)).toBe("2026-11-10"));
+});
