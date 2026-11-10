@@ -4,7 +4,7 @@ import { ArchiveRestore, Download, FileClock, FolderOpen, HardDriveDownload, His
 import { isDesktopApp, localData } from "./dataClient";
 import { formatDataDateTime as formatDateTime, parseDataDate } from "./dataDates";
 
-const TYPE_LABELS = { contracts: "Договор", payments: "Платёж", contacts: "Контакт", investors: "Вкладчик", withdrawals: "Вывод", expenses: "Расход", receipts: "Чек", export: "Экспорт", backup: "Резервная копия", drafts: "Черновик", import: "Импорт" };
+const TYPE_LABELS = { contracts: "Договор", payments: "Платёж", contacts: "Контакт", investors: "Вкладчик", withdrawals: "Вывод", expenses: "Расход", receipts: "Чек", export: "Экспорт", backup: "Резервная копия", drafts: "Черновик", import: "Импорт", operator_invites: "Приглашение", app_members: "Оператор" };
 const ACTION_LABELS = {
   create: "Создание", update: "Изменение", update_payment: "Изменение платежа",
   create_payment: "Оплата", full_payment: "Полная оплата", partial_payment: "Частичная оплата",
@@ -16,7 +16,7 @@ const ACTION_LABELS = {
   move_to_trash: "Перемещение в корзину", restore: "Восстановление",
   permanent_delete: "Удаление навсегда", import: "Импорт", export_excel: "Экспорт Excel", export_pdf: "Справка PDF", backup: "Резервная копия",
   export_backup: "Экспорт резервной копии", excel_backup: "Ежедневная Excel-копия",
-  stage_restore: "Подготовка восстановления копии", restore_backup: "Восстановление копии", delete_old_drafts: "Удаление старых черновиков",
+  stage_restore: "Подготовка восстановления копии", restore_backup: "Восстановление копии", invite_operator: "Приглашение оператора", accept_operator_invite: "Оператор принял приглашение", revoke_operator_invite: "Приглашение отозвано", update_operator: "Изменение доступа оператора", disable_operator: "Оператор заблокирован", delete_old_drafts: "Удаление старых черновиков",
 };
 
 const FIELD_LABELS = {
@@ -297,7 +297,7 @@ export default function DataCenter({ onClose, onRestored, onContinueDraft, contr
             <div className="data-list">
               {visibleActions.filter((a) => (!type || a.entity_type === type) && (!actionQuery || `${a.entity_name || ""} ${a.contract_id || ""} ${a.investor_id || ""}`.toLowerCase().includes(actionQuery.toLowerCase()))).map((a) => <div className="data-row journal-row" key={a.id}>
                 <div><b>{ACTION_LABELS[a.action_type] || a.action_type}</b><span>{a.entity_name || TYPE_LABELS[a.entity_type] || a.entity_type}</span><small className="action-description">{actionDescription(a)}</small></div>
-                <div><span className={`badge ${a.result === "error" ? "b-clay" : "b-emerald"}`}>{a.result === "error" ? "Ошибка" : "Успешно"}</span><small>{formatDateTime(a.occurred_at)} · {a.actor_name || a.source}</small></div>
+                <div><span className={`badge ${a.result === "error" ? "b-clay" : "b-emerald"}`}>{a.result === "error" ? "Ошибка" : "Успешно"}</span><small>{formatDateTime(a.occurred_at)} · {a.actor_name ? `${a.actor_name}${a.source && !['Сайт', 'Mac', 'Сервер'].includes(a.source) ? ` · ${a.source}` : ''}` : a.source}</small></div>
               </div>)}
               {!visibleActions.length && <div className="empty">{cloud ? "Изменений пока нет. История записывается с 26 октября 2026 года: каждое создание, правка, оплата и удаление появится здесь." : "Журнал пока пуст."}</div>}
             </div>
