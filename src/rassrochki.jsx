@@ -1,6 +1,8 @@
 import ContractTable from "./ContractTable";
 import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contractWorkbench";
 import CashDesk, { PaymentDestination } from "./CashDesk";
+import Expenses from "./Expenses";
+import { expenseFromRow, expenseToRow } from "./expenses";
 import { cashCards, paymentDestination } from "./cash";
 import { expectedPayments, dateInPeriod, duePeriodSummary, monthBounds, shiftMonth } from "./expectedPayments";
 import { buildDuePeriodWorkbook, duePeriodExportRows, duePeriodFileName } from "./duePeriodExcel";
@@ -15,7 +17,7 @@ import {
   CheckCircle2, Clock, ChevronLeft, X, Check, Undo2, CalendarDays,
   Landmark, TrendingUp, Trash2, Paperclip, FileText, ChevronDown,
   Upload, Download, LogOut, Search, Pencil, MessageCircle, Printer,
-  Database, RotateCcw, History, ClipboardList, ChevronRight,
+  Database, RotateCcw, History, ClipboardList, ChevronRight, Receipt,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
 import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
@@ -572,7 +574,7 @@ const Ribbon = ({ paid, overdue, remaining }) => {
 /*  Приложение                                                         */
 /* ------------------------------------------------------------------ */
 
-export default function App({ onOpenTeam, onOpenMacImport } = {}) {
+export default function App({ onOpenTeam, onDownloadBackup } = {}) {
   const isPhone = usePhoneLayout(); // ширина до 760px — телефонная раскладка
   const [moreOpen, setMoreOpen] = useState(false);
   const [session, setSession] = useState(undefined); // undefined = проверяем, null = не вошли, объект = вошли
@@ -605,6 +607,9 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
 
   const [withdrawals, setWithdrawals] = useState([]);
   const [addingWithdrawal, setAddingWithdrawal] = useState(false);
+
+  const [expenses, setExpenses] = useState([]);
+  const [expensesError, setExpensesError] = useState("");
 
   const [sectionModal, setSectionModal] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
@@ -729,6 +734,19 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       setStorageError(""); // данные заново синхронизированы с БД — снимаем флаг ошибки
       setLoaded(true);
     })();
+    return () => { cancelled = true; };
+  }, [userId, reloadTick]);
+
+  // Реестр расходов грузится отдельно: если таблицы ещё нет в базе клиента, остальное приложение работает.
+  useEffect(() => {
+    if (!userId || isDesktopApp) return;
+    let cancelled = false;
+    supabase.from("expenses").select("*").order("date", { ascending: false }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) { setExpensesError(`Расходы не загрузились: ${error.message}`); return; }
+      setExpensesError("");
+      setExpenses((data || []).map(expenseFromRow));
+    });
     return () => { cancelled = true; };
   }, [userId, reloadTick]);
 
@@ -930,6 +948,30 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
     setWithdrawals((prev) => prev.filter((x) => x.id !== id));
     const { error } = await supabase.from("withdrawals").delete().eq("id", id);
     if (error) return rollback(error.message, () => setWithdrawals(prevWithdrawals));
+  };
+
+  const addExpense = async (data) => {
+    const e = { ...data, id: "x" + Date.now() + Math.random().toString(36).slice(2, 6), createdAt: new Date().toISOString() };
+    const { data: row, error } = await supabase.from("expenses").insert(expenseToRow(e)).select().single();
+    if (error) throw new Error(`Расход не сохранён: ${error.message}`);
+    setExpenses((prev) => [expenseFromRow(row), ...prev]);
+    showAppMessage("Расход сохранён", "success");
+  };
+
+  const updateExpense = async (data) => {
+    const { data: row, error } = await supabase.from("expenses").update(expenseToRow(data)).eq("id", data.id).select().single();
+    if (error) throw new Error(`Изменение не сохранено: ${error.message}`);
+    setExpenses((prev) => prev.map((x) => (x.id === data.id ? expenseFromRow(row) : x)));
+    showAppMessage("Расход изменён", "success");
+  };
+
+  const removeExpense = async (id) => {
+    const e = expenses.find((x) => x.id === id);
+    if (!await requestConfirm({ title: "Переместить расход в корзину?", message: `${e?.category || "Расход"} · ${money(e?.amount || 0)} от ${e ? fmtDate(e.date) : ""}. Его можно будет восстановить из корзины в «Истории».`, confirmLabel: "Переместить в корзину" })) return;
+    const prev = expenses;
+    setExpenses((list) => list.filter((x) => x.id !== id));
+    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (error) return rollback(error.message, () => setExpenses(prev));
   };
 
   const importData = async (newInvestors, newContracts, paymentUpdates) => {
@@ -1808,7 +1850,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       <style>{css}</style>
 
       {isPhone && <MobileTopBar
-        title={{ contracts: "Договоры", cash: "Касса", capital: "Капитал", directories: "Справочники" }[tab] || "Eppaz"}
+        title={{ contracts: "Договоры", cash: "Касса", capital: "Капитал", directories: "Справочники", expenses: "Расходы" }[tab] || "Eppaz"}
         subtitle={tab === "contracts" ? `Всего договоров: ${contracts.length}` : weekdayLabel(toIsoDate(new Date()))}
       >{syncStatus}</MobileTopBar>}
       {!isPhone && <header className="hd">
@@ -1860,6 +1902,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
         </button>
         {!isDesktopApp && <button className={tab === "directories" ? "on" : ""} onClick={() => setTab("directories")}><Users size={16}/> Справочники</button>}
         <button className={tab === "cash" ? "on" : ""} onClick={() => setTab("cash")}><Wallet size={16}/> Касса</button>
+        {!isDesktopApp && <button className={tab === "expenses" ? "on" : ""} onClick={() => setTab("expenses")}><Receipt size={16}/> Расходы</button>}
         <button onClick={() => setDataCenterOpen(true)}>
           {isDesktopApp ? <Database size={16} /> : <History size={16} />} {isDesktopApp ? "Данные" : "История"}
         </button>
@@ -1883,6 +1926,7 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
 
       {tab === "cash" && <CashDesk contracts={contracts} cards={cards} onAddCard={addCashCard} onOpen={setOpenId} phone={isPhone}/> }
       {tab === "directories" && <Directories contracts={contracts} onSaveClient={updateDirectoryClient}/> }
+      {tab === "expenses" && !isDesktopApp && <Expenses expenses={expenses} cards={cards} loadError={expensesError} onAdd={addExpense} onUpdate={updateExpense} onRemove={removeExpense}/> }
 
       {tab === "dashboard" && isPhone && (
         <MobileHome
@@ -2570,24 +2614,25 @@ export default function App({ onOpenTeam, onOpenMacImport } = {}) {
       {profitTotalOpen && <ProfitTotalDetail contracts={contracts} onClose={() => setProfitTotalOpen(false)} onOpenContract={(id) => { setProfitTotalOpen(false); setOpenId(id); }} />}
       {profitGroupOpen && <ProfitGroupDetail group={profitGroupOpen} onClose={() => setProfitGroupOpen(null)} onOpenContract={(id) => { setProfitGroupOpen(null); setOpenId(id); }} />}
       {!isPhone && <div className="build-info">Версия {APP_VERSION} · сборка {fmtDate(`${BUILD_DATE}T00:00:00`)}</div>}
-      {isPhone && <MobileTabBar tab={tab} onTab={goTab} onAdd={() => setAdding(true)} onMore={() => setMoreOpen(true)} moreActive={moreOpen || ["capital", "directories"].includes(tab)} />}
+      {isPhone && <MobileTabBar tab={tab} onTab={goTab} onAdd={() => setAdding(true)} onMore={() => setMoreOpen(true)} moreActive={moreOpen || ["capital", "directories", "expenses"].includes(tab)} />}
       {isPhone && moreOpen && <MobileMoreSheet
         onClose={() => setMoreOpen(false)}
         footer={`Версия ${APP_VERSION} · сборка ${fmtDate(`${BUILD_DATE}T00:00:00`)}`}
         groups={[
           { title: "Разделы", items: [
             { key: "capital", icon: <moreIcons.Landmark size={19} />, label: "Капитал", hint: "Вкладчики, выплаты, прибыль", onClick: () => goTab("capital") },
+            !isDesktopApp && { key: "expenses", icon: <moreIcons.Receipt size={19} />, label: "Расходы", hint: "Реестр оплат: аренда, зарплата, реклама", onClick: () => goTab("expenses") },
             !isDesktopApp && { key: "directories", icon: <moreIcons.Users size={19} />, label: "Справочники", hint: "Клиенты и товары", onClick: () => goTab("directories") },
             { key: "history", icon: <moreIcons.History size={19} />, label: isDesktopApp ? "Данные" : "История", hint: "Журнал действий", onClick: () => setDataCenterOpen(true) },
           ] },
           { title: "Данные", items: [
             { key: "import", icon: <moreIcons.Upload size={19} />, label: "Импорт из Excel", onClick: () => setImporting(true) },
             { key: "export", icon: <moreIcons.Download size={19} />, label: "Экспорт в Excel", hint: "Скачать все договоры", onClick: exportExcel },
+            onDownloadBackup && { key: "backup", icon: <moreIcons.HardDriveDownload size={19} />, label: "Скачать копию", hint: "Все данные одним файлом Excel", onClick: () => { setMoreOpen(false); onDownloadBackup(); } },
             !isDesktopApp && cloudDrafts.length > 0 && { key: "drafts", icon: <moreIcons.FileText size={19} />, label: `Черновики · ${cloudDrafts.length}`, onClick: () => setDraftsOpen(true) },
           ] },
           { title: "Администрирование", items: [
             onOpenTeam && { key: "team", icon: <moreIcons.UserCog size={19} />, label: "Операторы и назначения", onClick: onOpenTeam },
-            onOpenMacImport && { key: "mac", icon: <moreIcons.Laptop size={19} />, label: "Перенести копию с Mac", onClick: onOpenMacImport },
           ] },
           { title: "Аккаунт", items: [
             { key: "logout", icon: <moreIcons.LogOut size={19} />, label: "Выйти", tone: "bad", onClick: logout },

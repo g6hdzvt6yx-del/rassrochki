@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Home, ScrollText, Plus, Wallet, Menu, X, Phone, MessageCircle, Banknote, Check,
   ChevronRight, AlertTriangle, Landmark, Users, History, Upload, Download, FileText,
-  UserCog, Laptop, LogOut,
+  UserCog, LogOut, Receipt, HardDriveDownload,
 } from "lucide-react";
 import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import { receivedSummary } from "./finance";
@@ -118,7 +118,7 @@ export function MobileMoreSheet({ onClose, groups, footer }) {
   );
 }
 
-export const moreIcons = { Landmark, Users, History, Upload, Download, FileText, UserCog, Laptop, LogOut };
+export const moreIcons = { Landmark, Users, History, Upload, Download, FileText, UserCog, LogOut, Receipt, HardDriveDownload };
 
 /* ---------------- главная (Сводка) ---------------- */
 
