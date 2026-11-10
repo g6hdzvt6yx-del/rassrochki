@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Home, ScrollText, Plus, Wallet, Menu, X, Phone, MessageCircle, Banknote, Check,
   ChevronRight, AlertTriangle, Landmark, Users, History, Upload, Download, FileText,
-  UserCog, Laptop, LogOut,
+  UserCog, LogOut, Receipt, HardDriveDownload,
 } from "lucide-react";
 import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import { receivedSummary } from "./finance";
@@ -118,11 +118,11 @@ export function MobileMoreSheet({ onClose, groups, footer }) {
   );
 }
 
-export const moreIcons = { Landmark, Users, History, Upload, Download, FileText, UserCog, Laptop, LogOut };
+export const moreIcons = { Landmark, Users, History, Upload, Download, FileText, UserCog, LogOut, Receipt, HardDriveDownload };
 
 /* ---------------- главная (Сводка) ---------------- */
 
-export function MobileHome({ contracts, getStats, totals, capital, received, monthlyStats, onOpenContract, onPay, onRemind, onSection, onReceived, onProfitTotal }) {
+export function MobileHome({ contracts, getStats, totals, capital, received, monthlyStats, onOpenContract, onPay, onRemind, onSection, onReceived, onProfitTotal, netProfit }) {
   const today = isoDay(new Date());
   const [period, setPeriod] = useState("today");
   const [showAll, setShowAll] = useState(false);
@@ -261,6 +261,8 @@ export function MobileHome({ contracts, getStats, totals, capital, received, mon
         <button type="button" className="m-metric" onClick={() => onSection("active")}><span>Активных договоров</span><b>{totals.active}</b></button>
         <button type="button" className={`m-metric ${totals.debtors ? "bad" : ""}`} onClick={() => onSection("debtors")}><span>Должников</span><b>{totals.debtors}</b></button>
       </div>
+
+      {netProfit}
 
       <section className="m-panel">
         <h2>{months === "past" ? "Получено по месяцам" : "Ожидается по месяцам"}</h2>

@@ -4,11 +4,10 @@ import { accessFor } from './access';
 import OperatorDesk from './OperatorDesk';
 import TeamPanel from './TeamPanel';
 import './webAccess.css';
-const MacBackupImport = React.lazy(() => import('./MacBackupImport'));
 const AdminApp = React.lazy(() => import('./rassrochki.jsx'));
 export default function WebAccess() {
   const [session,setSession]=useState(undefined), [profile,setProfile]=useState(null), [checked,setChecked]=useState(false);
-  const [error,setError]=useState(''), [busy,setBusy]=useState(false), [team,setTeam]=useState(false), [importOpen,setImportOpen]=useState(false), [importBusy,setImportBusy]=useState(false), [appVersion,setAppVersion]=useState(0), [tick,setTick]=useState(0);
+  const [error,setError]=useState(''), [busy,setBusy]=useState(false), [team,setTeam]=useState(false), [backupBusy,setBackupBusy]=useState(false), [backupNote,setBackupNote]=useState(null), [tick,setTick]=useState(0);
   const sessionUser = useRef(null);
   useEffect(()=>{
     if (!supabaseConfigured) {setSession(null); return;}
@@ -34,5 +33,12 @@ export default function WebAccess() {
   const role=accessFor(profile);
   if(role==='blocked') return <main className="web-card"><h1>Доступ не предоставлен</h1><p>{error||'Учётная запись не активирована администратором.'}</p><button onClick={()=>setTick(t=>t+1)}>Проверить снова</button> <button onClick={logout}>Выйти</button></main>;
   if(role==='operator') return <OperatorDesk onLogout={logout}/>;
-  return <><div className={team||importOpen?'web-admin-bar is-open':'web-admin-bar'}><span>Администратор</span><button disabled={importBusy} onClick={()=>{setImportOpen(false);setTeam(!team);}}>{team?'Вернуться к приложению':'Операторы и назначения'}</button><button disabled={importBusy} onClick={()=>{setTeam(false);setImportOpen(!importOpen);}}>{importOpen?'Вернуться к приложению':'Перенести копию с Mac'}</button></div>{importOpen?<React.Suspense fallback={<p>Загрузка импорта…</p>}><MacBackupImport ownerId={session.user.id} onBusyChange={setImportBusy} onDone={()=>setAppVersion(v=>v+1)}/></React.Suspense>:team?<TeamPanel/>:<React.Suspense fallback={<p>Загрузка…</p>}><AdminApp key={session.user.id+":"+appVersion} onOpenTeam={()=>{setImportOpen(false);setTeam(true);}} onOpenMacImport={()=>{setTeam(false);setImportOpen(true);}}/></React.Suspense>}</>;
+  const downloadBackup=async()=>{
+    if(backupBusy)return;
+    setBackupBusy(true);setBackupNote(null);
+    try{const {downloadCloudBackup}=await import('./cloudBackup');const r=await downloadCloudBackup(supabase);setBackupNote({ok:true,text:`Копия скачана: договоров ${r.contracts}, расходов ${r.expenses}. Файл — в «Загрузках».`});}
+    catch(e){setBackupNote({ok:false,text:`Копия не скачалась: ${e.message||e}`});}
+    finally{setBackupBusy(false);}
+  };
+  return <><div className={team?'web-admin-bar is-open':'web-admin-bar'}><span>Администратор</span><button onClick={()=>setTeam(!team)}>{team?'Вернуться к приложению':'Операторы и назначения'}</button><button disabled={backupBusy} onClick={downloadBackup} title="Все данные сайта одним файлом Excel">{backupBusy?'Готовлю копию…':'Скачать копию'}</button>{backupNote&&<span role={backupNote.ok?'status':'alert'} className={backupNote.ok?'web-admin-note':'web-admin-note bad'}>{backupNote.text}<button type="button" aria-label="Скрыть" onClick={()=>setBackupNote(null)}>×</button></span>}</div>{team?<TeamPanel/>:<React.Suspense fallback={<p>Загрузка…</p>}><AdminApp key={session.user.id} onOpenTeam={()=>setTeam(true)} onDownloadBackup={downloadBackup}/></React.Suspense>}</>;
 }

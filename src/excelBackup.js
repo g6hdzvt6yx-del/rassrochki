@@ -56,6 +56,7 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
   const contracts = (snapshot.contracts || []).map(rowData);
   const investors = (snapshot.investors || []).map(rowData);
   const withdrawals = (snapshot.withdrawals || []).map(rowData);
+  const expenses = (snapshot.expenses || []).map(rowData);
   const activeContracts = contracts.filter((item) => !item.__deletedAt);
 
   addSheet(XLSX, workbook, "Сводка", ["Показатель", "Значение"], [
@@ -64,9 +65,10 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
     ["Договоров в корзине", contracts.length - activeContracts.length],
     ["Вкладчиков", investors.filter((item) => !item.__deletedAt).length],
     ["Выводов средств", withdrawals.filter((item) => !item.__deletedAt).length],
+    ...(snapshot.expenses ? [["Расходов", expenses.filter((item) => !item.__deletedAt).length]] : []),
     ["Записей журнала", (snapshot.actions || []).length],
     ["Черновиков", (snapshot.drafts || []).length],
-    ["Важно", "Файл является ежедневной читаемой копией данных. Полная техническая копия SQLite и вложений создаётся приложением отдельно."],
+    ["Важно", snapshot.note || "Файл является ежедневной читаемой копией данных. Полная техническая копия SQLite и вложений создаётся приложением отдельно."],
   ], [34, 90]);
 
   const contractSheet = addSheet(XLSX, workbook, "Договоры", [
@@ -148,6 +150,12 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
       item.note || item.comment || "", item.__deletedAt ? localDateTime(item.__deletedAt) : "",
     ]), [24, 16, 16, 24, 24, 36, 20]);
 
+  if (snapshot.expenses) addSheet(XLSX, workbook, "Расходы", ["ID", "Дата", "Сумма", "Статья", "Оплачено из", "Комментарий", "Удалён"],
+    expenses.map((item) => [
+      item.id || item.__id, localDate(item.date), +item.amount || 0, item.category || "", item.paid_from || item.paidFrom || "",
+      item.note || "", item.__deletedAt ? localDateTime(item.__deletedAt) : "",
+    ]), [24, 16, 16, 24, 28, 40, 20]);
+
   const contactsSheet = addSheet(XLSX, workbook, "История контактов", [
     "ID договора", "Клиент", "Телефон", "Тип", "Дата и время", "Результат", "Обещанная дата", "Обещанная сумма", "Следующий контакт", "Договор удалён",
   ], contactRows, [24, 25, 18, 14, 20, 45, 18, 18, 18, 15]);
@@ -176,6 +184,7 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
     ...contracts.filter((item) => item.__deletedAt).map((item) => ["Договор", item.id || item.__id, item.client_name || item.clientName || "", localDateTime(item.__deletedAt), item.__deletedBy]),
     ...investors.filter((item) => item.__deletedAt).map((item) => ["Вкладчик", item.id || item.__id, item.name || "", localDateTime(item.__deletedAt), item.__deletedBy]),
     ...withdrawals.filter((item) => item.__deletedAt).map((item) => ["Вывод", item.id || item.__id, item.note || item.purpose || "", localDateTime(item.__deletedAt), item.__deletedBy]),
+    ...expenses.filter((item) => item.__deletedAt).map((item) => ["Расход", item.id || item.__id, item.note || item.category || "", localDateTime(item.__deletedAt), item.__deletedBy]),
     ...(snapshot.deletedReceipts || []).map((item) => ["Чек", item.id, parse(item.data).name || "", localDateTime(item.deleted_at), item.deleted_by || ""]),
   ];
   addSheet(XLSX, workbook, "Корзина", ["Тип", "ID", "Название", "Удалён", "Кем удалён"], trashRows, [16, 32, 38, 21, 20]);

@@ -1,0 +1,100 @@
+/* Реестр расходов. Контейнер, фильтры и плитки итогов берутся у «Кассы» (.cash-desk). */
+.expenses-desk .exp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+html body .app .expenses-desk .exp-head h2{margin:0}
+.expenses-desk h3 small{font-size:13px;font-weight:500;color:var(--ink-soft)}
+.exp-error{color:var(--clay)}
+
+.exp-form{border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 20px;background:var(--surface-2,#243247)}
+.exp-form-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:15px}
+.exp-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.exp-form-grid label{display:flex;flex-direction:column;gap:6px;color:var(--ink-soft);font-size:12px;min-width:0}
+.exp-form-grid .exp-wide{grid-column:1/-1}
+html body .app .exp-form :is(input){height:40px;font-size:14px;width:100%;box-sizing:border-box}
+.exp-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+
+.exp-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.exp-chip{font:inherit;font-size:12.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);cursor:pointer}
+.exp-chip.on{border-color:var(--brass);color:var(--ink);background:#b39aff22}
+.exp-filters .exp-search{flex:1;min-width:180px}
+
+.exp-cat-btn{all:unset;display:block;width:100%;cursor:pointer;box-sizing:border-box}
+.exp-cat-btn:focus-visible{outline:2px solid var(--brass);outline-offset:4px;border-radius:6px}
+html body .app .expenses-desk .cash-summary>p.on{border-color:var(--brass);box-shadow:inset 0 0 0 1px var(--brass)}
+
+.exp-list-hd{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px;font-size:11px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ink-soft)}
+.exp-list{display:flex;flex-direction:column;gap:8px}
+.exp-row{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,200px) 130px auto;gap:14px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,#233146,#192435)}
+.exp-date{color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
+.exp-main{min-width:0;display:flex;flex-direction:column;gap:2px}
+.exp-main b{font-weight:650;overflow-wrap:anywhere}
+.exp-note{color:var(--ink-soft);font-size:12px;overflow-wrap:anywhere}
+.exp-from{color:var(--ink-soft);overflow-wrap:anywhere}
+.exp-sum{text-align:right;font-weight:650;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.exp-actions{display:flex;gap:6px}
+.exp-empty{color:var(--ink-soft)}
+
+@media(max-width:900px){.exp-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Телефон: плитки в стиле остальных мобильных экранов */
+@media (max-width: 760px) {
+  html body .app.is-phone .expenses-desk .exp-head h2{display:none}
+  html body .app.is-phone .expenses-desk .exp-head{margin-bottom:10px}
+  html body .app.is-phone .expenses-desk .exp-head .btn{width:100%;justify-content:center;min-height:48px;border-radius:14px;background:var(--m-accent);font-size:16px}
+  html body .app.is-phone .exp-form{border-radius:18px;background:var(--m-tile);border-color:var(--m-line-2);padding:14px}
+  html body .app.is-phone .exp-form-grid{grid-template-columns:1fr 1fr;gap:8px}
+  html body .app.is-phone .exp-form-grid label{font-size:13px;color:var(--m-muted)}
+  html body .app.is-phone .exp-form-grid label:nth-child(n+3){grid-column:1/-1}
+  html body .app.is-phone .exp-form-actions .btn{flex:1;justify-content:center;min-height:48px}
+  html body .app.is-phone .exp-chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 10px;padding:0 16px 2px;scrollbar-width:none}
+  html body .app.is-phone .exp-chips::-webkit-scrollbar{display:none}
+  html body .app.is-phone .exp-chip{flex:none;min-height:36px;padding:0 14px;font-size:14px;border-color:var(--m-line-2);color:var(--m-muted);background:var(--m-tile)}
+  html body .app.is-phone .exp-chip.on{background:var(--m-accent-soft);border-color:var(--m-accent);color:var(--m-accent-text)}
+  html body .app.is-phone .exp-filters > :is(select,.exp-search){grid-column:1/-1}
+  html body .app.is-phone .expenses-desk h3{background:linear-gradient(160deg,rgba(255,122,134,.26),rgba(255,122,134,.05) 60%,rgba(255,255,255,.04));border-color:rgba(255,122,134,.3)}
+  html body .app.is-phone .expenses-desk h3 small{display:block;font-size:13px;color:var(--m-muted);margin-top:4px}
+  html body .app.is-phone .expenses-desk .cash-summary>p.on{border-color:var(--m-accent);box-shadow:none;background:var(--m-accent-soft)}
+  html body .app.is-phone .exp-list-hd{margin:16px 2px 8px;font-size:12px;color:var(--m-muted)}
+  html body .app.is-phone .exp-list-hd .btn{min-height:36px}
+  html body .app.is-phone .exp-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:12px 14px;border-radius:16px;background:var(--m-tile);border-color:var(--m-line)}
+  html body .app.is-phone .exp-main{grid-column:1;grid-row:1}
+  html body .app.is-phone .exp-main b{font-size:16px;color:var(--m-text)}
+  html body .app.is-phone .exp-note{font-size:13px;color:var(--m-muted)}
+  html body .app.is-phone .exp-sum{grid-column:2;grid-row:1;font-size:17px;font-weight:700;color:var(--m-text);align-self:start}
+  html body .app.is-phone .exp-date,html body .app.is-phone .exp-from{grid-row:2;font-size:12.5px;color:var(--m-muted)}
+  html body .app.is-phone .exp-date{grid-column:1;display:flex;gap:8px}
+  html body .app.is-phone .exp-from{grid-column:1;grid-row:3}
+  html body .app.is-phone .exp-actions{grid-column:2;grid-row:2/4;align-self:end}
+  html body .app.is-phone .exp-actions .icon-btn-ghost{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;border-color:var(--m-line-2)}
+  html body .app.is-phone .exp-empty{color:var(--m-muted);text-align:center;padding:24px 0}
+}
+
+/* «Чистая прибыль» на Сводке */
+.net-profit{border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 16px;background:linear-gradient(135deg,#233146,#192435)}
+.net-profit-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.net-profit-title{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-soft)}
+.net-profit-month{display:inline-flex;align-items:center;gap:6px}
+.net-profit-month b{min-width:130px;text-align:center;font-weight:600}
+.net-profit-month button{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);cursor:pointer}
+.net-profit-month button:disabled{opacity:.35;cursor:default}
+.net-profit-rows{margin:0;display:grid;gap:6px}
+.net-profit-rows>div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.net-profit-rows dt{color:var(--ink-soft)}
+.net-profit-rows dd{margin:0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.net-profit-total{border-top:1px solid var(--line);padding-top:10px;margin-top:4px;font-size:18px!important;font-weight:700}
+.net-profit-total dt{color:var(--ink)!important}
+.net-profit-total.ok dd{color:var(--emerald)}.net-profit-total.bad dd{color:var(--clay)}
+.net-profit-link{all:unset;cursor:pointer;color:var(--brass);text-decoration:underline;text-underline-offset:2px}
+@media (max-width: 760px) {
+  html body .app.is-phone .net-profit{margin:14px 0 0;padding:14px;border-radius:18px;background:var(--m-tile);border-color:var(--m-line)}
+  html body .app.is-phone .net-profit-title{font-size:12.5px;color:var(--m-muted)}
+  html body .app.is-phone .net-profit-month b{min-width:0;font-size:15px}
+  html body .app.is-phone .net-profit-month button{width:40px;height:40px;border-radius:12px;border-color:var(--m-line-2);color:var(--m-text)}
+  html body .app.is-phone .net-profit-rows>div{font-size:15px}
+  html body .app.is-phone .net-profit-rows dt{color:var(--m-muted)}
+  html body .app.is-phone .net-profit-total{font-size:19px!important;border-color:var(--m-line-2)}
+  html body .app.is-phone .net-profit-total dt{color:var(--m-text)!important}
+  html body .app.is-phone .net-profit-total.ok dd{color:var(--m-ok)}html body .app.is-phone .net-profit-total.bad dd{color:var(--m-bad)}
+  html body .app.is-phone .net-profit-link{color:var(--m-accent-text)}
+}
+.exp-hint{font-size:12px;color:var(--ink-soft);margin:10px 0 0}
+@media (max-width: 760px){html body .app.is-phone .exp-hint{font-size:13px;color:var(--m-muted)}}

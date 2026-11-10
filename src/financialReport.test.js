@@ -22,7 +22,7 @@ it('flags undated receipts and handles empty data', () => {
 it('round trips workbook with numeric totals and registers', () => {
  const wb = buildFinancialReportWorkbook(XLSX, buildFinancialReport(args));
  const read = XLSX.read(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
- expect(read.SheetNames).toHaveLength(4); expect(read.Sheets['Итоги'].B6.v).toBe(300);
+ expect(read.SheetNames).toHaveLength(5); expect(read.SheetNames).toContain('Расходы'); expect(read.Sheets['Итоги'].B6.v).toBe(300);
  expect(XLSX.utils.sheet_to_json(read.Sheets['Платежи'])).toHaveLength(2);
 });
 
@@ -40,4 +40,13 @@ it('uses clear labels for missing client or item', () => {
  const r = buildFinancialReport(args);
  expect(r.portfolio[0].contractName).toBe('Клиент не указан — Товар не указан');
  expect(r.payments[0].contractName).toBe(r.portfolio[0].contractName);
+});
+
+it('subtracts period expenses from owner profit only', () => {
+ const expenses = [{ date: '2026-10-05', amount: 15, category: 'Аренда' }, { date: '2026-09-29', amount: 1000, category: 'Аренда' }, { date: '2026-10-14', amount: 5, category: 'Связь' }];
+ const r = buildFinancialReport({ ...args, expenses });
+ expect(r.expenses).toBe(20); expect(r.periodExpenses).toHaveLength(2);
+ expect(r.netProfit).toBe(60 - 20 - 20);
+ const inv = buildFinancialReport({ ...args, expenses, investorId: 'i' });
+ expect(inv.expenses).toBe(0);
 });
