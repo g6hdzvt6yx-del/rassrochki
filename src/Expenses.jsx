@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Download, X } from "lucide-react";
 import {
-  buildExpensesWorkbook, categoryOptions, expenseTotals, filterExpenses, paidFromOptions, parseAmount, validateExpense,
+  buildExpensesWorkbook, categoryOptions, expensePeriod, expenseTotals, filterExpenses, monthOf, paidFromOptions, parseAmount,
+  periodLabel, periodOptions, validateExpense,
 } from "./expenses";
 import { buildJournalWorkbook, filterJournal, journalTotals, moneyJournal } from "./moneyJournal";
 import "./expenses.css";
@@ -20,10 +21,14 @@ const quickPeriods = () => {
     ["all", "Всё время", "", ""],
   ];
 };
-const emptyForm = () => ({ id: "", date: localDay(new Date()), amount: "", category: "", paidFrom: "", note: "" });
+const emptyForm = () => { const date = localDay(new Date()); return { id: "", date, period: monthOf(date), amount: "", category: "", paidFrom: "", note: "" }; };
+const forPeriod = (e) => `за ${periodLabel(expensePeriod(e)).toLowerCase()}`;
+const BASES = [["paid", "По дате оплаты"], ["period", "По периоду расхода"]];
 
 function ExpenseForm({ initial, categories, sources, onCancel, onSave }) {
   const [f, setF] = useState(initial);
+  // Пока период не выбран вручную, он следует за месяцем даты оплаты. У сохранённой записи период уже выбран.
+  const [periodTouched, setPeriodTouched] = useState(Boolean(initial.id));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
@@ -40,7 +45,13 @@ function ExpenseForm({ initial, categories, sources, onCancel, onSave }) {
       <div className="exp-form-hd"><b>{f.id ? "Изменить расход" : "Новый расход"}</b>
         <button type="button" className="icon-btn-ghost" onClick={onCancel} aria-label="Закрыть"><X size={16} /></button></div>
       <div className="exp-form-grid">
-        <label>Дата оплаты<input type="date" value={f.date} onChange={set("date")} required /></label>
+        <label>Дата оплаты<input type="date" value={f.date} required
+          onChange={(e) => { const date = e.target.value; setF((p) => ({ ...p, date, ...(periodTouched || !date ? {} : { period: monthOf(date) }) })); }} /></label>
+        <label>Период расхода
+          <select value={f.period} required onChange={(e) => { setPeriodTouched(true); setF((p) => ({ ...p, period: e.target.value })); }}>
+            {periodOptions(f.date, f.period).map((m) => <option key={m} value={m}>{periodLabel(m)}</option>)}
+          </select>
+          <small className="exp-field-hint">Месяц, к которому относится расход. Может отличаться от месяца оплаты</small></label>
         <label>Сумма, ₽<input inputMode="decimal" value={f.amount} onChange={set("amount")} placeholder="0" autoFocus={!f.id} required /></label>
         <label>Статья<input list="exp-categories" value={f.category} onChange={set("category")} maxLength={100} placeholder="Аренда, зарплата…" />
           <datalist id="exp-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist></label>
@@ -60,6 +71,14 @@ function ExpenseForm({ initial, categories, sources, onCancel, onSave }) {
 
 const VIEWS = [["all", "Всё"], ["in", "Поступления"], ["expenses", "Расходы"]];
 
+function BasisSwitch({ basis, onChange }) {
+  return (
+    <div className="exp-basis" role="radiogroup" aria-label="Как считать расходы">
+      {BASES.map(([key, label]) => <button type="button" role="radio" key={key} aria-checked={basis === key} className={basis === key ? "on" : ""} onClick={() => onChange(key)}>{label}</button>)}
+    </div>
+  );
+}
+
 export default function Expenses({ expenses, cards = [], loadError = "", onAdd, onUpdate, onRemove, contracts = [], withdrawals = [], investors = [], purposes = {}, onOpenContract }) {
   const periods = quickPeriods();
   const [from, setFrom] = useState(periods[0][2]);
@@ -68,17 +87,22 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(null);
   const [view, setView] = useState("all");
+  const [basis, setBasis] = useState("paid");
   const isJournal = view !== "expenses";
 
-  const rows = useMemo(() => filterExpenses(expenses, { from, to, category, search }), [expenses, from, to, category, search]);
+  const rows = useMemo(() => filterExpenses(expenses, { from, to, category, search, basis }), [expenses, from, to, category, search, basis]);
   const totals = useMemo(() => expenseTotals(rows), [rows]);
   const categories = useMemo(() => categoryOptions(expenses), [expenses]);
   const sources = useMemo(() => paidFromOptions(expenses, cards), [expenses, cards]);
   const usedCategories = useMemo(() => [...new Set(expenses.map((e) => e.category))].sort((a, b) => a.localeCompare(b, "ru")), [expenses]);
   const invalid = from && to && from > to;
   const journal = useMemo(() => moneyJournal({ contracts, expenses, withdrawals, investors, purposes }), [contracts, expenses, withdrawals, investors, purposes]);
-  const journalRows = useMemo(() => isJournal ? filterJournal(journal, { from, to, kind: view === "in" ? "in" : "all", search }) : [], [journal, isJournal, view, from, to, search]);
+  const journalBasis = view === "all" ? basis : "paid";
+  const journalRows = useMemo(() => isJournal ? filterJournal(journal, { from, to, kind: view === "in" ? "in" : "all", search, basis: journalBasis }) : [], [journal, isJournal, view, from, to, search, journalBasis]);
+  // Деньги (пришло, выводы, «пришло − ушло») — всегда по датам движения, независимо от переключателя.
+  const cashRows = useMemo(() => journalBasis === "paid" ? journalRows : filterJournal(journal, { from, to, kind: "all", search }), [journal, journalRows, journalBasis, from, to, search]);
   const jt = useMemo(() => journalTotals(journalRows), [journalRows]);
+  const cashTotals = useMemo(() => journalTotals(cashRows), [cashRows]);
 
   const save = async (data) => {
     if (data.id) await onUpdate(data); else await onAdd(data);
@@ -87,8 +111,8 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
   const exportExcel = async () => {
     const XLSX = await import("xlsx");
     const end = to || localDay(new Date());
-    if (isJournal) XLSX.writeFile(buildJournalWorkbook(XLSX, journalRows, { from, to }), `Журнал_денег_${from || "всё"}_${end}.xlsx`);
-    else XLSX.writeFile(buildExpensesWorkbook(XLSX, rows, { from, to }), `Расходы_${from || "всё"}_${end}.xlsx`);
+    if (isJournal) XLSX.writeFile(buildJournalWorkbook(XLSX, journalRows, { from, to, basis: journalBasis, cashRows }), `Журнал_денег_${from || "всё"}_${end}.xlsx`);
+    else XLSX.writeFile(buildExpensesWorkbook(XLSX, rows, { from, to, basis }), `Расходы_${from || "всё"}_${end}.xlsx`);
   };
 
   return (
@@ -121,15 +145,16 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
         </select>}
         <input className="exp-search" type="search" aria-label="Поиск" placeholder={isJournal ? "Поиск: клиент, статья, карта, комментарий" : "Поиск по комментарию"} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
+      {view !== "in" && <BasisSwitch basis={basis} onChange={setBasis} />}
       {invalid && <p role="alert">Начало периода должно быть раньше окончания.</p>}
 
       {isJournal ? <>
         {view === "all" ? (
           <div className="cash-summary journal-summary">
-            <p className="in">Пришло от клиентов<b>{money(jt.incoming)}</b></p>
-            <p className="out">Расходы<b>{money(jt.expenses)}</b></p>
-            <p className="out">Выводы<b>{money(jt.withdrawals)}</b></p>
-            <p className={jt.balance < 0 ? "total bad" : "total"}>Пришло − ушло<b>{money(jt.balance)}</b></p>
+            <p className="in">Пришло от клиентов<b>{money(cashTotals.incoming)}</b></p>
+            <p className="out">{basis === "period" ? "Расходы за период (по месяцу расхода)" : "Расходы оплачено"}<b>{money(jt.expenses)}</b></p>
+            <p className="out">Выводы<b>{money(cashTotals.withdrawals)}</b></p>
+            <p className={cashTotals.balance < 0 ? "total bad" : "total"}>Пришло − ушло (деньги за эти даты)<b>{money(cashTotals.balance)}</b></p>
           </div>
         ) : <h3 className="journal-in-total">Пришло от клиентов: {money(jt.incoming)} <small>· оплат {journalRows.length}</small></h3>}
         <div className="exp-list-hd">
@@ -158,7 +183,7 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
           </div>
         )}
       </> : <>
-      <h3>Потрачено: {money(totals.total)} <small>· записей {totals.count}</small></h3>
+      <h3>{basis === "period" ? "Расходы за период (по месяцу расхода)" : "Оплачено расходов"}: {money(totals.total)} <small>· записей {totals.count}</small></h3>
       {totals.byCategory.length > 0 && (
         <div className="cash-summary">
           {totals.byCategory.map((t) => (
@@ -179,10 +204,11 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
         <p className="exp-empty">{expenses.length ? "За выбранный период расходов нет." : "Расходов пока нет. Нажмите «Добавить расход»."}</p>
       ) : (
         <div className="exp-list">
+          <div className="exp-cols" aria-hidden="true"><span>Дата оплаты</span><span>Статья · период расхода</span><span>Оплачено из</span><span>Сумма</span><span /></div>
           {rows.map((e) => (
             <div key={e.id} className="exp-row">
-              <span className="exp-date">{ruDate(e.date)}</span>
-              <span className="exp-main"><b>{e.category}</b>{e.note && <span className="exp-note">{e.note}</span>}</span>
+              <span className="exp-date"><span className="exp-date-lbl">Оплата </span>{ruDate(e.date)}</span>
+              <span className="exp-main"><b>{e.category}</b><span className={`exp-period ${expensePeriod(e) !== monthOf(e.date) ? "shifted" : ""}`}>{forPeriod(e)}</span>{e.note && <span className="exp-note">{e.note}</span>}</span>
               <span className="exp-from">{e.paidFrom || "—"}</span>
               <span className="exp-sum">{money(e.amount)}</span>
               <span className="exp-actions">

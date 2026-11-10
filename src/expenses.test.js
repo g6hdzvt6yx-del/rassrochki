@@ -13,7 +13,7 @@ describe("реестр расходов", () => {
   it("переводит строку базы туда и обратно", () => {
     const e = expenseFromRow({ id: "x", date: "2026-11-10", amount: "1500.50", category: "Аренда", paid_from: "Наличные", note: "к" });
     expect(e).toMatchObject({ amount: 1500.5, paidFrom: "Наличные" });
-    expect(expenseToRow({ ...e, category: "  " })).toEqual({ id: "x", date: "2026-11-10", amount: 1500.5, category: "Прочее", paid_from: "Наличные", note: "к" });
+    expect(expenseToRow({ ...e, category: "  " })).toEqual({ id: "x", date: "2026-11-10", period: "2026-11-01", amount: 1500.5, category: "Прочее", paid_from: "Наличные", note: "к" });
   });
 
   it("фильтрует по периоду, статье и тексту и сортирует новые сверху", () => {
@@ -32,9 +32,10 @@ describe("реестр расходов", () => {
   });
 
   it("проверяет форму", () => {
-    expect(validateExpense({ date: "2026-11-10", amount: "1 500,5" })).toBe("");
+    expect(validateExpense({ date: "2026-11-10", period: "2026-10", amount: "1 500,5" })).toBe("");
+    expect(validateExpense({ date: "2026-11-10", amount: "1" })).toMatch(/период расхода/);
     expect(validateExpense({ date: "", amount: 10 })).toMatch(/дату/);
-    expect(validateExpense({ date: "2026-11-10", amount: "0" })).toMatch(/больше нуля/);
+    expect(validateExpense({ date: "2026-11-10", period: "2026-11", amount: "0" })).toMatch(/больше нуля/);
   });
 
   it("подсказывает статьи и источники оплаты без повторов", () => {
@@ -46,7 +47,7 @@ describe("реестр расходов", () => {
     const wb = buildExpensesWorkbook(XLSX, filterExpenses(list), { from: "2026-10-01", to: "2026-11-30" });
     expect(wb.SheetNames).toEqual(["Расходы", "По статьям"]);
     const rows = XLSX.utils.sheet_to_json(wb.Sheets["Расходы"]);
-    expect(rows[0]).toMatchObject({ Дата: "05.11.2026", Статья: "Банк и комиссии" });
+    expect(rows[0]).toMatchObject({ "Дата оплаты": "05.11.2026", "Период расхода": "Ноябрь 2026", Статья: "Банк и комиссии" });
     const sum = XLSX.utils.sheet_to_json(wb.Sheets["По статьям"], { header: 1 });
     expect(sum.at(-1)).toEqual(["Итого", 35000.3]);
   });
