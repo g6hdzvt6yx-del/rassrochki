@@ -150,11 +150,11 @@ export function buildFullExcelBackupWorkbook(XLSX, snapshot) {
       item.note || item.comment || "", item.__deletedAt ? localDateTime(item.__deletedAt) : "",
     ]), [24, 16, 16, 24, 24, 36, 20]);
 
-  if (snapshot.expenses) addSheet(XLSX, workbook, "Расходы", ["ID", "Дата", "Сумма", "Статья", "Оплачено из", "Комментарий", "Удалён"],
+  if (snapshot.expenses) addSheet(XLSX, workbook, "Расходы", ["ID", "Дата оплаты", "Период расхода", "Сумма", "Статья", "Оплачено из", "Комментарий", "Удалён"],
     expenses.map((item) => [
-      item.id || item.__id, localDate(item.date), +item.amount || 0, item.category || "", item.paid_from || item.paidFrom || "",
+      item.id || item.__id, localDate(item.date), String(item.period || item.date || "").slice(0, 7), +item.amount || 0, item.category || "", item.paid_from || item.paidFrom || "",
       item.note || "", item.__deletedAt ? localDateTime(item.__deletedAt) : "",
-    ]), [24, 16, 16, 24, 28, 40, 20]);
+    ]), [24, 16, 16, 16, 24, 28, 40, 20]);
 
   const contactsSheet = addSheet(XLSX, workbook, "История контактов", [
     "ID договора", "Клиент", "Телефон", "Тип", "Дата и время", "Результат", "Обещанная дата", "Обещанная сумма", "Следующий контакт", "Договор удалён",

@@ -36,7 +36,7 @@ describe("журнал денег", () => {
     const wb = buildJournalWorkbook(XLSX, rows, { from: "2026-11-01", to: "2026-11-30" });
     const sheet = XLSX.utils.sheet_to_json(wb.Sheets["Журнал денег"], { header: 1 });
     expect(sheet[1]).toEqual(expect.arrayContaining(["07.11.2026", "Вывод", "", 50]));
-    expect(sheet.at(-1)).toEqual(expect.arrayContaining(["Разница (пришло − ушло)", 300]));
+    expect(sheet.at(-1)).toEqual(expect.arrayContaining(["Пришло − ушло (деньги за эти даты)", 300]));
   });
 });
 

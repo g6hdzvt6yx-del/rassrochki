@@ -29,7 +29,7 @@ export default function NetProfitPanel({ contracts, withdrawals, expenses, getSt
       <dl className="net-profit-rows">
         <div><dt>Наценка получена</dt><dd>{money(result.profitReceived)}</dd></div>
         <div><dt>− Выплачено вкладчикам</dt><dd>{money(result.investorPayout)}</dd></div>
-        <div><dt>− Расходы{onOpenExpenses && <> · <button type="button" className="net-profit-link" onClick={onOpenExpenses}>открыть</button></>}</dt><dd>{money(result.expenses)}</dd></div>
+        <div><dt>− Расходы месяца{onOpenExpenses && <> · <button type="button" className="net-profit-link" onClick={onOpenExpenses}>открыть</button></>}</dt><dd>{money(result.expenses)}</dd></div>
         <div className={`net-profit-total ${negative ? "bad" : "ok"}`}><dt>= Чистая прибыль</dt><dd>{money(result.net)}</dd></div>
       </dl>
       {expensesError && <p role="alert" className="exp-error">Расходы не загрузились — чистая прибыль посчитана без них.</p>}
