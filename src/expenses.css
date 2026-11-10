@@ -67,3 +67,34 @@ html body .app .expenses-desk .cash-summary>p.on{border-color:var(--brass);box-s
   html body .app.is-phone .exp-actions .icon-btn-ghost{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;border-color:var(--m-line-2)}
   html body .app.is-phone .exp-empty{color:var(--m-muted);text-align:center;padding:24px 0}
 }
+
+/* «Чистая прибыль» на Сводке */
+.net-profit{border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 16px;background:linear-gradient(135deg,#233146,#192435)}
+.net-profit-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.net-profit-title{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-soft)}
+.net-profit-month{display:inline-flex;align-items:center;gap:6px}
+.net-profit-month b{min-width:130px;text-align:center;font-weight:600}
+.net-profit-month button{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);cursor:pointer}
+.net-profit-month button:disabled{opacity:.35;cursor:default}
+.net-profit-rows{margin:0;display:grid;gap:6px}
+.net-profit-rows>div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.net-profit-rows dt{color:var(--ink-soft)}
+.net-profit-rows dd{margin:0;font-variant-numeric:tabular-nums;white-space:nowrap}
+.net-profit-total{border-top:1px solid var(--line);padding-top:10px;margin-top:4px;font-size:18px!important;font-weight:700}
+.net-profit-total dt{color:var(--ink)!important}
+.net-profit-total.ok dd{color:var(--emerald)}.net-profit-total.bad dd{color:var(--clay)}
+.net-profit-link{all:unset;cursor:pointer;color:var(--brass);text-decoration:underline;text-underline-offset:2px}
+@media (max-width: 760px) {
+  html body .app.is-phone .net-profit{margin:14px 0 0;padding:14px;border-radius:18px;background:var(--m-tile);border-color:var(--m-line)}
+  html body .app.is-phone .net-profit-title{font-size:12.5px;color:var(--m-muted)}
+  html body .app.is-phone .net-profit-month b{min-width:0;font-size:15px}
+  html body .app.is-phone .net-profit-month button{width:40px;height:40px;border-radius:12px;border-color:var(--m-line-2);color:var(--m-text)}
+  html body .app.is-phone .net-profit-rows>div{font-size:15px}
+  html body .app.is-phone .net-profit-rows dt{color:var(--m-muted)}
+  html body .app.is-phone .net-profit-total{font-size:19px!important;border-color:var(--m-line-2)}
+  html body .app.is-phone .net-profit-total dt{color:var(--m-text)!important}
+  html body .app.is-phone .net-profit-total.ok dd{color:var(--m-ok)}html body .app.is-phone .net-profit-total.bad dd{color:var(--m-bad)}
+  html body .app.is-phone .net-profit-link{color:var(--m-accent-text)}
+}
+.exp-hint{font-size:12px;color:var(--ink-soft);margin:10px 0 0}
+@media (max-width: 760px){html body .app.is-phone .exp-hint{font-size:13px;color:var(--m-muted)}}

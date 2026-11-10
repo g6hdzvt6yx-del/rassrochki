@@ -31,7 +31,7 @@ export default function MobileCapital({
           {shortage > 0 && <span className="m-bad"><i className="over" />не хватает {money(shortage)}</span>}
           <span><i className="rest" />свободно {money(free)}</span>
         </div>
-        {capital.withdrawnTotal > 0 && <p className="m-today-caption">Выведено всего: {money(capital.withdrawnTotal)}</p>}
+        {(capital.withdrawnTotal > 0 || capital.expensesTotal > 0) && <p className="m-today-caption">{[capital.withdrawnTotal > 0 && `Выведено всего: ${money(capital.withdrawnTotal)}`, capital.expensesTotal > 0 && `Расходы всего: ${money(capital.expensesTotal)}`].filter(Boolean).join(" · ")}</p>}
       </section>
 
       <div className="m-metrics">

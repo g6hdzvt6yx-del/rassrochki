@@ -2,6 +2,7 @@ import ContractTable from "./ContractTable";
 import {overdueDays,daysLabel,staleNotification,matchesWorkView} from "./contractWorkbench";
 import CashDesk, { PaymentDestination } from "./CashDesk";
 import Expenses from "./Expenses";
+import NetProfitPanel from "./NetProfitPanel";
 import { expenseFromRow, expenseToRow } from "./expenses";
 import { cashCards, paymentDestination } from "./cash";
 import { expectedPayments, dateInPeriod, duePeriodSummary, monthBounds, shiftMonth } from "./expectedPayments";
@@ -843,12 +844,15 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
       withdrawnTotal += amt;
     });
 
+    // Расходы оплачиваются из общих денег бизнеса, поэтому уменьшают «Свободно».
+    const expensesTotal = expenses.reduce((s, e) => s + (+e.amount || 0), 0);
+
     return {
-      invested, deployed, free: invested - deployed - withdrawnTotal,
+      invested, deployed, free: invested - deployed - withdrawnTotal - expensesTotal,
       profitRealized, profitExpected: profitTotal - profitRealized, profitTotal,
-      perInvestor, profitByInvestor, withdrawnByInvestor, withdrawnTotal,
+      perInvestor, profitByInvestor, withdrawnByInvestor, withdrawnTotal, expensesTotal,
     };
-  }, [contracts, investors, withdrawals]);
+  }, [contracts, investors, withdrawals, expenses]);
 
   const received = useMemo(() => receivedSummary(contracts, contractStats), [contracts]);
   const dailyPayments = useMemo(() => expectedPayments(contracts, contractStats, dailyDate, dailyEnd), [contracts, dailyDate, dailyEnd]);
@@ -1934,6 +1938,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
           onOpenContract={setOpenId} onPay={openQuickPay} onRemind={notifyPayment} onSection={setSectionModal}
           onReceived={(view) => { setReceivedView(view); setReceivedOpen(true); }}
           onProfitTotal={() => setProfitTotalOpen(true)}
+          netProfit={<NetProfitPanel contracts={contracts} withdrawals={withdrawals} expenses={expenses} getStats={contractStats} expensesError={expensesError} onOpenExpenses={isDesktopApp ? undefined : () => goTab("expenses")} />}
         />
       )}
       {tab === "dashboard" && !isPhone && (
@@ -1957,6 +1962,8 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
             <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} onClick={() => setSectionModal("active")} />
             <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
           </section>
+
+          <NetProfitPanel contracts={contracts} withdrawals={withdrawals} expenses={expenses} getStats={contractStats} expensesError={expensesError} onOpenExpenses={isDesktopApp ? undefined : () => goTab("expenses")} />
 
           <section className="panel daily-panel">
             <div className="panel-hd daily-panel-hd">
@@ -2367,7 +2374,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
         <MobileCapital
           capital={capital} investors={investors} withdrawals={withdrawals} investorProfits={investorProfits}
           getAccrual={investorAccrual} purposes={WITHDRAWAL_PURPOSES}
-          report={<FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} getStats={contractStats} />}
+          report={<FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} expenses={expenses} getStats={contractStats} />}
           onProfitGroup={setProfitGroupOpen} onAddInvestor={() => setAddingInvestor(true)} onEditInvestor={setEditingInvestor}
           onRemoveInvestor={removeInvestor} onPayAccrual={payInvestorAccrual}
           onAddWithdrawal={() => setAddingWithdrawal(true)} onRemoveWithdrawal={removeWithdrawal}
@@ -2375,7 +2382,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
       )}
       {tab === "capital" && !isPhone && (
         <main className="wrap">
-          <FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} getStats={contractStats} />
+          <FinancialReport contracts={contracts} investors={investors} withdrawals={withdrawals} expenses={expenses} getStats={contractStats} />
           <section className="hero">
             <div className="hero-label">Капитал вкладчиков</div>
             <div className="hero-num num">{money(capital.invested)}</div>
@@ -2392,6 +2399,9 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
               <span><i className="dot s-rem" /> Свободно {money(Math.max(0, capital.free))}</span>
               {capital.withdrawnTotal > 0 && (
                 <span>Выведено всего: {money(capital.withdrawnTotal)}</span>
+              )}
+              {capital.expensesTotal > 0 && (
+                <span>Расходы всего: {money(capital.expensesTotal)}</span>
               )}
             </div>
           </section>

@@ -47,6 +47,7 @@ function ExpenseForm({ initial, categories, sources, onCancel, onSave }) {
           <datalist id="exp-sources">{sources.map((c) => <option key={c} value={c} />)}</datalist></label>
         <label className="exp-wide">Комментарий<input value={f.note} onChange={set("note")} maxLength={2000} placeholder="Кому и за что" /></label>
       </div>
+      <p className="exp-hint">Закупку товара сюда не вносите — она записывается в «Капитал» → «Выводы» → «Закупка товара», иначе вычтется дважды.</p>
       {error && <p role="alert" className="exp-error">{error}</p>}
       <div className="exp-form-actions">
         <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>Отмена</button>
@@ -86,7 +87,7 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
         <h2>Расходы</h2>
         <button className="btn primary" onClick={() => setForm(emptyForm())}><Plus size={16} /> Добавить расход</button>
       </div>
-      <p>Реестр оплат: аренда, зарплата, реклама и другие траты. Это отдельный список — капитал, прибыль и касса от него не меняются.</p>
+      <p>Реестр оплат: аренда, зарплата, реклама и другие траты. Расходы вычитаются из вашей прибыли (вкладчиков не касаются) и уменьшают «Свободно» в «Капитале».</p>
       {loadError && <p role="alert" className="exp-error">{loadError}</p>}
       {form && <ExpenseForm key={form.id || "new"} initial={form} categories={categories} sources={sources} onCancel={() => setForm(null)} onSave={save} />}
 

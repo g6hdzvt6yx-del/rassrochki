@@ -4,14 +4,14 @@ import { isDesktopApp } from './dataClient';
 
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const money = n => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n) + ' ₽';
-export default function FinancialReport({ contracts, investors, withdrawals, getStats }) {
+export default function FinancialReport({ contracts, investors, withdrawals, expenses = [], getStats }) {
   const [from, setFrom] = useState(() => today().slice(0,7) + '-01');
   const [to, setTo] = useState(today);
   const [investorId, setInvestorId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   let report, validation = '';
-  try { report = buildFinancialReport({ contracts, investors, withdrawals, getStats, from, to, investorId, asOf: today() }); }
+  try { report = buildFinancialReport({ contracts, investors, withdrawals, expenses, getStats, from, to, investorId, asOf: today() }); }
   catch (e) { validation = e.message; }
   const exportReport = async () => {
     if (!report) return;
