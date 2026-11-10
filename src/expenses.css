@@ -98,3 +98,26 @@ html body .app .expenses-desk .cash-summary>p.on{border-color:var(--brass);box-s
 }
 .exp-hint{font-size:12px;color:var(--ink-soft);margin:10px 0 0}
 @media (max-width: 760px){html body .app.is-phone .exp-hint{font-size:13px;color:var(--m-muted)}}
+
+/* Журнал денег */
+.exp-views{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;margin:0 0 12px}
+.exp-views button{font:inherit;font-size:13px;padding:7px 16px;border-radius:9px;border:0;background:transparent;color:var(--ink-soft);cursor:pointer}
+.exp-views button.on{background:#b39aff2b;color:var(--ink);font-weight:600}
+.journal-summary .in b{color:var(--emerald)}
+.journal-summary .total b{color:var(--emerald)}.journal-summary .total.bad b{color:var(--clay)}
+.journal-row.in .exp-sum{color:var(--emerald)}
+.journal-row.withdrawal .exp-main b{color:var(--amber)}
+.journal-client{all:unset;cursor:pointer;font-weight:650;overflow-wrap:anywhere}
+.journal-client:hover{text-decoration:underline;text-underline-offset:2px}
+.journal-client:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:4px}
+@media (max-width: 760px) {
+  html body .app.is-phone .exp-views{display:flex;width:100%;box-sizing:border-box;border-radius:14px;border-color:var(--m-line-2);background:var(--m-tile)}
+  html body .app.is-phone .exp-views button{flex:1;min-height:40px;font-size:14.5px;color:var(--m-muted)}
+  html body .app.is-phone .exp-views button.on{background:var(--m-accent-soft);color:var(--m-accent-text)}
+  html body .app.is-phone .journal-summary .in b,html body .app.is-phone .journal-summary .total b,html body .app.is-phone .journal-row.in .exp-sum{color:var(--m-ok)}
+  html body .app.is-phone .journal-summary .total.bad b{color:var(--m-bad)}
+  html body .app.is-phone .journal-client{font-size:16px;font-weight:650;color:var(--m-text);min-height:24px}
+  html body .app.is-phone .journal-row.withdrawal .exp-main b{color:var(--m-warn)}
+}
+@media (max-width: 760px){html body .app.is-phone .expenses-desk h3.journal-in-total{background:linear-gradient(160deg,rgba(60,207,159,.24),rgba(60,207,159,.05) 60%,rgba(255,255,255,.04));border-color:rgba(60,207,159,.3)}}
+.journal-summary{margin-top:16px}

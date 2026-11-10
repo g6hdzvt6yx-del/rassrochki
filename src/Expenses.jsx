@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, Download, X } from "lucide-react";
 import {
   buildExpensesWorkbook, categoryOptions, expenseTotals, filterExpenses, paidFromOptions, parseAmount, validateExpense,
 } from "./expenses";
+import { buildJournalWorkbook, filterJournal, journalTotals, moneyJournal } from "./moneyJournal";
 import "./expenses.css";
 
 const money = (n) => Number(n || 0).toLocaleString("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 });
@@ -57,13 +58,17 @@ function ExpenseForm({ initial, categories, sources, onCancel, onSave }) {
   );
 }
 
-export default function Expenses({ expenses, cards = [], loadError = "", onAdd, onUpdate, onRemove }) {
+const VIEWS = [["all", "Всё"], ["in", "Поступления"], ["expenses", "Расходы"]];
+
+export default function Expenses({ expenses, cards = [], loadError = "", onAdd, onUpdate, onRemove, contracts = [], withdrawals = [], investors = [], purposes = {}, onOpenContract }) {
   const periods = quickPeriods();
   const [from, setFrom] = useState(periods[0][2]);
   const [to, setTo] = useState(periods[0][3]);
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(null);
+  const [view, setView] = useState("all");
+  const isJournal = view !== "expenses";
 
   const rows = useMemo(() => filterExpenses(expenses, { from, to, category, search }), [expenses, from, to, category, search]);
   const totals = useMemo(() => expenseTotals(rows), [rows]);
@@ -71,6 +76,9 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
   const sources = useMemo(() => paidFromOptions(expenses, cards), [expenses, cards]);
   const usedCategories = useMemo(() => [...new Set(expenses.map((e) => e.category))].sort((a, b) => a.localeCompare(b, "ru")), [expenses]);
   const invalid = from && to && from > to;
+  const journal = useMemo(() => moneyJournal({ contracts, expenses, withdrawals, investors, purposes }), [contracts, expenses, withdrawals, investors, purposes]);
+  const journalRows = useMemo(() => isJournal ? filterJournal(journal, { from, to, kind: view === "in" ? "in" : "all", search }) : [], [journal, isJournal, view, from, to, search]);
+  const jt = useMemo(() => journalTotals(journalRows), [journalRows]);
 
   const save = async (data) => {
     if (data.id) await onUpdate(data); else await onAdd(data);
@@ -78,7 +86,9 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
   };
   const exportExcel = async () => {
     const XLSX = await import("xlsx");
-    XLSX.writeFile(buildExpensesWorkbook(XLSX, rows, { from, to }), `Расходы_${from || "всё"}_${to || localDay(new Date())}.xlsx`);
+    const end = to || localDay(new Date());
+    if (isJournal) XLSX.writeFile(buildJournalWorkbook(XLSX, journalRows, { from, to }), `Журнал_денег_${from || "всё"}_${end}.xlsx`);
+    else XLSX.writeFile(buildExpensesWorkbook(XLSX, rows, { from, to }), `Расходы_${from || "всё"}_${end}.xlsx`);
   };
 
   return (
@@ -87,7 +97,12 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
         <h2>Расходы</h2>
         <button className="btn primary" onClick={() => setForm(emptyForm())}><Plus size={16} /> Добавить расход</button>
       </div>
-      <p>Реестр оплат: аренда, зарплата, реклама и другие траты. Расходы вычитаются из вашей прибыли (вкладчиков не касаются) и уменьшают «Свободно» в «Капитале».</p>
+      <div className="exp-views" role="tablist" aria-label="Что показать">
+        {VIEWS.map(([key, label]) => <button type="button" role="tab" key={key} aria-selected={view === key} className={view === key ? "on" : ""} onClick={() => setView(key)}>{label}</button>)}
+      </div>
+      <p>{isJournal
+        ? "Журнал денег: оплаты от клиентов (вместе с первоначальными взносами), расходы и выводы из «Капитала». Расходы добавляются и правятся здесь, выводы — в «Капитале»."
+        : "Реестр оплат: аренда, зарплата, реклама и другие траты. Расходы вычитаются из вашей прибыли (вкладчиков не касаются) и уменьшают «Свободно» в «Капитале»."}</p>
       {loadError && <p role="alert" className="exp-error">{loadError}</p>}
       {form && <ExpenseForm key={form.id || "new"} initial={form} categories={categories} sources={sources} onCancel={() => setForm(null)} onSave={save} />}
 
@@ -100,14 +115,49 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
       <div className="cash-filters exp-filters">
         <label>С <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
         <label>По <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
-        <select aria-label="Статья" value={category} onChange={(e) => setCategory(e.target.value)}>
+        {!isJournal && <select aria-label="Статья" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">Все статьи</option>
           {usedCategories.map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <input className="exp-search" type="search" aria-label="Поиск" placeholder="Поиск по комментарию" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </select>}
+        <input className="exp-search" type="search" aria-label="Поиск" placeholder={isJournal ? "Поиск: клиент, статья, карта, комментарий" : "Поиск по комментарию"} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
       {invalid && <p role="alert">Начало периода должно быть раньше окончания.</p>}
 
+      {isJournal ? <>
+        {view === "all" ? (
+          <div className="cash-summary journal-summary">
+            <p className="in">Пришло от клиентов<b>{money(jt.incoming)}</b></p>
+            <p className="out">Расходы<b>{money(jt.expenses)}</b></p>
+            <p className="out">Выводы<b>{money(jt.withdrawals)}</b></p>
+            <p className={jt.balance < 0 ? "total bad" : "total"}>Пришло − ушло<b>{money(jt.balance)}</b></p>
+          </div>
+        ) : <h3 className="journal-in-total">Пришло от клиентов: {money(jt.incoming)} <small>· оплат {journalRows.length}</small></h3>}
+        <div className="exp-list-hd">
+          <span>{view === "in" ? "Поступления" : "Движение денег"}</span>
+          <button className="btn ghost btn-sm" disabled={!journalRows.length} onClick={exportExcel}><Download size={14} /> Excel</button>
+        </div>
+        {journalRows.length === 0 ? <p className="exp-empty">За выбранный период движений нет.</p> : (
+          <div className="exp-list">
+            {journalRows.map((e) => (
+              <div key={e.key} className={`exp-row journal-row ${e.kind}`}>
+                <span className="exp-date">{ruDate(e.date)}</span>
+                <span className="exp-main">
+                  {e.kind === "in" && onOpenContract ? <button type="button" className="journal-client" onClick={() => onOpenContract(e.contractId)}>{e.title}</button> : <b>{e.title}</b>}
+                  <span className="exp-note">{[e.detail, e.note].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className="exp-from">{e.via}</span>
+                <span className="exp-sum">{e.kind === "in" ? "+" : "−"}{money(e.amount)}</span>
+                <span className="exp-actions">
+                  {e.kind === "expense" && <>
+                    <button className="icon-btn-ghost" onClick={() => setForm({ ...e.expense, amount: String(e.expense.amount) })} aria-label="Изменить" title="Изменить"><Pencil size={14} /></button>
+                    <button className="icon-btn-ghost" onClick={() => onRemove(e.expense.id)} aria-label="Удалить" title="Удалить"><Trash2 size={14} /></button>
+                  </>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </> : <>
       <h3>Потрачено: {money(totals.total)} <small>· записей {totals.count}</small></h3>
       {totals.byCategory.length > 0 && (
         <div className="cash-summary">
@@ -143,6 +193,7 @@ export default function Expenses({ expenses, cards = [], loadError = "", onAdd, 
           ))}
         </div>
       )}
+      </>}
     </section>
   );
 }
