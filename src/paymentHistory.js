@@ -1,3 +1,4 @@
+import { downPaymentDate } from './cash';
 // Таблица фактических оплат по договору: одна строка — одна оплата,
 // как её вводили (amount — вся внесённая сумма). due и remaining —
 // сумма по графику и остаток платежа, в который дошли деньги.
@@ -55,7 +56,7 @@ export function contractReceipts(contract, rows = []) {
   if (down > 0) {
     const dest = contract.payments?.__downPaymentDestination || {};
     receipts.push({
-      date: String(contract.contractDate || contract.startDate || '').slice(0, 10),
+      date: downPaymentDate(contract),
       due: down, amount: down, remaining: 0, numbers: [], downPayment: true, createdAt: '',
       method: dest.method || '', card: dest.card || '', comment: '', key: 'down', splits: [],
     });

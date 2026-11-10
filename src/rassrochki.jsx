@@ -207,7 +207,7 @@ const contractFromRow = (r) => ({
   termMonths: Number(r.term_months) || 1, startDate: r.start_date,
   investorId: r.investor_id || "", payments: r.payments || {}, comment: r.comment || "",
   guarantorName: r.guarantor_name || "", guarantorPhone: r.guarantor_phone || "",
-  contractDate: r.contract_date || "",
+  contractDate: r.contract_date || "", createdAt: r.created_at || "",
 });
 
 const contractToRow = (c) => ({
@@ -1356,7 +1356,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
     const { error } = isDesktopApp ? await localData.saveContract(contractToRow(c), true)
       : await supabase.from("contracts").insert(contractToRow(c));
     if (error) { rollback(error.message); return false; }
-    setContracts((prev) => [c, ...prev.filter((item) => item.id !== c.id)]);
+    setContracts((prev) => [{ ...c, createdAt: new Date().toISOString() }, ...prev.filter((item) => item.id !== c.id)]);
     return true;
   };
 
