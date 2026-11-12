@@ -1,6 +1,5 @@
-import { checkedWrite, equal, syncTables } from './syncModel';
+import { checkedWrite, equal, syncTables, CONFLICT_MESSAGE as conflictMessage } from './syncModel';
 let pending = 0;
-const conflictMessage = 'Запись уже изменена на другом устройстве. Обновите данные и повторите действие.';
 
 // Three-way merge of a partial update onto the current database row. Returns
 // null when this tab and the other device changed the same field (or the same
@@ -63,8 +62,13 @@ export function guardedCloudClient(client) {
   client.auth.onAuthStateChange(event => {
     if (event === 'SIGNED_OUT') rows.clear();
   });
+  // Неполное чтение (select('id,client_name')) дополняет запомненную строку, а не заменяет её:
+  // иначе пропала бы прочитанная версия updated_at, и защита от затирания ослабла бы.
   function remember(table, result) {
-    if (!result.error && Array.isArray(result.data)) for (const row of result.data) rows.set(`${table}:${row.id}`, structuredClone(row));
+    if (!result.error && Array.isArray(result.data)) for (const row of result.data) {
+      const key = `${table}:${row.id}`;
+      rows.set(key, structuredClone({ ...(rows.get(key) || {}), ...row }));
+    }
     return result;
   }
   const wrapRead = (query, table) => new Proxy(query, {
@@ -84,7 +88,8 @@ export function guardedCloudClient(client) {
           pending++;
           return Promise.resolve(client.from(table).insert(value).select('*')).then(result => remember(table, result)).finally(() => { pending--; });
         },
-        update(value) { return mutation(value); },
+        // Версию строки (updated_at) ставит база; присланное значение не участвует ни в записи, ни в объединении.
+        update(value) { const { updated_at: _version, ...rest } = value || {}; return mutation(rest); },
         delete() { return mutation(null); },
       };
       function mutation(value) {

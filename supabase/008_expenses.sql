@@ -136,7 +136,7 @@ begin
  if b.data ? 'expenses' then
   delete from public.expenses x
    where x.user_id=owner and not exists(select 1 from jsonb_array_elements(b.data->'expenses') e where e->>'id'=x.id);
-  tables := tables || 'expenses';
+  tables := array_append(tables, 'expenses');
  end if;
 
  foreach tbl in array tables loop
