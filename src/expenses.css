@@ -23,14 +23,14 @@ html body .app .expenses-desk .cash-summary>p.on{border-color:var(--brass);box-s
 
 .exp-list-hd{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px;font-size:11px;font-weight:600;letter-spacing:.025em;text-transform:uppercase;color:var(--ink-soft)}
 .exp-list{display:flex;flex-direction:column;gap:8px}
-.exp-row{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,200px) 130px auto;gap:14px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,#233146,#192435)}
+.exp-row{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,200px) 130px 76px;gap:14px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,#233146,#192435)}
 .exp-date{color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
 .exp-main{min-width:0;display:flex;flex-direction:column;gap:2px}
 .exp-main b{font-weight:650;overflow-wrap:anywhere}
 .exp-note{color:var(--ink-soft);font-size:12px;overflow-wrap:anywhere}
 .exp-from{color:var(--ink-soft);overflow-wrap:anywhere}
 .exp-sum{text-align:right;font-weight:650;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
-.exp-actions{display:flex;gap:6px}
+.exp-actions{display:flex;gap:6px;justify-content:flex-end}
 .exp-empty{color:var(--ink-soft)}
 
 @media(max-width:900px){.exp-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.exp-form-grid .exp-wide{grid-column:1/-1}}
