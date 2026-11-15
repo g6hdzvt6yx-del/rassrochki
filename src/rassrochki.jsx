@@ -3658,7 +3658,12 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
 
   const markup = +f.markupAmount || 0;
   const financed = principal + markup;
-  const changes = { ...f, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0, markup,
+  // Свёрнутые блоки (паспорт, поручитель) в договор не попадают; введённое остаётся в форме, пока она открыта.
+  const out = { ...f,
+    passport: showPassport ? f.passport : emptyPassport(),
+    guarantorName: showGuarantor ? f.guarantorName : "", guarantorPhone: showGuarantor ? f.guarantorPhone : "",
+    guarantorPassport: showGuarantor && showGuarantorPassport ? f.guarantorPassport : emptyPassport() };
+  const changes = { ...out, totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0, markup,
     termMonths: +f.termMonths, markupPercent: +f.markupPercent || 0 };
   let editError = "";
   if (draft?.draft_type === "Редактирование договора" && !editing) editError = "Исходный договор не найден. Восстановите его из корзины, затем продолжите черновик.";
@@ -3677,8 +3682,10 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
     ["Первый платёж", editing.startDate, f.startDate],
     ["Остаток", money(contractStats(editing).remaining), money(financed - contractStats(editing).paidSum)],
     ["Комментарий", editing.comment, f.comment],
-    ["Паспорт клиента", passportSummary(passportOf(editing)), passportSummary(f.passport)],
-    ["Паспорт поручителя", passportSummary(guarantorPassportOf(editing)), passportSummary(f.guarantorPassport)],
+    ["Паспорт клиента", passportSummary(passportOf(editing)), passportSummary(out.passport)],
+    ["Паспорт поручителя", passportSummary(guarantorPassportOf(editing)), passportSummary(out.guarantorPassport)],
+    ["Поручитель", editing.guarantorName, out.guarantorName.trim()],
+    ["Телефон поручителя", fmtPhone(editing.guarantorPhone), fmtPhone(out.guarantorPhone)],
   ].filter(([, before, after]) => String(before || "") !== String(after || "")) : [];
   const samePhoneClient = clients.find((client) => {
     const phone = normalizePhone(f.phone);
@@ -3724,7 +3731,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
             newHint="Нет в базе — товар добавится после сохранения договора"
           />
           {showPassport ? (
-            <PassportFields title="Паспортные данные клиента" value={f.passport} onChange={setPassportField("passport")} />
+            <PassportFields title="Паспортные данные клиента" value={f.passport} onChange={setPassportField("passport")} onCollapse={() => setShowPassport(false)} />
           ) : (
             <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowPassport(true)}>
               <Plus size={13} /> Паспорт клиента
@@ -3732,6 +3739,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
           )}
           {showGuarantor ? (
             <div className="guarantor-block">
+              <div className="passport-hd"><span>Поручитель</span><CollapseButton onClick={() => setShowGuarantor(false)} /></div>
               <div className="frow">
                 <Field label="Поручитель, ФИО">
                   <input value={f.guarantorName} onChange={set("guarantorName")} placeholder="Иванов Иван" />
@@ -3741,7 +3749,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
                 </Field>
               </div>
               {showGuarantorPassport ? (
-                <PassportFields title="Паспортные данные поручителя" value={f.guarantorPassport} onChange={setPassportField("guarantorPassport")} />
+                <PassportFields title="Паспортные данные поручителя" value={f.guarantorPassport} onChange={setPassportField("guarantorPassport")} onCollapse={() => setShowGuarantorPassport(false)} />
               ) : (
                 <button type="button" className="btn ghost btn-sm guarantor-toggle" onClick={() => setShowGuarantorPassport(true)}>
                   <Plus size={13} /> Паспорт поручителя
@@ -3822,9 +3830,9 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
               try {
               await draftWrite.current;
               if (+f.downPayment > 0 && (!editing || f.downPaymentMethod)) paymentDestination(f.downPaymentMethod,f.downPaymentCard);
-              const { markupAmount: _markupAmount, totalPayable: _totalPayable, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
+              const { markupAmount: _markupAmount, totalPayable: _totalPayable, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = out;
               const success = await onSave({
-                ...rest, newContractId: newContractId.current, phone: fmtPhone(f.phone.trim()), guarantorPhone: fmtPhone(f.guarantorPhone.trim()), totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
+                ...rest, newContractId: newContractId.current, phone: fmtPhone(f.phone.trim()), guarantorPhone: fmtPhone(out.guarantorPhone.trim()), totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,
                 markup, markupPercent: +f.markupPercent || 0, termMonths: Math.max(1, +f.termMonths || 1),
               });
               if (success !== true) { setFormError("Договор не сохранён. Черновик оставлен для повторной попытки."); return; }
@@ -3882,11 +3890,15 @@ const Field = ({ label, children }) => (
 );
 
 // Поля паспорта — одинаковые для клиента и поручителя.
-function PassportFields({ title, value, onChange }) {
+const CollapseButton = ({ onClick }) => (
+  <button type="button" className="btn ghost btn-sm block-collapse" onClick={onClick} title="Убрать этот блок — он не попадёт в договор"><X size={13} /> Убрать</button>
+);
+
+function PassportFields({ title, value, onChange, onCollapse }) {
   const bind = (key) => ({ value: value[key] || "", onChange: (e) => onChange(key, e.target.value) });
   return (
     <div className="passport-block">
-      <div className="passport-hd">{title}</div>
+      <div className="passport-hd"><span>{title}</span>{onCollapse && <CollapseButton onClick={onCollapse} />}</div>
       <div className="frow">
         <Field label="Серия"><input {...bind("series")} inputMode="numeric" placeholder="90 12" maxLength={10} /></Field>
         <Field label="Номер"><input {...bind("number")} inputMode="numeric" placeholder="123456" maxLength={12} /></Field>
@@ -4566,7 +4578,8 @@ body:has(.dashboard-wrap){background:#0f172a}
 .search-picker-selected{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2)}
 .search-picker-selected>span{flex:1;min-width:140px;font-weight:600;font-size:14px}
 .passport-block{margin:4px 0 14px;padding:12px 12px 2px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
-.passport-hd{font-weight:600;font-size:13px;margin-bottom:10px}
+.passport-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:13px;margin-bottom:10px}
+.block-collapse{flex:none;padding:3px 8px;font-size:12px;font-weight:500}
 .draft-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .draft-row>div:first-child{display:flex;flex-direction:column;gap:3px;min-width:0}
 .draft-row small{color:var(--ink-soft);font-size:11.5px}
