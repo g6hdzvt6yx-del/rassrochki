@@ -268,3 +268,4 @@ html body .app .pay-status-table button:hover{background:#2a3b53}
 html body .app :is(.pay-status-hd,.pay-status-ft){background:#202e43;color:var(--ink);border-color:#43536b}
 html body .app .pay-status-table.is-paid strong{color:#5fd39a}
 html body .app :is(.pay-status-table.is-unpaid strong,.pay-status-late,.pay-status-late small){color:#ff8f86}
+html body .app .pay-status-table.is-unpaid strong.pay-status-wait{color:var(--ink)}

@@ -2838,23 +2838,34 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
   );
 }
 
-function PaymentStatusTable({ rows, paid, status, onOpenContract }) {
-  if (!rows.length) return <div className="empty">{paid ? "В этом периоде пока никто не оплатил." : "Все платежи периода оплачены."}</div>;
+function PaymentStatusTable({ rows: allRows, paid, status, onOpenContract }) {
+  const [due, setDue] = useState("all");
+  const overdueRows = useMemo(() => allRows.filter((row) => row.overdue), [allRows]);
+  const upcomingRows = useMemo(() => allRows.filter((row) => !row.overdue), [allRows]);
+  if (!allRows.length) return <div className="empty">{paid ? "В этом периоде пока никто не оплатил." : "Все платежи периода оплачены."}</div>;
+  const rows = paid || due === "all" ? allRows : due === "overdue" ? overdueRows : upcomingRows;
+  const total = (list, key) => list.reduce((sum, row) => sum + row[key], 0);
   return (
     <>
       <p className="field-hint">{paid
         ? "Платежи со сроком в выбранном периоде, оплаченные полностью (в том числе заранее)."
         : `Платежи со сроком в выбранном периоде, по которым остался долг.${status.partialTotal > 0 ? ` Частично внесено: ${money(status.partialTotal)}.` : ""}`}</p>
+      {!paid && <div className="filter-chips pay-status-chips" role="group" aria-label="Срок платежа">
+        <button type="button" className={due === "all" ? "on" : ""} onClick={() => setDue("all")}>Все · {allRows.length}</button>
+        <button type="button" className={due === "overdue" ? "on" : ""} onClick={() => setDue("overdue")}>Просрочены · {overdueRows.length} · {money(total(overdueRows, "remaining"))}</button>
+        <button type="button" className={due === "upcoming" ? "on" : ""} onClick={() => setDue("upcoming")}>Срок не наступил · {upcomingRows.length} · {money(total(upcomingRows, "remaining"))}</button>
+      </div>}
+      {!rows.length ? <div className="empty">{due === "overdue" ? "Просроченных платежей в этом периоде нет." : "Платежей с ненаступившим сроком в этом периоде нет."}</div> :
       <div className={`pay-status-table ${paid ? "is-paid" : "is-unpaid"}`}>
         <div className="pay-status-hd"><span>Клиент</span><span>Срок</span><span>По графику</span><span>{paid ? "Оплачено" : "Остаток"}</span></div>
         {rows.map((row) => <button type="button" key={`${row.contractId}-${row.paymentNo}`} onClick={() => onOpenContract(row.contractId)}>
           <span className="pay-status-client"><b>{row.clientName}</b><small>{row.item || "Без товара"} · платёж №{row.paymentNo}{!paid && row.paidAmount > 0 ? ` · внесено ${money(row.paidAmount)}` : ""}</small></span>
           <span className={!paid && row.overdue ? "pay-status-late" : ""}>{fmtDate(row.dueDate)}{paid && row.paidDate ? <small>опл. {fmtDate(row.paidDate)}</small> : null}{!paid && row.overdue ? <small>просрочен</small> : null}</span>
           <span className="num">{money(row.amount)}</span>
-          <strong className="num">{money(paid ? row.paidAmount : row.remaining)}</strong>
+          <strong className={`num${!paid && !row.overdue ? " pay-status-wait" : ""}`}>{money(paid ? row.paidAmount : row.remaining)}</strong>
         </button>)}
-        <div className="pay-status-ft"><span>Итого · {rows.length} {ruPlural(rows.length, "платёж", "платежа", "платежей")}</span><span></span><span className="num">{money(rows.reduce((sum, row) => sum + row.amount, 0))}</span><strong className="num">{money(paid ? status.paidTotal : status.unpaidTotal)}</strong></div>
-      </div>
+        <div className="pay-status-ft"><span>Итого · {rows.length} {ruPlural(rows.length, "платёж", "платежа", "платежей")}</span><span></span><span className="num">{money(total(rows, "amount"))}</span><strong className={`num${!paid && due === "upcoming" ? " pay-status-wait" : ""}`}>{money(total(rows, paid ? "paidAmount" : "remaining"))}</strong></div>
+      </div>}
     </>
   );
 }
@@ -4715,6 +4726,7 @@ body:has(.dashboard-wrap){background:#0f172a}
 .data-list{border:1px solid var(--line);border-radius:12px;overflow:hidden}.data-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface)}.data-row:last-child{border-bottom:0}.data-row>div{display:flex;flex-direction:column;gap:3px}.data-row>div:last-child{align-items:flex-end}.data-row span,.data-row small{font-size:12px;color:var(--ink-soft)}.data-row-actions{flex-direction:row!important;align-items:center!important}.data-row-button{width:100%;border:0;text-align:left;cursor:pointer;font:inherit}.data-row-button:hover{background:var(--surface-2)}
 .journal-row{align-items:flex-start}.journal-row>div:first-child{min-width:0;flex:1}.journal-row .action-description{margin-top:3px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}.journal-row>div:last-child{flex:0 0 auto}
 .seg-toggle.seg-toggle-3{grid-template-columns:repeat(3,1fr);margin-bottom:12px}.seg-toggle.seg-toggle-4{grid-template-columns:repeat(4,1fr);margin-bottom:8px}.seg-toggle-3 button,.seg-toggle-4 button{padding:8px 6px;font-size:12px}
+.pay-status-chips{margin:8px 0 2px}.pay-status-table.is-unpaid strong.pay-status-wait{color:var(--ink)}
 .pay-status-table{border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:8px}.pay-status-hd,.pay-status-ft,.pay-status-table button{display:grid;grid-template-columns:minmax(0,1fr) 96px 110px 110px;align-items:center;gap:12px;width:100%;padding:10px 12px;box-sizing:border-box;text-align:left}.pay-status-hd{background:var(--surface-2);color:var(--ink-soft);font-size:10.5px}.pay-status-hd span:nth-child(n+3),.pay-status-table .num{text-align:right;white-space:nowrap}.pay-status-table button{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}.pay-status-table button:hover{background:#EDF6F1}.pay-status-client{min-width:0}.pay-status-client b,.pay-status-client small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pay-status-table small{display:block;color:var(--ink-soft);font-size:10.5px;margin-top:2px}.pay-status-table.is-paid strong{color:var(--emerald)}.pay-status-table.is-unpaid strong,.pay-status-late,.pay-status-late small{color:#d9534f}.pay-status-ft{border-top:1px solid var(--line);background:var(--surface-2);font-weight:600;font-size:12px}
 @media(max-width:760px){.pay-status-hd,.pay-status-ft,.pay-status-table button{grid-template-columns:minmax(0,1fr) 74px 92px;gap:8px;padding:10px}.pay-status-hd span:nth-child(3),.pay-status-ft span:nth-child(3),.pay-status-table button>span:nth-child(3){display:none}.seg-toggle.seg-toggle-4{grid-template-columns:1fr 1fr}.seg-toggle-4 button:nth-child(n+3){border-top:1px solid var(--line)}.seg-toggle-4 button:nth-child(3){border-left:0}}
 .received-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.received-plan-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.received-totals>div{background:var(--surface-2);border-radius:10px;padding:12px}.received-totals span{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:4px}.received-totals b{font-size:17px}
