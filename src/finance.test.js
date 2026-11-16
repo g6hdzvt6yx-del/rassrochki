@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledProfitSummary, receivedProfitByMonth, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
+import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledPaymentStatus, scheduledProfitSummary, receivedProfitByMonth, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 
 const stats = (contract) => contract.stats;
 const localIso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -210,5 +210,35 @@ describe("общая прибыль по периодам", () => {
   it("обрабатывает отсутствие договоров", () => {
     expect(scheduledProfitByMonth([], stats)).toEqual([]);
     expect(scheduledProfitByContract([], stats)).toMatchObject({ profit: 0, contracts: 0, rows: [] });
+  });
+});
+
+describe("оплатили / не оплатили за период", () => {
+  const contracts = [{
+    id: "c1", clientName: "Али", item: "Телефон",
+    stats: { rows: [
+      { n: 1, dueDate: "2026-11-05", amountDue: 1000, paidAmount: 1000, paidDate: "2026-10-30" },
+      { n: 2, dueDate: "2026-11-20", amountDue: 1000, paidAmount: 300, paidDate: "2026-11-16" },
+      { n: 3, dueDate: "2026-12-20", amountDue: 1000, paidAmount: 0 },
+    ] },
+  }, {
+    id: "c2", clientName: "Билал", item: "Товар",
+    stats: { rows: [{ n: 4, dueDate: "2026-11-10", amountDue: 500, paidAmount: 0, status: "overdue" }] },
+  }];
+
+  it("делит платежи месяца по сроку и считает остатки", () => {
+    const result = scheduledPaymentStatus(contracts, stats, "2026-11");
+    expect(result.paid.map((row) => row.paymentNo)).toEqual([1]);
+    expect(result.unpaid.map((row) => [row.clientName, row.remaining])).toEqual([["Билал", 500], ["Али", 700]]);
+    expect(result.paidTotal).toBe(1000);
+    expect(result.partialTotal).toBe(300);
+    expect(result.unpaidTotal).toBe(1200);
+    expect(result.scheduled).toBe(2500);
+    expect(result.unpaid[0].overdue).toBe(true);
+  });
+
+  it("сходится с плановой суммой периода", () => {
+    const range = { from: "2026-11-01", to: "2026-12-31" };
+    expect(scheduledPaymentStatus(contracts, stats, "", range).scheduled).toBe(3500);
   });
 });

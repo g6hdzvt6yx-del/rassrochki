@@ -108,6 +108,31 @@ export function scheduledProfitSummary(contracts, getStats, month = "", range = 
   return { scheduled, profitScheduled, rows };
 }
 
+// Платежи по графику за период, разделённые на оплаченные и неоплаченные.
+// Период — по сроку платежа (с учётом переносов). Частично оплаченный платёж
+// остаётся в «не оплатили» с остатком; оплата засчитывается независимо от её даты.
+export function scheduledPaymentStatus(contracts, getStats, month = "", range = null) {
+  const paid = [], unpaid = [];
+  contracts.forEach((contract) => {
+    getStats(contract).rows.forEach((payment) => {
+      const dueDate = dueDay(payment.dueDate);
+      if (!ISO_DAY.test(dueDate) || (month && dueDate.slice(0, 7) !== month) || !inDateRange(dueDate, range)) return;
+      const amount = Math.max(0, +payment.amountDue || 0);
+      const paidAmount = Math.min(amount, Math.max(0, +payment.paidAmount || 0));
+      const remaining = Math.max(0, amount - paidAmount);
+      const row = { contractId: contract.id, clientName: contract.clientName, phone: contract.phone || "", item: contract.item || "",
+        paymentNo: payment.n, dueDate, amount, paidAmount, remaining, paidDate: payment.paidDate || "", overdue: payment.status === "overdue" };
+      (remaining > 0 ? unpaid : paid).push(row);
+    });
+  });
+  const byDue = (a, b) => a.dueDate.localeCompare(b.dueDate) || String(a.clientName).localeCompare(String(b.clientName), "ru");
+  paid.sort(byDue); unpaid.sort(byDue);
+  const sum = (rows, key) => rows.reduce((total, row) => total + row[key], 0);
+  return { paid, unpaid,
+    paidTotal: sum(paid, "paidAmount"), partialTotal: sum(unpaid, "paidAmount"),
+    unpaidTotal: sum(unpaid, "remaining"), scheduled: sum(paid, "amount") + sum(unpaid, "amount") };
+}
+
 // Общая прибыль договора по группам сроков платежей. keyOf(срок) возвращает ключ группы
 // или пусто, если платёж не учитывается. Прибыль группы — доля наценки в платежах графика
 // (с учётом переносов), полученная — доля наценки в уже оплаченной части этих же платежей,
