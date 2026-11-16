@@ -21,7 +21,7 @@ import {
   Database, RotateCcw, History, ClipboardList, ChevronRight, Receipt,
 } from "lucide-react";
 import { supabase, supabaseConfigured, isDesktopApp, localData, setActionSource, suppressNextActionLog } from "./dataClient";
-import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
+import { addMonthsClamped, investorProfitBreakdown, profitComparisonByMonth, scheduledProfitByContract, scheduledProfitByMonth, scheduledPaymentStatus, scheduledProfitSummary, receivedSummary, splitReceived, splitScheduleAmount } from "./finance";
 import { formatPhone as fmtPhone, formatPhoneForExcel, normalizePhone } from "./phone";
 import { allocateContractPayment, editPaymentEventWithCarry, deletePaymentEvent } from "./payments";
 import { actualPaid, prepareContractEdit, draftContractId } from "./contractSafety";
@@ -2838,12 +2838,37 @@ function SectionDetail({ title, rows, onClose, onOpenContract }) {
   );
 }
 
+function PaymentStatusTable({ rows, paid, status, onOpenContract }) {
+  if (!rows.length) return <div className="empty">{paid ? "В этом периоде пока никто не оплатил." : "Все платежи периода оплачены."}</div>;
+  return (
+    <>
+      <p className="field-hint">{paid
+        ? "Платежи со сроком в выбранном периоде, оплаченные полностью (в том числе заранее)."
+        : `Платежи со сроком в выбранном периоде, по которым остался долг.${status.partialTotal > 0 ? ` Частично внесено: ${money(status.partialTotal)}.` : ""}`}</p>
+      <div className={`pay-status-table ${paid ? "is-paid" : "is-unpaid"}`}>
+        <div className="pay-status-hd"><span>Клиент</span><span>Срок</span><span>По графику</span><span>{paid ? "Оплачено" : "Остаток"}</span></div>
+        {rows.map((row) => <button type="button" key={`${row.contractId}-${row.paymentNo}`} onClick={() => onOpenContract(row.contractId)}>
+          <span className="pay-status-client"><b>{row.clientName}</b><small>{row.item || "Без товара"} · платёж №{row.paymentNo}{!paid && row.paidAmount > 0 ? ` · внесено ${money(row.paidAmount)}` : ""}</small></span>
+          <span className={!paid && row.overdue ? "pay-status-late" : ""}>{fmtDate(row.dueDate)}{paid && row.paidDate ? <small>опл. {fmtDate(row.paidDate)}</small> : null}{!paid && row.overdue ? <small>просрочен</small> : null}</span>
+          <span className="num">{money(row.amount)}</span>
+          <strong className="num">{money(paid ? row.paidAmount : row.remaining)}</strong>
+        </button>)}
+        <div className="pay-status-ft"><span>Итого · {rows.length} {ruPlural(rows.length, "платёж", "платежа", "платежей")}</span><span></span><span className="num">{money(rows.reduce((sum, row) => sum + row.amount, 0))}</span><strong className="num">{money(paid ? status.paidTotal : status.unpaidTotal)}</strong></div>
+      </div>
+    </>
+  );
+}
+
 function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received", onClose, onOpenContract }) {
   const period = useReportPeriod();
   const { month, setMonth, custom, range, error: periodError } = period;
   const [profitMode, setProfitMode] = useState("actual");
   const monthlyProfit = useMemo(() => profitComparisonByMonth(contracts, contractStats), [contracts]);
   const planned = useMemo(() => scheduledProfitSummary(contracts, contractStats, custom ? "" : month, range), [contracts, month, custom, range]);
+  const [listMode, setListMode] = useState("receipts");
+  const status = useMemo(() => scheduledPaymentStatus(contracts, contractStats, custom ? "" : month, range), [contracts, month, custom, range]);
+  const hasPeriod = Boolean(month || custom);
+  const statusMode = view === "profit" ? (profitMode === "paid" || profitMode === "unpaid" ? profitMode : "") : (hasPeriod && listMode !== "receipts" ? listMode : "");
   const showPlanned = view === "profit" && profitMode === "planned";
   const months = useMemo(() => monthlyProfit.map((row) => row.month), [monthlyProfit]);
   const summary = useMemo(
@@ -2871,11 +2896,13 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
               {!monthlyProfit.length && <div className="empty">Платежей пока нет.</div>}
             </div>
             }
-            <div className="seg-toggle">
-              <button type="button" className={!showPlanned ? "on" : ""} onClick={() => setProfitMode("actual")}>Фактические поступления</button>
+            <div className="seg-toggle seg-toggle-4">
+              <button type="button" className={profitMode === "actual" ? "on" : ""} onClick={() => setProfitMode("actual")}>Фактические поступления</button>
               <button type="button" className={showPlanned ? "on" : ""} onClick={() => setProfitMode("planned")}>Обязательные платежи</button>
+              <button type="button" className={profitMode === "paid" ? "on" : ""} onClick={() => setProfitMode("paid")}>Оплатили · {status.paid.length}</button>
+              <button type="button" className={profitMode === "unpaid" ? "on" : ""} onClick={() => setProfitMode("unpaid")}>Не оплатили · {status.unpaid.length}</button>
             </div>
-            <p className="field-hint">Ниже — полные суммы {showPlanned ? "платежей по графику" : "поступлений"}, включая возврат капитала.</p>
+            {!statusMode && <p className="field-hint">Ниже — полные суммы {showPlanned ? "платежей по графику" : "поступлений"}, включая возврат капитала.</p>}
           </> : <>
           <div className="received-totals received-plan-totals">
             <div><span>По плану за период</span><b>{money(planned.scheduled)}</b></div>
@@ -2884,14 +2911,20 @@ function ReceivedDetail({ contracts, summary: allTimeSummary, view = "received",
             <div><span>Полученная прибыль</span><b>{money(summary.profitReceived)}</b></div>
           </div>
           <p className="field-hint">По плану — полная сумма платежей по графику за выбранный период с учётом переносов, включая уже оплаченные. Фактически получено — поступления по дате оплаты.</p>
+          {hasPeriod && <div className="seg-toggle seg-toggle-3">
+            <button type="button" className={!statusMode ? "on" : ""} onClick={() => setListMode("receipts")}>Поступления · {summary.rows.length}</button>
+            <button type="button" className={statusMode === "paid" ? "on" : ""} onClick={() => setListMode("paid")}>Оплатили · {status.paid.length}</button>
+            <button type="button" className={statusMode === "unpaid" ? "on" : ""} onClick={() => setListMode("unpaid")}>Не оплатили · {status.unpaid.length}</button>
+          </div>}
           </>}
           {!summary.reconciled && <div className="storage-warn">Полученная сумма не сходится с капиталом и прибылью.</div>}
+          {statusMode ? <PaymentStatusTable rows={statusMode === "paid" ? status.paid : status.unpaid} paid={statusMode === "paid"} status={status} onOpenContract={onOpenContract} /> :
           <div className="data-list received-payment-list">
             {(showPlanned ? planned.rows : summary.rows).map((row, index) => <button className="data-row data-row-button" key={`${row.contractId}-${row.paymentNo}-${index}`} onClick={() => onOpenContract(row.contractId)}>
               <div><b>{row.clientName}</b><span>{row.item} · платёж №{row.paymentNo}</span></div><div><b className="num">{money(row.amount)}</b><small>{(showPlanned ? row.dueDate : row.paidDate) ? fmtDate(showPlanned ? row.dueDate : row.paidDate) : "дата не указана"}</small></div>
             </button>)}
             {!(showPlanned ? planned.rows : summary.rows).length && <div className="empty">За выбранный период платежей нет.</div>}
-          </div>
+          </div>}
           </>}
         </div>
       </div>
@@ -4681,6 +4714,9 @@ body:has(.dashboard-wrap){background:#0f172a}
 .data-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}.data-toolbar select{border:1px solid var(--line);border-radius:9px;padding:9px;background:var(--surface);font:inherit}.data-toolbar label{font-size:13px;color:var(--ink-soft)}
 .data-list{border:1px solid var(--line);border-radius:12px;overflow:hidden}.data-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface)}.data-row:last-child{border-bottom:0}.data-row>div{display:flex;flex-direction:column;gap:3px}.data-row>div:last-child{align-items:flex-end}.data-row span,.data-row small{font-size:12px;color:var(--ink-soft)}.data-row-actions{flex-direction:row!important;align-items:center!important}.data-row-button{width:100%;border:0;text-align:left;cursor:pointer;font:inherit}.data-row-button:hover{background:var(--surface-2)}
 .journal-row{align-items:flex-start}.journal-row>div:first-child{min-width:0;flex:1}.journal-row .action-description{margin-top:3px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}.journal-row>div:last-child{flex:0 0 auto}
+.seg-toggle.seg-toggle-3{grid-template-columns:repeat(3,1fr);margin-bottom:12px}.seg-toggle.seg-toggle-4{grid-template-columns:repeat(4,1fr);margin-bottom:8px}.seg-toggle-3 button,.seg-toggle-4 button{padding:8px 6px;font-size:12px}
+.pay-status-table{border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:8px}.pay-status-hd,.pay-status-ft,.pay-status-table button{display:grid;grid-template-columns:minmax(0,1fr) 96px 110px 110px;align-items:center;gap:12px;width:100%;padding:10px 12px;box-sizing:border-box;text-align:left}.pay-status-hd{background:var(--surface-2);color:var(--ink-soft);font-size:10.5px}.pay-status-hd span:nth-child(n+3),.pay-status-table .num{text-align:right;white-space:nowrap}.pay-status-table button{border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}.pay-status-table button:hover{background:#EDF6F1}.pay-status-client{min-width:0}.pay-status-client b,.pay-status-client small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pay-status-table small{display:block;color:var(--ink-soft);font-size:10.5px;margin-top:2px}.pay-status-table.is-paid strong{color:var(--emerald)}.pay-status-table.is-unpaid strong,.pay-status-late,.pay-status-late small{color:#d9534f}.pay-status-ft{border-top:1px solid var(--line);background:var(--surface-2);font-weight:600;font-size:12px}
+@media(max-width:760px){.pay-status-hd,.pay-status-ft,.pay-status-table button{grid-template-columns:minmax(0,1fr) 74px 92px;gap:8px;padding:10px}.pay-status-hd span:nth-child(3),.pay-status-ft span:nth-child(3),.pay-status-table button>span:nth-child(3){display:none}.seg-toggle.seg-toggle-4{grid-template-columns:1fr 1fr}.seg-toggle-4 button:nth-child(n+3){border-top:1px solid var(--line)}.seg-toggle-4 button:nth-child(3){border-left:0}}
 .received-totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.received-plan-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.received-totals>div{background:var(--surface-2);border-radius:10px;padding:12px}.received-totals span{display:block;font-size:11px;color:var(--ink-soft);margin-bottom:4px}.received-totals b{font-size:17px}
 .received-range{flex-wrap:wrap}.received-range label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px}.received-range input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}
 .received-period{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.received-period label{font-size:12.5px;font-weight:600;color:var(--ink-soft)}.received-period select{min-width:190px;border:1px solid var(--line);border-radius:9px;background:var(--surface);padding:8px 10px;font:inherit;color:var(--ink)}

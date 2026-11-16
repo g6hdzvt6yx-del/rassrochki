@@ -919,3 +919,13 @@
   html body .app.is-phone .m-detail-sheet .badge { display: inline-flex; width: auto; max-width: max-content; margin-top: 4px; padding: 2px 8px; border-radius: 7px; font-size: 12px; }
   html body .app.is-phone .m-detail-sheet :is(.icon-btn-ghost, .btn) { min-width: 44px; min-height: 44px; border-radius: 12px; }
 }
+
+/* Оплатили / не оплатили за период */
+@media (max-width: 760px) {
+  html body .app.is-phone .m-detail-sheet .seg-toggle.seg-toggle-4 { flex-wrap: wrap; }
+  html body .app.is-phone .m-detail-sheet .seg-toggle.seg-toggle-4 button { flex: 1 1 calc(50% - 3px); }
+  html body .app.is-phone .m-detail-sheet .seg-toggle:is(.seg-toggle-3, .seg-toggle-4) button { font-size: 13px; padding: 4px 6px; }
+  html body .app.is-phone .m-detail-sheet .pay-status-table { border-radius: 16px; border-color: var(--m-line); }
+  html body .app.is-phone .m-detail-sheet .pay-status-table button { min-height: 56px; font-size: 14.5px; }
+  html body .app.is-phone .m-detail-sheet .pay-status-table small { font-size: 12px; }
+}
