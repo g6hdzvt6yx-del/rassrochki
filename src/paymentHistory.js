@@ -71,7 +71,7 @@ export const receiptPurpose = (r) => r.downPayment
   ? 'Первоначальный взнос'
   : `${r.earlyPayoff ? 'Досрочно · ' : ''}${r.numbers.length > 1 ? 'Платежи' : 'Платёж'} №${r.numbers.join(', ')}`;
 
-export const receiptMethod = (r) => r.method === 'cash' ? 'Наличные' : r.method === 'bank' ? `Безнал${r.card ? ` · ${r.card}` : ''}` : '';
+export const receiptMethod = (r) => r.method === 'cash' ? 'Наличные' : r.method === 'bank' ? `Безнал${r.card ? ` · ${r.card}` : ''}` : 'Не определен';
 
 // «Способ / комментарий»: если оплата закрыла несколько платежей —
 // сколько зачтено в каждый, затем способ оплаты и комментарий.

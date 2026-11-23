@@ -67,7 +67,7 @@ describe("справка по выбранной плитке и поступл�
   it("поступления за период по видам, итог и прибыль", () => {
     const r = periodReceipts(real, "2026-10-01", "2026-10-31");
     expect(r.byKind.map(k => [k.label, k.count, k.amount, k.profit])).toEqual([
-      ["Наличные", 1, 600, 150], ["Безнал · Сбер · 1234", 2, 600, 150], ["Способ не указан", 1, 1000, 0],
+      ["Наличные", 1, 600, 150], ["Безнал · Сбер · 1234", 2, 600, 150], ["Не определен", 1, 1000, 0],
     ]);
     expect(r.total).toBe(2200); expect(r.profit).toBe(300); expect(r.count).toBe(4); expect(r.downPayments).toBe(0);
   });
