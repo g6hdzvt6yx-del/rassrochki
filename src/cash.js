@@ -5,8 +5,12 @@ export const cashCards = contracts => [...new Set(contracts.flatMap(c => [
   ...(c.payments?.__downPaymentDestination?.card ? [c.payments.__downPaymentDestination.card] : []),
   ...Object.values(c.payments || {}).flatMap(r => (r?.paymentEvents || []).map(e => e.card).filter(Boolean)),
 ]))].sort((a,b) => a.localeCompare(b,'ru'));
+// Способ оплаты не выбран — сохраняем статус «Не определен», чтобы платёж можно было провести сразу.
+export const UNKNOWN_METHOD = 'unknown';
+export const UNKNOWN_METHOD_LABEL = 'Не определен';
 export function paymentDestination(method, card = '') {
-  if (!['cash','bank'].includes(method)) throw new Error('Выберите способ оплаты');
+  if (!method || method === UNKNOWN_METHOD) return { method: UNKNOWN_METHOD };
+  if (!['cash','bank'].includes(method)) throw new Error('Неизвестный способ оплаты');
   const name = String(card).trim();
   if (method === 'bank' && !name) throw new Error('Укажите карту для безналичной оплаты');
   return { method, ...(method === 'bank' ? {card:name} : {}) };
@@ -30,4 +34,4 @@ export function cashEntries(contracts) {
     return rows;
   }).sort((a,b) => String(b.date).localeCompare(String(a.date)));
 }
-export const destinationLabel = e => e.method === 'cash' ? 'Наличные' : e.method === 'bank' ? `Безнал · ${e.card || 'Карта не указана'}` : 'Способ не указан';
+export const destinationLabel = e => e.method === 'cash' ? 'Наличные' : e.method === 'bank' ? `Безнал · ${e.card || 'Карта не указана'}` : UNKNOWN_METHOD_LABEL;

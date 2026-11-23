@@ -4,7 +4,7 @@ import CashDesk, { PaymentDestination } from "./CashDesk";
 import Expenses from "./Expenses";
 import NetProfitPanel from "./NetProfitPanel";
 import { expenseFromRow, expenseToRow } from "./expenses";
-import { cashCards, paymentDestination } from "./cash";
+import { cashCards, paymentDestination, destinationLabel } from "./cash";
 import { expectedPayments, dateInPeriod, duePeriodSummary, monthBounds, shiftMonth } from "./expectedPayments";
 import { buildDuePeriodWorkbook, duePeriodExportRows, duePeriodFileName } from "./duePeriodExcel";
 import { periodReceipts } from "./duePeriodReceipts";
@@ -1368,7 +1368,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
     const { passport, guarantorPassport, ...contractData } = data;
     try { updated = prepareContractEdit(original, contractData);
       updated.payments = withPassport(withPassport(updated.payments, passport), guarantorPassport, "__guarantorPassport");
-      if (+data.downPayment > 0 && data.downPaymentMethod) updated.payments.__downPaymentDestination = paymentDestination(data.downPaymentMethod,data.downPaymentCard);
+      if (+data.downPayment > 0) updated.payments.__downPaymentDestination = paymentDestination(data.downPaymentMethod,data.downPaymentCard);
     }
     catch (error) { showAppMessage(error.message); return false; }
     const cid = original.id;
@@ -3073,7 +3073,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
     if (paymentLock.current) return;
     paymentLock.current = true; setPayBusy(true); setPayError('');
     try {
-      const destination = payMode === 'edit' && !payMethod ? {} : paymentDestination(payMethod,payCard);
+      const destination = paymentDestination(payMethod,payCard);
       const saved = payMode === 'edit'
         ? await onEditPayment(contract.id,idx,editEventIndex,editRecord,{date:payDate,amount:payAmount,comment:payComment,destination})
         : await onPay(contract.id, idx, payDate, +payAmount || 0, payComment, destination);
@@ -3433,7 +3433,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 )}
                 {r.paymentEvents.length > 0 && <details className="payment-details"><summary>История платежей · {r.paymentEvents.length}</summary><div className="payment-comments" aria-label="Фактические оплаты">
                   {r.paymentEvents.map((event, index) => <span key={`${event.createdAt || event.date}-${index}`}>
-                    <CheckCircle2 size={12}/><span>Оплата {fmtDate(event.date)} · {money(event.amount)}{event.method === 'cash' ? ' · Наличные' : event.method === 'bank' ? ` · Безнал · ${event.card || 'Карта не указана'}` : ''}{event.comment ? ` — ${event.comment}` : ''}</span>
+                    <CheckCircle2 size={12}/><span>Оплата {fmtDate(event.date)} · {money(event.amount)} · {destinationLabel(event)}{event.comment ? ` — ${event.comment}` : ''}</span>
                   </span>)}
                 </div></details>}
                 {r.notifiedAt && (
@@ -3475,7 +3475,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                 )}
                 {payingIdx === r.index && (
                   <div className="pay-inline" ref={initialAction === "pay" ? actionArea : null}>
-                    {payMode === 'edit' && <label>Поступление <select aria-label="Редактируемое поступление" disabled={payBusy} value={editEventIndex} onChange={e=>startEditDate(r.index,r.paidDate,+e.target.value)}>{r.paymentEvents.map((event,i)=><option key={i} value={i}>{fmtDate(event.date)} · {money(event.amount)} · {event.method === 'cash' ? 'Наличные' : event.card || 'Способ не указан'}</option>)}</select></label>}
+                    {payMode === 'edit' && <label>Поступление <select aria-label="Редактируемое поступление" disabled={payBusy} value={editEventIndex} onChange={e=>startEditDate(r.index,r.paidDate,+e.target.value)}>{r.paymentEvents.map((event,i)=><option key={i} value={i}>{fmtDate(event.date)} · {money(event.amount)} · {destinationLabel(event)}</option>)}</select></label>}
                     <div className="pay-date-field"><span>Дата оплаты</span><DateFields value={payDate} onChange={setPayDate} /></div>
                     <div className="pay-destination"><PaymentDestination method={payMethod} card={payCard} onMethod={setPayMethod} onCard={setPayCard} cards={cards}/></div>
                     {payError && <p role="alert">{payError}</p>}
@@ -3499,7 +3499,7 @@ function ContractDetail({ onDeletePayment, onEditPayment, cards = [], contract, 
                         /></label>
                       </>
                     )}
-                    <div className="pay-form-actions"><button className="btn primary btn-sm" disabled={payBusy || !payDate || !(+payAmount > 0) || (payMode === "new" && !payMethod) || (payMethod === "bank" && !payCard.trim())} onClick={() => confirmPay(r.index)}>{payBusy ? "Сохраняем…" : payMode === "edit" ? "Сохранить изменения" : "Сохранить платёж"}</button>
+                    <div className="pay-form-actions"><button className="btn primary btn-sm" disabled={payBusy || !payDate || !(+payAmount > 0) || (payMethod === "bank" && !payCard.trim())} onClick={() => confirmPay(r.index)}>{payBusy ? "Сохраняем…" : payMode === "edit" ? "Сохранить изменения" : "Сохранить платёж"}</button>
                     {payMode === 'edit' && <button type="button" className="btn ghost btn-sm" style={{color:'var(--clay)'}} disabled={payBusy} onClick={()=>deleteSelectedPayment(r.index)}><Trash2 size={13}/> Удалить поступление</button>}
                     <button className="btn ghost btn-sm" disabled={payBusy} onClick={() => setPayingIdx(null)}>Отмена</button></div>
                     {payMode === "new" && +payAmount > r.remainingDue && (
@@ -3865,7 +3865,7 @@ function AddForm({ cards = [], investors, clients = [], products = [], onClose, 
               saveInProgress.current = true; setSaving(true); setFormError("");
               try {
               await draftWrite.current;
-              if (+f.downPayment > 0 && (!editing || f.downPaymentMethod)) paymentDestination(f.downPaymentMethod,f.downPaymentCard);
+              if (+f.downPayment > 0) paymentDestination(f.downPaymentMethod,f.downPaymentCard);
               const { markupAmount: _markupAmount, totalPayable: _totalPayable, monthlyPayment: _monthlyPayment, markupBase: _markupBase, ...rest } = f;
               const success = await onSave({
                 ...rest, newContractId: newContractId.current, phone: fmtPhone(f.phone.trim()), guarantorPhone: fmtPhone(f.guarantorPhone.trim()), totalPrice: +f.totalPrice, downPayment: +f.downPayment || 0,

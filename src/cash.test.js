@@ -6,7 +6,7 @@ describe('касса',()=>{
  it('не относит старые платежи и взносы к наличным',()=>{
   const entries=cashEntries([{...base,payments:{0:{paidDate:'2026-10-02'}}}]);
   expect(entries.reduce((s,e)=>s+e.amount,0)).toBe(700);
-  expect(entries.every(e=>destinationLabel(e)==='Способ не указан')).toBe(true);
+  expect(entries.every(e=>destinationLabel(e)==='Не определен')).toBe(true);
  });
  it('сохраняет карту при распределении и не удваивает поступление',()=>{
   const result=allocateContractPayment({rows:[{index:0,n:1,remainingDue:500,paidAmount:0,amountDue:500,status:'overdue',dueDate:'2026-10-01'},{index:1,n:2,remainingDue:500,paidAmount:0,amountDue:500,dueDate:'2026-11-01'}],selectedIndex:0,amount:700,date:'2026-10-02',destination:paymentDestination('bank','Банк 1234')});
@@ -15,8 +15,11 @@ describe('касса',()=>{
   expect(entries.every(e=>e.card==='Банк 1234')).toBe(true);
   expect(cashCards([{payments:result.payments}])).toEqual(['Банк 1234']);
  });
- it('требует способ и карту, не переносит карту на наличные',()=>{
-  expect(()=>paymentDestination('')).toThrow();
+ it('без выбранного способа ставит «Не определен», требует карту для безнала',()=>{
+  expect(paymentDestination('')).toEqual({method:'unknown'});
+  expect(paymentDestination(undefined,'Банк')).toEqual({method:'unknown'});
+  expect(destinationLabel(paymentDestination(''))).toBe('Не определен');
+  expect(()=>paymentDestination('crypto')).toThrow();
   expect(()=>paymentDestination('bank',' ')).toThrow();
   expect(paymentDestination('cash','Банк')).toEqual({method:'cash'});
  });
