@@ -1,6 +1,7 @@
 import React from "react";
 import { Plus, Pencil, Trash2, Check, ChevronRight, Landmark, Wallet, TrendingUp, FileText } from "lucide-react";
 import { MRibbon, mMoney as money, mPlural as plural } from "./MobileShell";
+import { percentOf } from "./percent";
 
 /*
  * Экран «Капитал» на телефоне (до 760px). Все цифры и действия — из основного приложения
@@ -27,17 +28,17 @@ export default function MobileCapital({
         <div className="m-today-sum">{money(capital.invested)}</div>
         <MRibbon parts={[[capital.deployed, "paid"], [shortage, "over"], [free, "rest"]]} />
         <div className="m-legend m-cap-legend">
-          <span><i className="paid" />в обороте {money(capital.deployed)}</span>
-          {shortage > 0 && <span className="m-bad"><i className="over" />не хватает {money(shortage)}</span>}
-          <span><i className="rest" />свободно {money(free)}</span>
+          <span><i className="paid" />в обороте {money(capital.deployed)} <b>{percentOf(capital.deployed, capital.invested)}</b></span>
+          {shortage > 0 && <span className="m-bad"><i className="over" />не хватает {money(shortage)} <b>{percentOf(shortage, capital.invested)}</b></span>}
+          <span><i className="rest" />свободно {money(free)} <b>{percentOf(free, capital.invested)}</b></span>
         </div>
         {(capital.withdrawnTotal > 0 || capital.expensesTotal > 0) && <p className="m-today-caption">{[capital.withdrawnTotal > 0 && `Выведено всего: ${money(capital.withdrawnTotal)}`, capital.expensesTotal > 0 && `Расходы всего: ${money(capital.expensesTotal)}`].filter(Boolean).join(" · ")}</p>}
       </section>
 
       <div className="m-metrics">
-        <div className="m-metric ok"><span>Прибыль получена</span><b>{money(capital.profitRealized)}</b></div>
-        <div className="m-metric"><span>Прибыль ожидается</span><b>{money(capital.profitExpected)}</b></div>
-        <div className="m-metric wide"><span>Прибыль всего по договорам</span><b>{money(capital.profitTotal)}</b></div>
+        <div className="m-metric ok"><span>Прибыль получена</span><b>{money(capital.profitRealized)}</b>{percentOf(capital.profitRealized, capital.profitTotal) && <small>{percentOf(capital.profitRealized, capital.profitTotal)} от всей</small>}</div>
+        <div className="m-metric"><span>Прибыль ожидается</span><b>{money(capital.profitExpected)}</b>{percentOf(capital.profitExpected, capital.profitTotal) && <small>{percentOf(capital.profitExpected, capital.profitTotal)} от всей</small>}</div>
+        <div className="m-metric wide"><span>Прибыль всего по договорам</span><b>{money(capital.profitTotal)}</b>{(percentOf(capital.profitTotal, capital.principalTotal) || percentOf(capital.profitTotal, capital.invested)) && <small>{[percentOf(capital.profitTotal, capital.principalTotal) && `наценка ${percentOf(capital.profitTotal, capital.principalTotal)}`, percentOf(capital.profitTotal, capital.invested) && `${percentOf(capital.profitTotal, capital.invested)} к капиталу`].filter(Boolean).join(" · ")}</small>}</div>
       </div>
 
       <h2 className="m-section-h"><span><TrendingUp size={17} aria-hidden="true" /> Прибыль по вкладчикам</span></h2>

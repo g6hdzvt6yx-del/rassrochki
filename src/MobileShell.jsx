@@ -8,6 +8,7 @@ import { expectedPayments, dateInPeriod } from "./expectedPayments";
 import { receivedSummary } from "./finance";
 import { waReminderLink } from "./whatsapp";
 import { normalizePhone } from "./phone";
+import { percentOf } from "./percent";
 
 /*
  * Телефонный вид (ширина до 760px). Здесь только раскладка: все расчёты берутся из тех же
@@ -252,14 +253,15 @@ export function MobileHome({ contracts, getStats, totals, capital, received, mon
           <span>Остаток к получению</span>
           <b>{money(totals.remaining)}</b>
           <MRibbon parts={[[totals.paid, "paid"], [totals.overdue, "over"], [rest, "rest"]]} thin />
-          <small>Оплачено {money(totals.paid)} · просрочено {money(totals.overdue)}</small>
+          <small>Оплачено {money(totals.paid)} ({percentOf(totals.paid, totals.financed) || "—"}) · просрочено {money(totals.overdue)} ({percentOf(totals.overdue, totals.financed) || "—"})</small>
+          {percentOf(totals.remaining, totals.financed) && <small>Остаток — {percentOf(totals.remaining, totals.financed)} от выданного</small>}
         </button>
-        <button type="button" className="m-metric" onClick={() => onReceived("received")}><span>Получено всего</span><b>{money(received.received)}</b></button>
-        <button type="button" className="m-metric" onClick={() => onSection("financed")}><span>Выдано в рассрочку</span><b>{money(totals.financed)}</b></button>
-        <button type="button" className="m-metric" onClick={onProfitTotal}><span>Общая прибыль</span><b>{money(capital.profitTotal)}</b></button>
-        <button type="button" className="m-metric ok" onClick={() => onReceived("profit")}><span>Прибыль получена</span><b>{money(capital.profitRealized)}</b></button>
-        <button type="button" className="m-metric" onClick={() => onSection("active")}><span>Активных договоров</span><b>{totals.active}</b></button>
-        <button type="button" className={`m-metric ${totals.debtors ? "bad" : ""}`} onClick={() => onSection("debtors")}><span>Должников</span><b>{totals.debtors}</b></button>
+        <button type="button" className="m-metric" onClick={() => onReceived("received")}><span>Получено всего</span><b>{money(received.received)}</b>{percentOf(received.received, totals.financed) && <small>{percentOf(received.received, totals.financed)} от выданного</small>}</button>
+        <button type="button" className="m-metric" onClick={() => onSection("financed")}><span>Выдано в рассрочку</span><b>{money(totals.financed)}</b>{percentOf(capital.profitTotal, totals.financed) && <small>в т.ч. прибыль {percentOf(capital.profitTotal, totals.financed)}</small>}</button>
+        <button type="button" className="m-metric" onClick={onProfitTotal}><span>Общая прибыль</span><b>{money(capital.profitTotal)}</b>{percentOf(capital.profitTotal, capital.principalTotal) && <small>наценка {percentOf(capital.profitTotal, capital.principalTotal)}</small>}</button>
+        <button type="button" className="m-metric ok" onClick={() => onReceived("profit")}><span>Прибыль получена</span><b>{money(capital.profitRealized)}</b>{percentOf(capital.profitRealized, capital.profitTotal) && <small>{percentOf(capital.profitRealized, capital.profitTotal)} от общей</small>}</button>
+        <button type="button" className="m-metric" onClick={() => onSection("active")}><span>Активных договоров</span><b>{totals.active}</b>{percentOf(totals.active, contracts.length) && <small>{percentOf(totals.active, contracts.length)} из {contracts.length}</small>}</button>
+        <button type="button" className={`m-metric ${totals.debtors ? "bad" : ""}`} onClick={() => onSection("debtors")}><span>Должников</span><b>{totals.debtors}</b>{percentOf(totals.debtors, totals.active) && <small>{percentOf(totals.debtors, totals.active)} активных</small>}</button>
       </div>
 
       {netProfit}

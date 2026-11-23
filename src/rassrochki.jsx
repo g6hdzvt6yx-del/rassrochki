@@ -44,6 +44,7 @@ import {OperatorMarkSummary, OperatorMarksHistory} from "./OperatorMarks.jsx";
 import DataPanelBoundary from "./DataPanelBoundary";
 import usePhoneLayout from "./usePhoneLayout";
 import { MobileTopBar, MobileTabBar, MobileMoreSheet, MobileHome, moreIcons, weekdayLabel } from "./MobileShell";
+import { percentOf } from "./percent";
 import MobileContracts from "./MobileContracts";
 import MobileCapital from "./MobileCapital";
 import { contractReceipts, receiptPurpose, receiptNote } from "./paymentHistory";
@@ -849,7 +850,7 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
     const expensesTotal = expenses.reduce((s, e) => s + (+e.amount || 0), 0);
 
     return {
-      invested, deployed, free: invested - deployed - withdrawnTotal - expensesTotal,
+      invested, deployed, free: invested - deployed - withdrawnTotal - expensesTotal, principalTotal,
       profitRealized, profitExpected: profitTotal - profitRealized, profitTotal,
       perInvestor, profitByInvestor, withdrawnByInvestor, withdrawnTotal, expensesTotal,
     };
@@ -1947,21 +1948,22 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
           <button type="button" className="hero hero-btn" onClick={() => setSectionModal("remaining")}>
             <div className="hero-label">Остаток к получению</div>
             <div className="hero-num num">{money(totals.remaining)}</div>
+            {percentOf(totals.remaining, totals.financed) && <div className="hero-sub">{percentOf(totals.remaining, totals.financed)} от выданного в рассрочку</div>}
             <Ribbon paid={totals.paid} overdue={totals.overdue} remaining={totals.remaining - totals.overdue} />
             <div className="hero-legend">
-              <span><i className="dot s-paid" /> Оплачено {money(totals.paid)}</span>
-              <span><i className="dot s-over" /> Просрочено {money(totals.overdue)}</span>
-              <span><i className="dot s-rem" /> Остаток {money(totals.remaining - totals.overdue)}</span>
+              <span><i className="dot s-paid" /> Оплачено {money(totals.paid)} <b className="pct">{percentOf(totals.paid, totals.financed)}</b></span>
+              <span><i className="dot s-over" /> Просрочено {money(totals.overdue)} <b className="pct">{percentOf(totals.overdue, totals.financed)}</b></span>
+              <span><i className="dot s-rem" /> Остаток {money(totals.remaining - totals.overdue)} <b className="pct">{percentOf(totals.remaining - totals.overdue, totals.financed)}</b></span>
             </div>
           </button>
 
           <section className="cards">
-            <Stat icon={<Wallet size={16} />} label="Получено всего" value={money(received.received)} onClick={() => { setReceivedView("received"); setReceivedOpen(true); }} />
-            <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} onClick={() => setSectionModal("financed")} />
-            <Stat icon={<TrendingUp size={16} />} label="Общая прибыль" value={money(capital.profitTotal)} onClick={() => setProfitTotalOpen(true)} />
-            <Stat icon={<CheckCircle2 size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} onClick={() => { setReceivedView("profit"); setReceivedOpen(true); }} />
-            <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} onClick={() => setSectionModal("active")} />
-            <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
+            <Stat icon={<Wallet size={16} />} label="Получено всего" value={money(received.received)} sub={percentOf(received.received, totals.financed) && `${percentOf(received.received, totals.financed)} от выданного`} onClick={() => { setReceivedView("received"); setReceivedOpen(true); }} />
+            <Stat icon={<Wallet size={16} />} label="Выдано в рассрочку" value={money(totals.financed)} sub={percentOf(capital.profitTotal, totals.financed) && `в т.ч. прибыль ${percentOf(capital.profitTotal, totals.financed)}`} onClick={() => setSectionModal("financed")} />
+            <Stat icon={<TrendingUp size={16} />} label="Общая прибыль" value={money(capital.profitTotal)} sub={percentOf(capital.profitTotal, capital.principalTotal) && `наценка ${percentOf(capital.profitTotal, capital.principalTotal)} к вложенному`} onClick={() => setProfitTotalOpen(true)} />
+            <Stat icon={<CheckCircle2 size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} sub={percentOf(capital.profitRealized, capital.profitTotal) && `${percentOf(capital.profitRealized, capital.profitTotal)} от общей прибыли`} onClick={() => { setReceivedView("profit"); setReceivedOpen(true); }} />
+            <Stat icon={<Users size={16} />} label="Активных договоров" value={totals.active} sub={percentOf(totals.active, contracts.length) && `${percentOf(totals.active, contracts.length)} из ${contracts.length} договоров`} onClick={() => setSectionModal("active")} />
+            <Stat icon={<AlertTriangle size={16} />} label="Должников (просрочка)" value={totals.debtors} sub={percentOf(totals.debtors, totals.active) && `${percentOf(totals.debtors, totals.active)} активных договоров`} tone={totals.debtors ? "clay" : ""} onClick={() => setSectionModal("debtors")} />
           </section>
 
           <NetProfitPanel contracts={contracts} withdrawals={withdrawals} expenses={expenses} getStats={contractStats} expensesError={expensesError} onOpenExpenses={isDesktopApp ? undefined : () => goTab("expenses")} />
@@ -2393,11 +2395,11 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
               remaining={Math.max(0, capital.free)}
             />
             <div className="hero-legend">
-              <span><i className="dot s-paid" /> В обороте {money(capital.deployed)}</span>
+              <span><i className="dot s-paid" /> В обороте {money(capital.deployed)} <b className="pct">{percentOf(capital.deployed, capital.invested)}</b></span>
               {capital.free < 0 && (
-                <span><i className="dot s-over" /> Не хватает вложений {money(-capital.free)}</span>
+                <span><i className="dot s-over" /> Не хватает вложений {money(-capital.free)} <b className="pct">{percentOf(-capital.free, capital.invested)}</b></span>
               )}
-              <span><i className="dot s-rem" /> Свободно {money(Math.max(0, capital.free))}</span>
+              <span><i className="dot s-rem" /> Свободно {money(Math.max(0, capital.free))} <b className="pct">{percentOf(Math.max(0, capital.free), capital.invested)}</b></span>
               {capital.withdrawnTotal > 0 && (
                 <span>Выведено всего: {money(capital.withdrawnTotal)}</span>
               )}
@@ -2408,9 +2410,9 @@ export default function App({ onOpenTeam, onDownloadBackup } = {}) {
           </section>
 
           <section className="cards">
-            <Stat icon={<TrendingUp size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} />
-            <Stat icon={<Clock size={16} />} label="Прибыль ожидается" value={money(capital.profitExpected)} />
-            <Stat icon={<Wallet size={16} />} label="Прибыль всего по договорам" value={money(capital.profitTotal)} />
+            <Stat icon={<TrendingUp size={16} />} label="Прибыль получена" value={money(capital.profitRealized)} sub={percentOf(capital.profitRealized, capital.profitTotal) && `${percentOf(capital.profitRealized, capital.profitTotal)} от всей прибыли`} />
+            <Stat icon={<Clock size={16} />} label="Прибыль ожидается" value={money(capital.profitExpected)} sub={percentOf(capital.profitExpected, capital.profitTotal) && `${percentOf(capital.profitExpected, capital.profitTotal)} от всей прибыли`} />
+            <Stat icon={<Wallet size={16} />} label="Прибыль всего по договорам" value={money(capital.profitTotal)} sub={[percentOf(capital.profitTotal, capital.principalTotal) && `наценка ${percentOf(capital.profitTotal, capital.principalTotal)}`, percentOf(capital.profitTotal, capital.invested) && `${percentOf(capital.profitTotal, capital.invested)} к капиталу`].filter(Boolean).join(" · ")} />
           </section>
 
           <section className="panel investor-profit-panel">
@@ -2690,13 +2692,14 @@ function Login({ onLogin, busy, error }) {
   );
 }
 
-const Stat = ({ icon, label, value, tone, onClick }) => {
+const Stat = ({ icon, label, value, sub, tone, onClick }) => {
   const Tag = onClick ? "button" : "div";
   return (
     <Tag type={onClick ? "button" : undefined} className={`stat ${onClick ? "stat-btn" : ""}`} onClick={onClick}>
       <div className="stat-ic">{icon}</div>
       <div className="stat-label">{label}</div>
       <div className={`stat-val num ${tone || ""}`}>{value}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
     </Tag>
   );
 };
@@ -4283,6 +4286,9 @@ const css = `
 .stat-label{font-size:12px;color:var(--ink-soft);margin-bottom:3px}
 .stat-val{font-size:22px;font-weight:600}
 .stat-val.clay{color:var(--clay)}
+.stat-sub{margin-top:4px;font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.hero-sub{margin-top:2px;font-size:13px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.hero-legend .pct{font-weight:600;margin-left:4px;color:var(--ink);font-variant-numeric:tabular-nums}
 .stat-btn{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%;transition:border-color .15s}
 .stat-btn:hover{border-color:var(--brass)}
 
@@ -4312,6 +4318,9 @@ body:has(.dashboard-wrap){background:#0f172a}
 .dashboard-wrap .stat-label{margin:0 0 5px;color:#9baac0;font-size:10px;font-weight:700;line-height:1.35;text-transform:uppercase;letter-spacing:.025em}
 .dashboard-wrap .stat-val{max-width:100%;font-family:inherit;font-variant-numeric:tabular-nums;font-size:clamp(17px,2.7vw,25px);font-weight:700;line-height:1.2;letter-spacing:-.045em;white-space:nowrap}
 .dashboard-wrap .stat-val.clay{color:#ff616e}
+.dashboard-wrap .stat-sub{margin-top:6px;color:#9baac0;font-size:12.5px;line-height:1.3}
+.dashboard-wrap .hero-sub{color:#9baac0}
+.dashboard-wrap .hero-legend .pct{color:#f7f9ff}
 .dashboard-wrap .stat-btn:hover{border-color:var(--metric-accent);transform:translateY(-2px)}
 .dashboard-wrap .stat-btn:focus-visible,.dashboard-wrap .hero-btn:focus-visible{outline:3px solid #a78bfa;outline-offset:3px}
 @media(max-width:560px){
